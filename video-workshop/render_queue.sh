@@ -16,18 +16,15 @@ render_one() {  # $1 book  $2 json
   local out=$DIR/$book/out/$ep; mkdir -p "$out" "$DIR/deliver/$book"
   if python3 "$HERE/build_video.py" "$js" "$out" --piper "$PIPER" --voice "$VOICE" > "$out/build.log" 2>&1; then
     local mp4; mp4=$(ls "$out"/*.mp4 | head -1)
-    # delivery copy: 1080p, still-image tuned, small; split into <=29 MB parts if needed
-    local base; base=$(basename "$mp4" .mp4)
-    ffmpeg -y -v error -i "$mp4" -map 0 -c:v libx264 -preset veryslow -tune stillimage -crf 28 -r 10 -g 600 \
-      -c:a aac -b:a 64k -ac 1 -c:s mov_text -movflags +faststart "$out/$base.small.mp4"
-    local size; size=$(stat -c %s "$out/$base.small.mp4")
+    # the build already encodes a small still-image video; split into <=29 MB parts only if needed
+    local base size; base=$(basename "$mp4" .mp4); size=$(stat -c %s "$mp4")
     if [ "$size" -le 30000000 ]; then
-      cp "$out/$base.small.mp4" "$DIR/deliver/$book/$base.mp4"
+      cp "$mp4" "$DIR/deliver/$book/$base.mp4"
     else
-      local d parts seg; d=$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$out/$base.small.mp4")
+      local d parts seg; d=$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$mp4")
       parts=$(python3 -c "import math;print(math.ceil($size/28000000))")
       seg=$(python3 -c "print(int($d/$parts)+1)")
-      ffmpeg -y -v error -i "$out/$base.small.mp4" -map 0 -c copy -f segment -segment_time "$seg" \
+      ffmpeg -y -v error -i "$mp4" -map 0 -c copy -f segment -segment_time "$seg" -segment_start_number 1 \
         -reset_timestamps 1 "$DIR/deliver/$book/$base-Part%d.mp4"
     fi
     cp "$out/subtitles.srt" "$DIR/deliver/$book/$base.srt"

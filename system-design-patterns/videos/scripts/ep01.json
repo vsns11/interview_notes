@@ -15,7 +15,11 @@
           "reveal": 0
         },
         {
-          "say": "Keep the Part 1 notes open. Each concept here matches a section there, in the same order.",
+          "say": "We'll follow one running example most of the way: a photo-sharing app, like an early Instagram. Every time a slide lists steps or types, we'll apply each one to that app, with numbers.",
+          "reveal": 0
+        },
+        {
+          "say": "Keep the Part one notes open: each concept matches a section there, in order. Pause on any calculation and redo it yourself.",
           "reveal": 0
         }
       ]
@@ -45,7 +49,7 @@
           "reveal": 3
         },
         {
-          "say": "Two working designs can also differ ten times over in their cloud bill.",
+          "say": "And two working designs can differ ten times over in their cloud bill.",
           "reveal": 4
         }
       ]
@@ -58,46 +62,110 @@
       "caption": "A design is right for a given load, never finished",
       "steps": [
         {
-          "say": "Design runs as a loop. Understand the goal: what it must do, and how well. Estimate the load. Sketch the parts. Find the weak spots: what runs out first, and what takes everything down. Then fix it and state the cost.",
+          "say": "Design runs as a loop of five steps. Understand the goal. Estimate the load. Sketch the parts. Find the weak spots. Fix it and justify the fix. Then go round again as the system grows.",
           "reveal": 0
         },
         {
-          "say": "You repeat as the system grows. A design is right for a given load, never finished.",
+          "say": "That's easy to say and hard to picture, so let's run the loop once, step by step, on our photo app.",
           "reveal": 0
         }
       ]
     },
     {
       "id": "s004",
-      "layout": "bullets",
-      "title": "Abstractions leak, choices cost",
-      "bullets": [
-        "Abstraction: a simple contract over details",
-        "Leaks: slow networks, lagging replicas, drifting clocks",
-        "Every choice is a trade-off: name it",
-        "Interview: reasoning is graded"
-      ],
+      "layout": "table",
+      "kicker": "Example",
+      "title": "The design loop, run once on a photo app",
+      "table": {
+        "head": [
+          "Step",
+          "Applied to the photo app"
+        ],
+        "rows": [
+          [
+            "1. Understand the goal",
+            "Upload, feed; p99 under 200 ms; 99.9% up"
+          ],
+          [
+            "2. Estimate the load",
+            "10M users/day; 5,000 reads/s, 15,000 peak"
+          ],
+          [
+            "3. Sketch the parts",
+            "LB, app servers, 1 database, object storage"
+          ],
+          [
+            "4. Find weak spots",
+            "DB swamped at peak; DB is the single failure"
+          ],
+          [
+            "5. Fix and justify",
+            "Cache (250:1 reads) + standby DB; cost named"
+          ],
+          [
+            "Repeat at 10x",
+            "New weak spot: cache, network..."
+          ]
+        ]
+      },
       "steps": [
         {
-          "say": "Your main tool is abstraction: a simple contract hiding the details. A remote call that looks local. A database that looks like one table but is many machines.",
+          "say": "Step one, understand the goal: what it must do, and how well. Our app lets people upload photos and scroll a feed. How well: the feed loads in under two hundred milliseconds for ninety-nine percent of requests, and the app is up ninety-nine point nine percent of the time.",
           "reveal": 1
         },
         {
-          "say": "Abstractions leak. Networks fail halfway, replicas lag, clocks drift. Good design names the leaks it must handle.",
+          "say": "Step two, estimate the load. Ten million people a day each view fifty photos: about five thousand reads a second on average, fifteen thousand at the evening peak. We'll do this maths properly in concept nine.",
           "reveal": 2
         },
         {
-          "say": "And every choice gives something up. More copies are safer but cost more and can disagree. Say the trade-off out loud.",
+          "say": "Step three, sketch the parts. Phones talk to a load balancer, which spreads requests over a few app servers. They store photo details in one database and the image files in object storage.",
           "reveal": 3
         },
         {
-          "say": "In the interview there's rarely one right answer. They grade how you turn a vague idea into an architecture: asking questions, estimating scale, choosing parts, and explaining trade-offs. Coding is correctness inside one program; design is how many programs behave under load and failure.",
+          "say": "Step four, find the weak spots. What runs out first? One database handles roughly one to ten thousand simple queries a second, so fifteen thousand reads at peak will swamp it. What takes everything down? That same database. If it dies, the app dies.",
           "reveal": 4
+        },
+        {
+          "say": "Step five, fix and justify. Add a cache in front of the database, because there are two hundred and fifty reads for every write. Add a standby database in another building. Then say the cost: the cache can show slightly stale data, and the standby costs money.",
+          "reveal": 5
+        },
+        {
+          "say": "Then the loop restarts. At ten times the users, step four finds a new weak spot, maybe the cache or the network. A design is right for a given load, never finished.",
+          "reveal": 6
         }
       ]
     },
     {
       "id": "s005",
+      "layout": "bullets",
+      "title": "Abstractions leak, choices cost",
+      "bullets": [
+        "Abstraction: a simple contract over details",
+        "Leaks: a cache still showing a deleted photo",
+        "Every choice is a trade-off: name it",
+        "Interview: the reasoning is graded"
+      ],
+      "steps": [
+        {
+          "say": "Your main tool is abstraction: a simple contract hiding the details. A remote call that looks like a local function. A database that looks like one table but is really many machines.",
+          "reveal": 1
+        },
+        {
+          "say": "Abstractions leak. Networks fail halfway, replicas lag, clocks drift. Our new cache is one: delete a photo, and the cache may show it for another minute.",
+          "reveal": 2
+        },
+        {
+          "say": "Every choice gives something up. More copies are safer but cost more and can disagree. Say the trade-off out loud.",
+          "reveal": 3
+        },
+        {
+          "say": "In the interview there's rarely one right answer. They grade the reasoning: questions, estimates, chosen parts, and trade-offs.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s006",
       "layout": "diagram",
       "kicker": "Concept 2 of 23",
       "title": "Clients, servers and request/response",
@@ -105,147 +173,163 @@
       "caption": "A client asks, a server answers",
       "steps": [
         {
-          "say": "A client is any program that asks: a browser, an app, or another server. A server waits for requests and answers them. On the web they speak H-T-T-P, a standard request and response format.",
+          "say": "A client is any program that asks: a browser, an app, or another server. A server waits for requests and answers them. On the web they speak H-T-T-P, a standard request and response format. Let's follow one request through the five numbered arrows.",
           "reveal": 0
         },
         {
-          "say": "Open example dot com slash profile. The browser finds the server's address through D-N-S, the internet's phone book. It sends GET slash profile. The server looks up user forty-two in the database and replies two hundred, O-K, with the page.",
+          "say": "Arrow one. You open example dot com slash profile. The browser doesn't know where example dot com lives, so it asks D-N-S, the internet's phone book, and gets back an address.",
           "reveal": 0
         },
         {
-          "say": "Inside big systems, servers are constantly clients of other servers. And a server is a role, not a box. One name like api dot example dot com is often hundreds of machines behind a load balancer.",
+          "say": "Arrow two. The browser connects to that address and sends a request: GET slash profile.",
           "reveal": 0
-        }
-      ]
-    },
-    {
-      "id": "s006",
-      "layout": "bullets",
-      "title": "Variations to know",
-      "bullets": [
-        "Thin vs thick clients",
-        "Pull by default; push for chat",
-        "The network is slow and unreliable",
-        "Recap: chains of request/response"
-      ],
-      "steps": [
-        {
-          "say": "A thin client, like a basic web page, relies on the server. A thick client, like a mobile game, does a lot locally.",
-          "reveal": 1
         },
         {
-          "say": "Normally the client pulls. Chat needs the server to push, using WebSockets or server-sent events. That's episode two.",
-          "reveal": 2
+          "say": "Arrow three. The server reads it, sees you're user forty-two, and asks the database for your record.",
+          "reveal": 0
         },
         {
-          "say": "And the network between them is slow and unreliable compared with work inside one machine.",
-          "reveal": 3
+          "say": "Arrow four. The database replies with your name, photo and bio.",
+          "reveal": 0
         },
         {
-          "say": "Recap: almost everything on the web is a chain of request and response, often server to server.",
-          "reveal": 4
+          "say": "Arrow five. The server replies two hundred, O-K, with the page, and the browser draws it. Notice that in arrow three the server was itself a client. Inside big systems, servers are clients of other servers all the time.",
+          "reveal": 0
         }
       ]
     },
     {
       "id": "s007",
+      "layout": "bullets",
+      "title": "Variations to know",
+      "bullets": [
+        "Thin client: web page. Thick: mobile game",
+        "Pull by default; push for chat",
+        "A server is a role, not one box",
+        "The network is slow and unreliable"
+      ],
+      "steps": [
+        {
+          "say": "A thin client relies on the server: a basic web page that fetches everything. A thick client does a lot locally: a mobile game that only calls home to save your score.",
+          "reveal": 1
+        },
+        {
+          "say": "Normally the client pulls. A chat app needs the server to push a new message to you unasked, using WebSockets or server-sent events. That's episode two.",
+          "reveal": 2
+        },
+        {
+          "say": "A server is a role, not a box. One name, like api dot example dot com, is often hundreds of machines behind a load balancer.",
+          "reveal": 3
+        },
+        {
+          "say": "And the network between them is slow and unreliable compared with work inside one machine. Recap: almost everything on the web is a chain of request and response, often server to server.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s008",
       "layout": "table",
       "kicker": "Concept 3 of 23",
       "title": "The building blocks of a web app",
       "table": {
         "head": [
           "Part",
-          "Job"
+          "Job in the photo app"
         ],
         "rows": [
           [
             "Client",
-            "Renders UI, calls backend over HTTP"
+            "Phone app renders the feed"
           ],
           [
             "Load balancer",
-            "Spreads requests, skips dead servers"
+            "Spreads 15,000 req/s, skips dead servers"
           ],
           [
             "App servers",
-            "Business rules; identical copies"
+            "Rules: who may see a photo; copies"
           ],
           [
             "Database",
-            "Durable, searchable state"
+            "Posts, captions, likes: durable state"
           ],
           [
             "Cache (Redis)",
-            "Hot data in RAM, sub-millisecond"
+            "Hot feeds in RAM, sub-millisecond"
           ],
           [
             "Queue + workers",
-            "Slow work in the background"
+            "Thumbnails made in the background"
           ],
           [
             "Object storage (S3)",
-            "Big files by key"
+            "Photo files by key"
           ],
           [
             "CDN",
-            "Static files near users"
+            "Images cached near users"
           ]
         ]
       },
       "steps": [
         {
-          "say": "Nearly every web app uses the same parts. The client renders the interface.",
+          "say": "Nearly every web app uses the same eight parts. Here's each one's job in our photo app. The client renders the interface: the phone app showing your feed.",
           "reveal": 1
         },
         {
-          "say": "The load balancer spreads requests over app servers and skips dead ones.",
+          "say": "The load balancer spreads requests over app servers and skips dead ones. Fifteen thousand feed requests a second get shared across the fleet.",
           "reveal": 2
         },
         {
-          "say": "App servers apply business rules. You run identical copies so one crash doesn't stop the site.",
+          "say": "App servers apply business rules, like only followers may see a private photo. You run identical copies so one crash doesn't stop the site.",
           "reveal": 3
         },
         {
-          "say": "The database stores data durably. It's usually the hardest part to scale, because it holds state.",
+          "say": "The database stores data durably: who posted which photo, captions, likes. It's usually the hardest part to scale, because it holds state.",
           "reveal": 4
         },
         {
-          "say": "A cache keeps hot data in RAM. A hit is well under a millisecond, versus several milliseconds or more for a database query.",
+          "say": "A cache keeps hot data in RAM. Today's popular feed comes back in well under a millisecond, versus several milliseconds or more from the database.",
           "reveal": 5
         },
         {
-          "say": "A queue lets slow jobs, like welcome emails, run later on workers, so the request returns at once.",
+          "say": "A queue plus workers runs slow jobs later. Making three thumbnail sizes of an upload goes on the queue, so the upload returns at once.",
           "reveal": 6
         },
         {
-          "say": "Object storage holds big files by key. Databases are bad at large files.",
+          "say": "Object storage holds big files by key, like photos slash forty-two slash beach. Databases are bad at large files.",
           "reveal": 7
         },
         {
-          "say": "A C-D-N, content delivery network, keeps static files near users, so Sydney doesn't fetch every image from Virginia.",
+          "say": "A C-D-N, content delivery network, keeps copies of the images near users, so someone in Sydney doesn't fetch every photo from Virginia.",
           "reveal": 8
         }
       ]
     },
     {
-      "id": "s008",
+      "id": "s009",
       "layout": "diagram",
       "title": "How the boxes connect",
-      "mermaid": "flowchart LR\n  U[\"Users\"] --> CDN[\"CDN\"]\n  U --> LB[\"Load balancer\"]\n  LB --> A[\"App servers\"]\n  A --> C[\"Cache\"]\n  A --> DB[\"Database\"]\n  A --> Q[\"Queue\"]\n  Q --> W[\"Worker\"]\n  W --> OS[\"Object storage\"]",
+      "mermaid": "flowchart LR\n  U[\"Users\"] --> CDN[\"CDN\"]\n  U --> LB[\"Load balancer\"]\n  LB --> A[\"App servers\"]\n  A --> C[\"Cache\"]\n  A --> DB[\"Database\"]\n  A --> Q[\"Queue + workers\"]\n  Q --> OS[\"Object storage\"]",
       "caption": "Justify every box with a problem or a number",
       "steps": [
         {
-          "say": "Users get static files from the C-D-N and send the rest to the load balancer. App servers read the cache first, then the database, and drop slow jobs on the queue for a worker, which writes to object storage.",
+          "say": "Now trace one upload. The phone sends the photo through the load balancer to an app server. The server saves the caption in the database, stores the file in object storage, and drops a make-thumbnails job on the queue. It replies at once. A worker picks up the job later and writes the thumbnails to object storage.",
           "reveal": 0
         },
         {
-          "say": "Instagram's early stack looked almost exactly like this. Add a box only when you can name its problem: we add a cache because reads outnumber writes a hundred to one. A small internal tool may need just one server and one database.",
+          "say": "Now trace one feed view. The app server asks the cache first. On a hit, done in under a millisecond. On a miss, it reads the database and fills the cache. The images themselves come from the C-D-N, not your servers.",
+          "reveal": 0
+        },
+        {
+          "say": "Instagram's early stack looked almost exactly like this. Add a box only when you can name its problem. A small internal tool may need just one server and one database.",
           "reveal": 0
         }
       ]
     },
     {
-      "id": "s009",
+      "id": "s010",
       "layout": "bullets",
       "title": "Building-block mistakes",
       "bullets": [
@@ -264,7 +348,7 @@
           "reveal": 2
         },
         {
-          "say": "Interview question: why not one server? Because it's a single point of failure with a hard capacity limit. Stateless app servers behind a load balancer let you add machines and survive crashes.",
+          "say": "Interview question: why not one server? It's a single point of failure with a hard capacity limit. Stateless app servers behind a load balancer let you add machines and survive crashes.",
           "reveal": 3
         },
         {
@@ -274,7 +358,7 @@
       ]
     },
     {
-      "id": "s010",
+      "id": "s011",
       "layout": "twocol",
       "kicker": "Concept 4 of 23",
       "title": "Latency, throughput and bandwidth",
@@ -308,63 +392,125 @@
           "reveal": 3
         },
         {
-          "say": "On a motorway, latency is one car's journey time, bandwidth is the number of lanes, and throughput is cars actually arriving per hour.",
+          "say": "On a motorway, latency is one car's journey time, throughput is cars actually arriving per hour, and bandwidth is the number of lanes.",
           "reveal": 4
         },
         {
-          "say": "Strictly, response time is what the client feels: network both ways, plus queueing, plus service time, the actual work. In interviews latency usually means response time.",
+          "say": "Strictly, response time is what the client feels: network both ways, plus queueing, plus service time. In interviews latency usually means response time.",
           "reveal": 5
         },
         {
-          "say": "Why care? Under about a hundred milliseconds feels instant; over a second breaks concentration. And throughput sets fleet size: fifty thousand requests a second at a thousand per server needs at least fifty servers. Also, latency and bandwidth are independent. A satellite link has huge bandwidth and six hundred millisecond round trips. More bandwidth won't speed up a small A-P-I call.",
+          "say": "Latency and bandwidth are independent. A satellite link has huge bandwidth and six hundred millisecond round trips. More bandwidth won't speed up a small A-P-I call. And throughput sets fleet size: fifty thousand requests a second at a thousand per server needs at least fifty servers.",
           "reveal": 6
         }
       ]
     },
     {
-      "id": "s011",
+      "id": "s012",
       "layout": "diagram",
       "title": "Where latency comes from",
       "mermaid": "flowchart LR\n  A[\"Propagation: ~200 km per ms\"] --> B[\"Transmission: size / bandwidth\"]\n  B --> C[\"Queueing: waiting in line\"]\n  C --> D[\"Processing: the real work\"]",
       "caption": "Near 100% utilisation, queues grow and latency explodes",
       "steps": [
         {
-          "say": "Four delays. Propagation: light in fibre covers about two hundred kilometres per millisecond, so London to New York is at least twenty-eight milliseconds one way, about seventy for a real round trip.",
+          "say": "Every request picks up four kinds of delay. Propagation: the time for the signal to travel. Transmission: the time to push the bytes onto the wire. Queueing: waiting behind other requests. Processing: the real work.",
           "reveal": 0
         },
         {
-          "say": "Transmission: one megabyte is eight megabits, so eighty milliseconds at a hundred megabits per second, eight at one gigabit. Then queueing behind other requests, and processing, the real work.",
-          "reveal": 0
-        },
-        {
-          "say": "Load links them. At low load latency is flat. Near full use, requests wait for each other and latency explodes while throughput levels off. That's why teams run at fifty to seventy percent at peak.",
+          "say": "Load links them. At low load latency is flat. Near full use, requests wait for each other and latency explodes while throughput levels off. That's why teams run at fifty to seventy percent at peak. Let's put real numbers on all four.",
           "reveal": 0
         }
       ]
     },
     {
-      "id": "s012",
+      "id": "s013",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "One photo page, London to New York",
+      "table": {
+        "head": [
+          "Delay",
+          "Calculation",
+          "Time"
+        ],
+        "rows": [
+          [
+            "Propagation",
+            "5,600 km / 200 km per ms, both ways",
+            "~70 ms"
+          ],
+          [
+            "Transmission",
+            "1 MB = 8 Mb at 100 Mbps",
+            "80 ms"
+          ],
+          [
+            "Queueing",
+            "Server 90% busy at peak (assumed)",
+            "~30 ms"
+          ],
+          [
+            "Processing",
+            "Query + build page (assumed)",
+            "~15 ms"
+          ],
+          [
+            "Total",
+            "CDN, compress, headroom, index",
+            "~195 ms"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Imagine a user in London opening a photo page served from New York. The page carries a one megabyte photo, and the user is on a hundred megabit connection.",
+          "reveal": 0
+        },
+        {
+          "say": "Propagation. Light in fibre covers about two hundred kilometres per millisecond. London to New York is fifty-six hundred kilometres, so at least twenty-eight milliseconds one way. Real cables wiggle and routers add delay, so a round trip is about seventy.",
+          "reveal": 1
+        },
+        {
+          "say": "Transmission. One megabyte is eight megabits. At a hundred megabits a second that takes eighty milliseconds. At one gigabit, just eight. This is the only term bandwidth helps.",
+          "reveal": 2
+        },
+        {
+          "say": "Queueing. Say the server is ninety percent busy at peak. Our request waits behind others, say thirty milliseconds.",
+          "reveal": 3
+        },
+        {
+          "say": "Processing. The database query and building the page, say fifteen milliseconds.",
+          "reveal": 4
+        },
+        {
+          "say": "Total: about a hundred and ninety-five milliseconds. Each delay has its own fix. A C-D-N copy in London cuts seventy to about ten. Compressing the photo to two hundred kilobytes cuts eighty to sixteen. Headroom shrinks the queue. An index speeds the query.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s014",
       "layout": "bullets",
       "title": "The low-latency checklist",
       "bullets": [
-        "Set a latency budget per hop",
-        "Fewer round trips; reuse connections",
+        "Budget: 60 network, 20 gateway, 80 service, 40",
+        "5 sequential calls x 70 ms = 350 ms; batch: 70",
         "Move bytes closer; cache; defer work",
         "Smaller payloads, indexes, headroom, cut tail",
-        "Biggest term first; name the price",
+        "Name the price of every lever",
         "Pause: Australia to Virginia. More bandwidth?"
       ],
       "steps": [
         {
-          "say": "Start with a latency budget. For a p ninety-nine of two hundred milliseconds, give sixty to the network, twenty to the gateway, eighty to the service and database, forty as slack. Fix whoever overspends.",
+          "say": "Start with a latency budget. For a p ninety-nine target of two hundred milliseconds on the feed, give sixty to the network, twenty to the gateway, eighty to the service and database, forty as slack. Whoever overspends gets fixed first.",
           "reveal": 1
         },
         {
-          "say": "Biggest payoff first: remove round trips by batching and running independent calls in parallel. Reuse connections so you don't repeat handshakes.",
+          "say": "Remove round trips. Say the feed screen makes five calls one after another from London to Virginia, at seventy milliseconds each: three hundred and fifty milliseconds. Batch them into one call and it's seventy. Reuse connections so you don't repeat handshakes.",
           "reveal": 2
         },
         {
-          "say": "Move bytes closer with C-D-Ns and regional replicas. Serve hot reads from memory. Push emails and thumbnails onto a queue.",
+          "say": "Move bytes closer with C-D-Ns. Serve hot reads from memory. Defer work like thumbnails onto the queue.",
           "reveal": 3
         },
         {
@@ -372,7 +518,7 @@
           "reveal": 4
         },
         {
-          "say": "Fix the biggest term first: a seventy millisecond ocean crossing dwarfs a two millisecond parse. And name each lever's price, like stale caches.",
+          "say": "Name each lever's price: caches go stale, replicas cost money, async work shows results later.",
           "reveal": 5
         },
         {
@@ -382,7 +528,7 @@
       ]
     },
     {
-      "id": "s013",
+      "id": "s015",
       "layout": "bullets",
       "title": "Answer and traps",
       "bullets": [
@@ -393,7 +539,7 @@
       ],
       "steps": [
         {
-          "say": "Barely. The round trip is about two hundred milliseconds. Cut round trips: a nearby C-D-N, fewer sequential calls, maybe a regional deployment.",
+          "say": "Barely. The round trip is about two hundred milliseconds. Cut round trips: a nearby C-D-N, fewer sequential calls, reused connections, maybe a regional deployment.",
           "reveal": 1
         },
         {
@@ -405,13 +551,13 @@
           "reveal": 3
         },
         {
-          "say": "Recap: a cargo ship has high throughput and high latency; a motorbike courier, the reverse.",
+          "say": "Recap: a cargo ship has high throughput and high latency. A motorbike courier is the reverse.",
           "reveal": 4
         }
       ]
     },
     {
-      "id": "s014",
+      "id": "s016",
       "layout": "table",
       "kicker": "Concept 5 of 23",
       "title": "Percentiles and tail latency",
@@ -449,7 +595,7 @@
           "reveal": 1
         },
         {
-          "say": "p ninety: one in ten requests is slower.",
+          "say": "p ninety: one request in ten is slower.",
           "reveal": 2
         },
         {
@@ -461,59 +607,117 @@
           "reveal": 4
         },
         {
-          "say": "p ninety-nine point nine: one in a thousand. This slow end is tail latency.",
+          "say": "p ninety-nine point nine: one in a thousand. This slow end of the graph is called tail latency.",
           "reveal": 5
         }
       ]
     },
     {
-      "id": "s015",
-      "layout": "number",
-      "title": "Why averages lie",
-      "big": "9 x 10 ms + 1 x 1000 ms: mean 109 ms, p50 10 ms, p99 1000 ms",
-      "caption": "The mean matches no real request",
+      "id": "s017",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Ten requests, read as percentiles",
+      "table": {
+        "head": [
+          "Measure",
+          "From the sorted log",
+          "Value"
+        ],
+        "rows": [
+          [
+            "Sorted log (ms)",
+            "10 10 10 10 10 10 10 10 10 1000",
+            "10 values"
+          ],
+          [
+            "Mean",
+            "1,090 ms / 10",
+            "109 ms"
+          ],
+          [
+            "p50",
+            "5th and 6th values",
+            "10 ms"
+          ],
+          [
+            "p90",
+            "9th value",
+            "10 ms"
+          ],
+          [
+            "p95",
+            "10th value",
+            "1,000 ms"
+          ],
+          [
+            "p99",
+            "10th value",
+            "1,000 ms"
+          ]
+        ]
+      },
       "steps": [
         {
-          "say": "Ten requests: nine take ten milliseconds, one takes a thousand. The mean is a hundred and nine milliseconds, which matches no real request.",
-          "reveal": 0
+          "say": "Here's a real-looking request log. Ten feed requests: nine take ten milliseconds, and one hits a garbage-collection pause and takes a thousand. To read percentiles, sort them and count positions.",
+          "reveal": 1
         },
         {
-          "say": "The median is ten. But p ninety-five and p ninety-nine are a full second: one user in ten waits. Real latency is skewed by garbage collection, cache misses and retries. Percentiles show that shape. Averages flatten it.",
-          "reveal": 0
+          "say": "The mean adds them up, one thousand and ninety, and divides by ten: a hundred and nine milliseconds. No request took a hundred and nine. The average describes nobody.",
+          "reveal": 2
+        },
+        {
+          "say": "p fifty, the median, sits in the middle, the fifth and sixth values: ten milliseconds. The typical user is happy.",
+          "reveal": 3
+        },
+        {
+          "say": "p ninety is the ninth value out of ten: still ten milliseconds.",
+          "reveal": 4
+        },
+        {
+          "say": "p ninety-five lands past the ninth value, on the tenth: a thousand milliseconds.",
+          "reveal": 5
+        },
+        {
+          "say": "p ninety-nine is the tenth value too: a full second. So one user in ten waited a second, and only the high percentiles show it. Real latency is skewed like this, by pauses, cache misses and retries. Percentiles show the shape. Averages flatten it.",
+          "reveal": 6
         }
       ]
     },
     {
-      "id": "s016",
+      "id": "s018",
       "layout": "diagram",
       "title": "Fan-out amplifies the tail",
       "mermaid": "flowchart LR\n  U[\"User request\"] --> F[\"Front end waits for ALL\"]\n  F --> S1[\"Server 1 fast\"]\n  F --> S2[\"Server 2 fast\"]\n  F --> S3[\"Server 3 slow 1% of time\"]\n  F --> SN[\"... Server 100\"]\n  S3 --> R[\"User sees slowest reply\"]",
       "caption": "1 - 0.99^100 = about 63% of user requests hit a slow server",
       "steps": [
         {
-          "say": "The tail matters more than it looks. A user loading a hundred pages a day hits your p ninety-nine daily, and heavy users are often your best customers.",
+          "say": "The tail matters more than it looks. A heavy user who loads a hundred pages a day hits your p ninety-nine about once a day. And heavy users are often your best customers.",
           "reveal": 0
         },
         {
-          "say": "Worse, fan-out. One request calls a hundred servers and waits for all. Each is slow just one percent of the time. The chance at least one is slow is one minus point nine nine to the hundredth, about sixty-three percent. That's from Google's paper, The Tail at Scale.",
+          "say": "Worse is fan-out. Imagine photo search: one user request asks a hundred search servers in parallel and waits for all of them. Each server is slow just one percent of the time.",
+          "reveal": 0
+        },
+        {
+          "say": "The chance all hundred are fast is point nine nine to the power of a hundred, about thirty-seven percent. So about sixty-three percent of searches hit a slow server. One in a hundred per server becomes two in three for the user. That's from Google's paper, The Tail at Scale.",
           "reveal": 0
         }
       ]
     },
     {
-      "id": "s017",
+      "id": "s019",
       "layout": "bullets",
       "title": "Measuring and cutting the tail",
       "bullets": [
         "Histograms estimate percentiles",
-        "Never average percentiles",
-        "Hedged requests, timeouts, less fan-out",
+        "Never average percentiles: merge histograms",
+        "Hedge after p95 (50 ms): ~5% extra requests",
         "Beware coordinated omission",
         "Recap: percentiles, not averages"
       ],
       "steps": [
         {
-          "say": "Monitoring uses histograms, counts per latency bucket, to estimate percentiles.",
+          "say": "Monitoring uses histograms, counts per latency bucket, to estimate percentiles without storing every value.",
           "reveal": 1
         },
         {
@@ -521,11 +725,11 @@
           "reveal": 2
         },
         {
-          "say": "Cut the tail with hedged requests: no reply by the p ninety-five time, ask a second replica and take the first answer. Add timeouts and limit fan-out.",
+          "say": "Cut the tail with hedged requests. Say the search server's p ninety-five is fifty milliseconds. If no reply after fifty, ask a second replica and take whichever answers first. That costs only about five percent extra requests, and rescues the slow ones. Add timeouts and limit fan-out.",
           "reveal": 3
         },
         {
-          "say": "Beware coordinated omission: a load tester that waits on slow responses sends less traffic exactly then, hiding the tail.",
+          "say": "Beware coordinated omission: a load tester that waits on each slow response sends less traffic exactly then, hiding the tail.",
           "reveal": 4
         },
         {
@@ -535,7 +739,7 @@
       ]
     },
     {
-      "id": "s018",
+      "id": "s020",
       "layout": "number",
       "kicker": "Concept 6 of 23",
       "title": "Little's law",
@@ -543,51 +747,145 @@
       "caption": "In flight = arrival rate x time in system",
       "steps": [
         {
-          "say": "Little's law holds for any stable system. L equals lambda times W. L is items inside at once, like requests in flight. Lambda is the arrival rate, which equals throughput. W is time spent inside, the latency.",
+          "say": "Little's law holds for any stable system, where items arrive, spend some time, and leave. L equals lambda times W.",
           "reveal": 0
         },
         {
-          "say": "Two customers arrive at a café per minute and each stays ten minutes, so twenty are inside on average, whatever the barista does.",
+          "say": "L is the number of items inside at once, like requests in flight. Lambda is the arrival rate, which in a stable system equals throughput. W is the time each item spends inside: the latency. Know any two and you get the third.",
           "reveal": 0
         }
       ]
     },
     {
-      "id": "s019",
-      "layout": "bullets",
-      "title": "Sizing with Little's law",
-      "bullets": [
-        "1,000/s x 0.2 s = 200 in flight",
-        "20 / 0.005 s = 4,000 queries/s",
-        "Latency doubles: throughput halves",
-        "Stable systems only; use seconds",
-        "100 threads / 0.25 s = 400 req/s"
-      ],
+      "id": "s021",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Little's law in a coffee shop",
+      "table": {
+        "head": [
+          "Letter",
+          "Coffee shop",
+          "Value"
+        ],
+        "rows": [
+          [
+            "lambda (arrivals)",
+            "Customers per minute",
+            "2 / min"
+          ],
+          [
+            "W (time inside)",
+            "Queue, drink, sit",
+            "10 min"
+          ],
+          [
+            "L = lambda x W",
+            "People inside",
+            "20"
+          ],
+          [
+            "W rises to 15 min",
+            "Same arrivals",
+            "30 inside"
+          ],
+          [
+            "Max lambda = L / W",
+            "20 seats / 10 min",
+            "2 / min"
+          ]
+        ]
+      },
       "steps": [
         {
-          "say": "A thousand requests per second at point two seconds each is two hundred in flight. You need at least two hundred threads or connections, plus headroom.",
+          "say": "Picture a coffee shop. Let's find each of the three letters.",
+          "reveal": 0
+        },
+        {
+          "say": "Lambda, the arrival rate: two customers walk in every minute.",
           "reveal": 1
         },
         {
-          "say": "Twenty database connections with five millisecond queries serve at most twenty divided by point zero zero five: four thousand queries per second.",
+          "say": "W, the time inside: each customer queues, gets a drink and sits for ten minutes.",
           "reveal": 2
         },
         {
-          "say": "With a fixed concurrency limit, if latency doubles, max throughput halves. That's why slow dependencies hurt.",
+          "say": "So L, the number inside on average, is two times ten: twenty people. That's true whatever the barista does. It's just counting.",
           "reveal": 3
         },
         {
-          "say": "It needs a stable system, and convert milliseconds to seconds first. Interview example: five thousand requests a second at forty milliseconds is two hundred in flight, about four per instance across fifty instances.",
+          "say": "Now the barista slows down and each visit stretches to fifteen minutes. Same arrivals, so thirty people inside. With twenty seats, ten are standing. Slower service means more people in the building.",
           "reveal": 4
         },
         {
-          "say": "Pause: a hundred threads, each held two hundred and fifty milliseconds. Max throughput? A hundred divided by point two five: four hundred requests per second.",
+          "say": "Run it backwards. The shop has twenty seats and visits last ten minutes, so it can serve at most twenty divided by ten: two customers a minute. That's the same sum we'll do for servers.",
           "reveal": 5
         }
       ]
     },
     {
-      "id": "s020",
+      "id": "s022",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Little's law on a server",
+      "table": {
+        "head": [
+          "Question",
+          "Calculation",
+          "Answer"
+        ],
+        "rows": [
+          [
+            "Threads needed?",
+            "1,000/s x 0.2 s",
+            "200 in flight"
+          ],
+          [
+            "Pool max throughput?",
+            "20 / 0.005 s",
+            "4,000 queries/s"
+          ],
+          [
+            "Query slows to 10 ms?",
+            "20 / 0.010 s",
+            "2,000: halved"
+          ],
+          [
+            "Pause: 100 threads, 250 ms?",
+            "Stable systems; use seconds",
+            "?"
+          ],
+          [
+            "Answer",
+            "100 / 0.25 s",
+            "400 req/s"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Now swap customers for requests. Our feed service gets a thousand requests a second, and each takes point two seconds. A thousand times point two is two hundred in flight. So you need at least two hundred threads or connections, plus headroom, or requests queue.",
+          "reveal": 1
+        },
+        {
+          "say": "Run it backwards for a database pool. Twenty connections, each query takes five milliseconds, which is point zero zero five seconds. Twenty divided by point zero zero five: at most four thousand queries a second.",
+          "reveal": 2
+        },
+        {
+          "say": "And here's why slow dependencies hurt. Keep the twenty connections, but the database slows to ten milliseconds a query. Max throughput halves, to two thousand. Same hardware, half the capacity.",
+          "reveal": 3
+        },
+        {
+          "say": "Two rules: the system must be stable, and convert milliseconds to seconds first. Pause: a hundred threads, each held two hundred and fifty milliseconds. Max throughput?",
+          "reveal": 4
+        },
+        {
+          "say": "A hundred divided by point two five: four hundred requests a second. Beyond that, requests queue and latency climbs.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s023",
       "layout": "table",
       "kicker": "Concept 7 of 23",
       "title": "Latency numbers every engineer should know",
@@ -633,7 +931,7 @@
       },
       "steps": [
         {
-          "say": "From Jeff Dean and Peter Norvig. Learn orders of magnitude, not digits. An L one cache read: one nanosecond.",
+          "say": "From Jeff Dean and Peter Norvig. Learn orders of magnitude, not digits. An L one cache read, inside the processor: one nanosecond.",
           "reveal": 1
         },
         {
@@ -641,7 +939,7 @@
           "reveal": 2
         },
         {
-          "say": "A random four kilobyte read from an N-V-M-e S-S-D: twenty to a hundred microseconds.",
+          "say": "A random four kilobyte read from a fast N-V-M-e S-S-D: twenty to a hundred microseconds.",
           "reveal": 3
         },
         {
@@ -667,28 +965,93 @@
       ]
     },
     {
-      "id": "s021",
+      "id": "s024",
       "layout": "number",
       "title": "If one nanosecond were one second",
       "big": "L1 1 s, RAM 2 min, DC trip 6 days, HDD seek 4 months, ocean 2 years",
       "caption": "Orders of magnitude matter, not exact digits",
       "steps": [
         {
-          "say": "Scale it up. If an L one read took a second, RAM would take about two minutes, a data-centre round trip about six days, a disk seek four months, and London to New York two years.",
+          "say": "Scale it up to human time. If an L one read took a second, a RAM read would take about two minutes, a data-centre round trip about six days, a disk seek four months, and London to New York two years.",
           "reveal": 0
         }
       ]
     },
     {
-      "id": "s022",
+      "id": "s025",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Pricing one feed request with the table",
+      "table": {
+        "head": [
+          "Work",
+          "Calculation",
+          "Time"
+        ],
+        "rows": [
+          [
+            "20 cache gets, one by one",
+            "20 x 0.5 ms trips",
+            "10 ms"
+          ],
+          [
+            "Same, batched",
+            "1 x 0.5 ms trip",
+            "0.5 ms"
+          ],
+          [
+            "10 random reads, SSD",
+            "10 x ~100 us",
+            "~1 ms"
+          ],
+          [
+            "10 random reads, HDD",
+            "10 x 10 ms seeks",
+            "100 ms"
+          ],
+          [
+            "One call across an ocean",
+            "1 round trip",
+            "70-150 ms"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Let's use the table to price parts of one feed request in our photo app.",
+          "reveal": 0
+        },
+        {
+          "say": "The feed needs twenty pieces of data from Redis. Fetched one after another, each costs a data-centre round trip of half a millisecond: ten milliseconds. The RAM read inside Redis is nanoseconds. The trip is what you pay for.",
+          "reveal": 1
+        },
+        {
+          "say": "Batch them into one multi-get call and it's one round trip: half a millisecond. Twenty times faster, same data.",
+          "reveal": 2
+        },
+        {
+          "say": "Now a cache miss sends ten random reads to a database. On S-S-D, at about a hundred microseconds each, that's about one millisecond.",
+          "reveal": 3
+        },
+        {
+          "say": "If that database sat on spinning disks, ten seeks at ten milliseconds is a hundred milliseconds. Half our whole budget gone on disk arms. That's why databases moved to S-S-Ds.",
+          "reveal": 4
+        },
+        {
+          "say": "And a call to another continent adds seventy to a hundred and fifty milliseconds. Only moving data closer fixes that. Interview version: fifty sequential calls of a millisecond is fifty milliseconds before any real work. Batch or parallelise.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s026",
       "layout": "bullets",
       "title": "What the numbers tell you",
       "bullets": [
         "RAM >> SSD >> HDD: caches live in RAM",
         "1,000 sequential calls = 0.5 s of trips",
         "Oceans cost 70-150 ms: move data closer",
-        "Sequential beats random: append-only logs",
-        "Remote cache: fast read + 0.5 ms trip"
+        "Sequential beats random: append-only logs"
       ],
       "steps": [
         {
@@ -696,25 +1059,21 @@
           "reveal": 1
         },
         {
-          "say": "A thousand sequential database calls cost at least half a second in round trips alone. Batch them.",
+          "say": "A data-centre round trip costs as much as thousands of memory reads. A thousand sequential database calls cost at least half a second in trips alone.",
           "reveal": 2
         },
         {
-          "say": "Ocean crossings cost seventy to a hundred and fifty milliseconds. Only moving data closer helps.",
+          "say": "Ocean crossings cost seventy to a hundred and fifty milliseconds, and light isn't getting faster.",
           "reveal": 3
         },
         {
-          "say": "Sequential beats random, so storage engines write append-only logs.",
+          "say": "Sequential beats random, so storage engines write append-only logs. Recap: memory is nanoseconds, S-S-D microseconds, network and disk milliseconds.",
           "reveal": 4
-        },
-        {
-          "say": "A remote Redis isn't free: the read is nanoseconds, but the trip is half a millisecond. Interview question: why is a service making fifty calls per request slow, when each call is fast? Fifty sequential calls at about a millisecond each is fifty milliseconds before any real work. Batch or parallelise.",
-          "reveal": 5
         }
       ]
     },
     {
-      "id": "s023",
+      "id": "s027",
       "layout": "table",
       "kicker": "Concept 8 of 23",
       "title": "Units and data sizes",
@@ -743,7 +1102,7 @@
           [
             "TB",
             "10^12",
-            "A laptop drive"
+            "A laptop drive; a day of photos"
           ],
           [
             "PB",
@@ -754,11 +1113,11 @@
       },
       "steps": [
         {
-          "say": "A byte is eight bits. Each unit is about a thousand times the last. Two to the ten is ten twenty-four, but estimates round it to a thousand. A kilobyte: a short post with metadata.",
+          "say": "A byte is eight bits, enough for one letter. Each unit is about a thousand times the last. Two to the ten is ten twenty-four, but estimates round it to a thousand. A kilobyte: a short post with its metadata.",
           "reveal": 1
         },
         {
-          "say": "A megabyte: a photo, or a minute of M-P-three.",
+          "say": "A megabyte: a high-quality photo, or a minute of M-P-three.",
           "reveal": 2
         },
         {
@@ -766,29 +1125,29 @@
           "reveal": 3
         },
         {
-          "say": "A terabyte: a laptop drive.",
+          "say": "A terabyte: a laptop drive. Our photo app takes in one of these every day.",
           "reveal": 4
         },
         {
-          "say": "A petabyte: a large data warehouse.",
+          "say": "A petabyte: a large company's data warehouse. Our app reaches nearly two of these in five years.",
           "reveal": 5
         }
       ]
     },
     {
-      "id": "s024",
+      "id": "s028",
       "layout": "bullets",
       "title": "Numbers to keep in your pocket",
       "bullets": [
-        "2^32 = 4.3 billion",
+        "2^32 = 4.3 billion: IPv4, 32-bit IDs",
         "Timestamp 8 B, UUID 16 B, photo 0.2-2 MB",
         "1 day = 86,400 s, about 10^5",
-        "1 million/day = about 12/s",
+        "1 million/day = about 12/s; 3M/day = ~36/s",
         "1 Gbps = 125 MB/s"
       ],
       "steps": [
         {
-          "say": "Two to the thirty-two is about four point three billion: the I-P version four address space, and where thirty-two bit IDs run out.",
+          "say": "Two to the thirty-two is about four point three billion. That's every I-P version four address, and where a thirty-two bit I-D column runs out. A signed one runs out at about two billion rows.",
           "reveal": 1
         },
         {
@@ -796,21 +1155,21 @@
           "reveal": 2
         },
         {
-          "say": "A day is eighty-six thousand four hundred seconds. Round it to ten to the five.",
+          "say": "A day is eighty-six thousand four hundred seconds. Round it to ten to the five, a hundred thousand.",
           "reveal": 3
         },
         {
-          "say": "So one million per day is about twelve per second.",
+          "say": "So one million per day is about twelve per second. For example, a shop taking three million orders a day handles about thirty-six a second on average.",
           "reveal": 4
         },
         {
-          "say": "And a one gigabit card moves a hundred and twenty-five megabytes per second at best.",
+          "say": "And a one gigabit network card moves a hundred and twenty-five megabytes per second at best, because there are eight bits in a byte.",
           "reveal": 5
         }
       ]
     },
     {
-      "id": "s025",
+      "id": "s029",
       "layout": "diagram",
       "kicker": "Concept 9 of 23",
       "title": "Back-of-the-envelope estimation",
@@ -818,22 +1177,31 @@
       "caption": "Round aggressively, state every assumption",
       "steps": [
         {
-          "say": "A back-of-the-envelope estimate finds the order of magnitude, and that decides the architecture. A hundred requests per second fits one server. A hundred thousand needs caching and sharding.",
+          "say": "A back-of-the-envelope estimate finds the order of magnitude, and that decides the architecture. A hundred requests a second fits one server. A hundred thousand needs caching and sharding.",
           "reveal": 0
         },
         {
-          "say": "D-A-U is daily active users. Q-P-S is queries per second. Requests per day divided by ten to the five gives average Q-P-S. Peak is usually two to three times that, more for spiky products.",
+          "say": "Start from assumptions. D-A-U means daily active users. Multiply by actions per user to get requests per day.",
           "reveal": 0
         },
         {
-          "say": "Storage per day is items times size, times days kept, times replicas. Bandwidth is Q-P-S times response size. State every assumption out loud.",
+          "say": "Divide by ten to the five to get average Q-P-S, queries per second.",
+          "reveal": 0
+        },
+        {
+          "say": "Multiply by two or three for the peak, because traffic bunches up in the evening. More for spiky products like ticket sales.",
+          "reveal": 0
+        },
+        {
+          "say": "Storage per day is new items times their size. Total storage is that times days kept, times replicas. And bandwidth is Q-P-S times response size. Say every assumption out loud. Now the photo app, one line at a time.",
           "reveal": 0
         }
       ]
     },
     {
-      "id": "s026",
+      "id": "s030",
       "layout": "table",
+      "kicker": "Example",
       "title": "Worked example: a photo-sharing app",
       "table": {
         "head": [
@@ -871,30 +1239,35 @@
       },
       "steps": [
         {
-          "say": "A photo app: ten million daily users, each viewing fifty photos and uploading point two a day. Photos average five hundred kilobytes, metadata one kilobyte, kept five years. Reads: five hundred million a day, so about five thousand Q-P-S, fifteen thousand at peak.",
+          "say": "Assumptions, said out loud: ten million daily users, each viewing fifty photos and uploading point two a day. Photos average five hundred kilobytes, metadata one kilobyte, and we keep everything five years.",
+          "reveal": 0
+        },
+        {
+          "say": "Reads. Ten million times fifty is five hundred million views a day. Divide by ten to the five: about five thousand Q-P-S average, fifteen thousand at a three times peak.",
           "reveal": 1
         },
         {
-          "say": "Writes: two million a day, about twenty per second, sixty at peak. Two hundred and fifty reads per write, so caching matters.",
+          "say": "Writes. Ten million times point two is two million uploads a day: about twenty per second, sixty at peak. That's two hundred and fifty reads per write, so caching and a C-D-N matter a lot.",
           "reveal": 2
         },
         {
-          "say": "Storage: two million times five hundred kilobytes is one terabyte of photos a day, plus two gigabytes of metadata.",
+          "say": "Storage per day. Two million times five hundred kilobytes is one terabyte of photos a day, plus two gigabytes of metadata.",
           "reveal": 3
         },
         {
-          "say": "Over five years, about one point eight petabytes, times three with replicas. Photos go in object storage.",
+          "say": "Five years. One terabyte times three sixty-five times five is about one point eight petabytes, times three with replicas. Photos go in object storage. Metadata, about three point six terabytes, fits a sharded database.",
           "reveal": 4
         },
         {
-          "say": "Bandwidth: five thousand views a second times five hundred kilobytes is two and a half gigabytes per second, about twenty gigabits. A strong case for a C-D-N.",
+          "say": "Bandwidth. Five thousand views a second times five hundred kilobytes is two and a half gigabytes per second, about twenty gigabits. A strong case for a C-D-N.",
           "reveal": 5
         }
       ]
     },
     {
-      "id": "s027",
+      "id": "s031",
       "layout": "table",
+      "kicker": "Example",
       "title": "How many servers do we need?",
       "table": {
         "head": [
@@ -947,41 +1320,41 @@
       },
       "steps": [
         {
-          "say": "Now server count. Thirty thousand requests per second at peak. Each uses four milliseconds of C-P-U and takes fifty milliseconds end to end. Sixteen-core machines, three availability zones, must survive losing one. One core: a thousand divided by four, two hundred and fifty per second.",
+          "say": "Now server count, the step interviewers love. Assume thirty thousand requests a second at peak. Each uses four milliseconds of C-P-U and takes fifty milliseconds end to end. Sixteen-core machines, three availability zones, and we must survive losing one. Step one: one core does a thousand divided by four, two hundred and fifty per second.",
           "reveal": 1
         },
         {
-          "say": "Times sixteen cores: four thousand per server at full load.",
+          "say": "Step two: times sixteen cores, four thousand per server at full load.",
           "reveal": 2
         },
         {
-          "say": "Keep C-P-U at sixty percent so queues stay short: twenty-four hundred.",
+          "say": "Step three: keep C-P-U at sixty percent so queues stay short. Twenty-four hundred per server.",
           "reveal": 3
         },
         {
-          "say": "Thirty thousand divided by twenty-four hundred is twelve and a half. Round up to thirteen.",
+          "say": "Step four: thirty thousand divided by twenty-four hundred is twelve and a half. Round up to thirteen.",
           "reveal": 4
         },
         {
-          "say": "Little's law check: thirty thousand times point zero five is fifteen hundred in flight, about a hundred and fifteen per server. Fine.",
+          "say": "Step five, a Little's law check: thirty thousand times point zero five is fifteen hundred in flight, about a hundred and fifteen per server. Fine.",
           "reveal": 5
         },
         {
-          "say": "Zone loss: thirteen must survive with two zones left, so seven per zone. Times three: twenty-one.",
+          "say": "Step six, zone loss: thirteen must survive with two zones left, so seven per zone. Times three zones: twenty-one.",
           "reveal": 6
         },
         {
-          "say": "Rolling deploys take about ten percent out: roughly twenty-three servers.",
+          "say": "Step seven: rolling deploys take about ten percent out at a time, so roughly twenty-three servers.",
           "reveal": 7
         },
         {
-          "say": "Network: twenty kilobyte responses give about four point eight gigabits total, a quarter gigabit per server. C-P-U is the limit.",
+          "say": "Step eight, network: twenty kilobyte responses give about four point eight gigabits total, about a quarter gigabit per server. C-P-U is the limit, not the network.",
           "reveal": 8
         }
       ]
     },
     {
-      "id": "s028",
+      "id": "s032",
       "layout": "bullets",
       "title": "Reading the answer",
       "bullets": [
@@ -989,8 +1362,8 @@
         "CPU per request sets the fleet",
         "Repeat per tier",
         "Peak, replicas, overhead; think aloud",
-        "Say the whole chain in one sentence",
-        "100M DAU x 20 = 20,000 avg, 60,000 peak"
+        "Pause: 100M DAU x 20 requests = ? QPS",
+        "20,000 avg, 60,000 peak"
       ],
       "steps": [
         {
@@ -1002,25 +1375,25 @@
           "reveal": 2
         },
         {
-          "say": "Repeat per tier: caches are limited by memory, databases by disk operations and writes, streams by bandwidth.",
+          "say": "Repeat per tier: caches are limited by memory, databases by disk and writes.",
           "reveal": 3
         },
         {
-          "say": "Common mistakes: forgetting peak, replicas, and index overhead of twenty to fifty percent, and false precision. Spend three to five minutes, out loud.",
+          "say": "Common mistakes: forgetting peak, replicas and index overhead, and false precision. Spend three to five minutes, out loud.",
           "reveal": 4
         },
         {
-          "say": "Say it in one breath: four milliseconds of C-P-U means four thousand a second per box; at sixty percent, twenty-four hundred; thirteen for peak; seven per zone across three zones, twenty-one, plus a little for deploys.",
+          "say": "Pause: a hundred million daily users, twenty requests each. Plan for what Q-P-S?",
           "reveal": 5
         },
         {
-          "say": "Pause: a hundred million daily users, twenty requests each. Plan for what Q-P-S? Two billion a day over ten to the five is twenty thousand average, about sixty thousand at peak. For scale, WhatsApp's hundred billion messages a day is about a million per second.",
+          "say": "Two billion a day over ten to the five is twenty thousand average, about sixty thousand at peak. For scale, WhatsApp's hundred billion messages a day is about a million per second.",
           "reveal": 6
         }
       ]
     },
     {
-      "id": "s029",
+      "id": "s033",
       "layout": "table",
       "kicker": "Concept 10 of 23",
       "title": "Availability and the nines",
@@ -1066,7 +1439,7 @@
       },
       "steps": [
         {
-          "say": "Availability is the share of time a system works correctly: uptime over total time, or successful requests over valid ones. Using a three sixty-five day year and thirty day month: ninety-nine percent allows three point six five days down a year, seven point two hours a month.",
+          "say": "Availability is the share of time a system works correctly: uptime over total time, or successful requests over valid ones. Two nines, ninety-nine percent, allows three point six five days down a year, seven point two hours a month.",
           "reveal": 1
         },
         {
@@ -1078,34 +1451,100 @@
           "reveal": 3
         },
         {
-          "say": "Four nines: fifty-three minutes a year, four point three minutes a month. Less than a human needs to wake and log in, so recovery must be automatic.",
+          "say": "Four nines: fifty-three minutes a year, four point three minutes a month. Less than a human needs to wake up and log in, so recovery must be automatic.",
           "reveal": 4
         },
         {
-          "say": "Five nines: about five minutes a year, twenty-six seconds a month. Each nine cuts downtime ten times, and usually costs far more than ten times the effort.",
+          "say": "Five nines: about five minutes a year. Each nine cuts downtime ten times, and usually costs far more than ten times the effort.",
           "reveal": 5
         }
       ]
     },
     {
-      "id": "s030",
+      "id": "s034",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "A real outage against the nines",
+      "table": {
+        "head": [
+          "Question",
+          "Calculation",
+          "Answer"
+        ],
+        "rows": [
+          [
+            "Outage",
+            "S3, one US region, Feb 2017",
+            "~4 hours"
+          ],
+          [
+            "Cause",
+            "Mistyped command removed servers",
+            "Human fault"
+          ],
+          [
+            "Three nines per year",
+            "4 h of 8.76 h",
+            "~half the year"
+          ],
+          [
+            "99.9% that month",
+            "4 h of 720 h",
+            "~99.4%"
+          ],
+          [
+            "Four nines per year",
+            "240 min / 52.6 min",
+            "4.5x over budget"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Let's measure a real outage with this table. In February twenty seventeen, Amazon S-three in its biggest U-S region went down for about four hours.",
+          "reveal": 1
+        },
+        {
+          "say": "The cause was human. An engineer ran a routine command to remove a few servers, mistyped one input, and removed far more than intended. Thousands of websites that stored files there broke with it.",
+          "reveal": 2
+        },
+        {
+          "say": "Against a three nines yearly budget of eight point seven six hours, that one afternoon used about half the year.",
+          "reveal": 3
+        },
+        {
+          "say": "Against a monthly target of ninety-nine point nine, which allows forty-three minutes, four hours drops that month to about ninety-nine point four percent.",
+          "reveal": 4
+        },
+        {
+          "say": "Against four nines, fifty-three minutes a year, the budget was blown more than four times over. One bad afternoon decides your nines.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s035",
       "layout": "diagram",
       "title": "Series and parallel",
       "mermaid": "flowchart LR\n  subgraph Series[\"Series: all must work = 99.79%\"]\n    A1[\"LB 99.99%\"] --> A2[\"App 99.9%\"] --> A3[\"DB 99.9%\"]\n  end\n  subgraph Parallel[\"Parallel: one is enough = 99.99%\"]\n    B1[\"Server A 99%\"]\n    B2[\"Server B 99%\"]\n  end",
       "caption": "Series multiplies down. Redundancy multiplies up",
       "steps": [
         {
-          "say": "Parts in series must all work, so multiply. A load balancer at four nines, app at three, database at three: about ninety-nine point seven nine percent. Lower than the weakest link.",
+          "say": "Now, how parts combine. Parts in series must all work, so you multiply. A feed request goes through a load balancer at four nines, an app tier at three, and a database at three. Point nine nine nine nine times point nine nine nine times point nine nine nine: about ninety-nine point seven nine percent. Lower than the weakest link.",
           "reveal": 0
         },
         {
-          "say": "Parts in parallel need only one. Two independent servers at ninety-nine percent are both down one percent of one percent of the time: ninety-nine point nine nine. But only if failures are independent; one rack's power cut takes both.",
+          "say": "Parts in parallel need only one to work. Two independent servers at ninety-nine percent are both down only one percent of one percent of the time: ninety-nine point nine nine. Two cheap two-nines machines make a four-nines pair.",
+          "reveal": 0
+        },
+        {
+          "say": "But only if failures are independent. Put both in one rack, and one power cut takes both.",
           "reveal": 0
         }
       ]
     },
     {
-      "id": "s031",
+      "id": "s036",
       "layout": "bullets",
       "title": "Costs and traps",
       "bullets": [
@@ -1116,7 +1555,7 @@
       ],
       "steps": [
         {
-          "say": "Three nines to four can mean multiple data centres and roughly double infrastructure. Many internal tools are fine at ninety-nine point five.",
+          "say": "Going from three nines to four can mean several data centres and double the infrastructure. Many internal tools are fine at ninety-nine point five.",
           "reveal": 1
         },
         {
@@ -1124,7 +1563,7 @@
           "reveal": 2
         },
         {
-          "say": "Planned maintenance still counts as downtime.",
+          "say": "Planned maintenance still counts as downtime. Users don't care why it's down.",
           "reveal": 3
         },
         {
@@ -1134,7 +1573,7 @@
       ]
     },
     {
-      "id": "s032",
+      "id": "s037",
       "layout": "bullets",
       "kicker": "Concept 11 of 23",
       "title": "SLI, SLO and SLA",
@@ -1142,46 +1581,121 @@
         "SLI: a measurement",
         "SLO: an internal target",
         "SLA: a contract with penalties",
-        "SLA looser than SLO: warning before paying"
+        "Pizza: actual times, 95% in 30 min, free at 45"
       ],
       "steps": [
         {
-          "say": "An S-L-I, service level indicator, is a measurement: say, the percentage of requests succeeding under three hundred milliseconds over thirty days.",
+          "say": "Three terms, from most technical to most legal. An S-L-I, service level indicator, is a measurement.",
           "reveal": 1
         },
         {
-          "say": "An S-L-O, service level objective, is an internal target for it: ninety-nine point nine percent.",
+          "say": "An S-L-O, service level objective, is an internal target for that measurement.",
           "reveal": 2
         },
         {
-          "say": "An S-L-A, service level agreement, is a customer contract with penalties, usually service credits.",
+          "say": "An S-L-A, service level agreement, is a contract with customers, with penalties, usually service credits.",
           "reveal": 3
         },
         {
-          "say": "Pizza shop: actual delivery times, the manager's ninety-five percent in thirty minutes, and the printed free-if-over-forty-five promise. The S-L-A is looser, so missing the S-L-O warns you before you pay.",
+          "say": "Think of a pizza shop. The S-L-I is how long deliveries actually take. The S-L-O is the manager's ninety-five percent within thirty minutes. The S-L-A is the printed promise: over forty-five minutes and it's free. The S-L-A is looser, so missing the S-L-O warns you before you have to pay.",
           "reveal": 4
         }
       ]
     },
     {
-      "id": "s033",
+      "id": "s038",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "SLI, SLO and SLA for the photo feed",
+      "table": {
+        "head": [
+          "Term",
+          "Photo feed API",
+          "Number"
+        ],
+        "rows": [
+          [
+            "SLI",
+            "% requests OK in < 300 ms, 30 days",
+            "measured"
+          ],
+          [
+            "SLO",
+            "Internal target",
+            "99.9%"
+          ],
+          [
+            "SLA",
+            "Contract: 10% credit if missed",
+            "99.5%"
+          ],
+          [
+            "Error budget",
+            "0.1% of 100M requests",
+            "100,000 fails"
+          ],
+          [
+            "Bad deploy",
+            "2% fail for 1 h (~139k req)",
+            "~2,800: ship on"
+          ],
+          [
+            "30 min outage",
+            "~69,000 fails",
+            "~70%: freeze"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Now one real service: our photo app's feed A-P-I, serving a hundred million requests a month.",
+          "reveal": 0
+        },
+        {
+          "say": "The S-L-I: the percentage of feed requests that succeed in under three hundred milliseconds, measured over thirty days.",
+          "reveal": 1
+        },
+        {
+          "say": "The S-L-O: ninety-nine point nine percent of them.",
+          "reveal": 2
+        },
+        {
+          "say": "The S-L-A: ninety-nine point five percent, or business customers get ten percent of their bill back. Looser on purpose.",
+          "reveal": 3
+        },
+        {
+          "say": "The error budget is one minus the S-L-O: point one percent. Of a hundred million requests, a hundred thousand may fail this month.",
+          "reveal": 4
+        },
+        {
+          "say": "Incident one. A bad deploy fails two percent of requests for an hour. An hour is about a hundred and thirty-nine thousand requests, so about twenty-eight hundred failed. That's under three percent of the budget. Roll back and keep shipping.",
+          "reveal": 5
+        },
+        {
+          "say": "Incident two. The database dies and the feed is down for thirty minutes: about seventy thousand failures, seventy percent of the budget. The team freezes risky launches and works on failover. Still inside the S-L-A, so no refunds. The warning came first.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s039",
       "layout": "diagram",
       "title": "Error budgets",
       "mermaid": "flowchart TD\n  I[\"SLI measured: 99.95%\"] --> O[\"SLO target: 99.9%\"]\n  O --> B[\"Error budget left\"]\n  B -->|\"budget left\"| F[\"Keep shipping features\"]\n  B -->|\"budget spent\"| R[\"Freeze risky changes\"]\n  O --> A[\"SLA looser, e.g. 99.5%: refunds\"]",
       "caption": "Error budget = 1 - SLO",
       "steps": [
         {
-          "say": "The error budget is one minus the S-L-O. At ninety-nine point nine, that's point one percent: of a hundred million monthly requests, a hundred thousand may fail, or about forty-three minutes of full outage.",
+          "say": "So the budget turns reliability into a shared decision. While budget remains, ship fast. When it's spent, freeze risky changes and fix reliability. The idea comes from Google's site reliability engineering.",
           "reveal": 0
         },
         {
-          "say": "While budget remains, ship fast. When it's spent, freeze risky changes and fix reliability. This comes from Google's site reliability engineering. Pick indicators users feel, like failed checkouts, not C-P-U. And never set an S-L-O of a hundred percent: any change would violate it. Measure over a rolling twenty-eight or thirty days, and alert when the budget burns too fast. In the interview: the S-L-O is the internal target, the S-L-A the looser external contract.",
+          "say": "Rules of thumb: pick indicators users feel, like failed checkouts, not C-P-U. Never set an S-L-O of a hundred percent, because any change would violate it. Measure over a rolling thirty days, and alert when the budget burns too fast.",
           "reveal": 0
         }
       ]
     },
     {
-      "id": "s034",
+      "id": "s040",
       "layout": "number",
       "kicker": "Concept 12 of 23",
       "title": "MTBF and MTTR",
@@ -1189,46 +1703,83 @@
       "caption": "1,000 h / (1,000 h + 1 h) = about 99.9%",
       "steps": [
         {
-          "say": "M-T-B-F, mean time between failures, should be high. M-T-T-R, mean time to repair or recover, should be low. Availability is M-T-B-F over M-T-B-F plus M-T-T-R.",
+          "say": "Two measures of failure. M-T-B-F, mean time between failures, is how long a system runs before it breaks. Higher is better. M-T-T-R, mean time to repair or recover, is how long it stays broken. Lower is better.",
           "reveal": 0
         },
         {
-          "say": "Fail every thousand hours, recover in one: about ninety-nine point nine percent.",
+          "say": "Availability is M-T-B-F divided by M-T-B-F plus M-T-T-R. There's also M-T-T-D, mean time to detect: how long before anyone notices. Detection is part of repair.",
           "reveal": 0
         }
       ]
     },
     {
-      "id": "s035",
-      "layout": "bullets",
-      "title": "Shrink the repair time",
-      "bullets": [
-        "At scale, cut MTTR",
-        "10 s recovery: ~99.9997%",
-        "Detection is part of repair",
-        "Recap: recover fast"
-      ],
+      "id": "s041",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "One database, two ways to recover",
+      "table": {
+        "head": [
+          "",
+          "Calculation",
+          "Result"
+        ],
+        "rows": [
+          [
+            "Manual: detect",
+            "Users complain after 30 min",
+            "MTTD 30 min"
+          ],
+          [
+            "Manual: repair",
+            "Engineer promotes replica",
+            "MTTR ~1 h"
+          ],
+          [
+            "Manual: availability",
+            "1,000 / 1,001",
+            "~99.9%"
+          ],
+          [
+            "Automatic: failover",
+            "Health check + switch",
+            "MTTR 10 s"
+          ],
+          [
+            "Automatic: availability",
+            "1,000 h / (1,000 h + 10 s)",
+            "~99.9997%"
+          ]
+        ]
+      },
       "steps": [
         {
-          "say": "At scale something always fails, so cutting M-T-T-R is usually cheaper than raising M-T-B-F.",
+          "say": "Take our photo app's database server. On average it fails once every thousand hours, about every six weeks.",
+          "reveal": 0
+        },
+        {
+          "say": "Version one, manual recovery. Nobody notices for thirty minutes, until users complain. That's the detection time.",
           "reveal": 1
         },
         {
-          "say": "Same server, but automatic ten-second recovery: about ninety-nine point nine nine nine seven percent.",
+          "say": "Then an engineer logs in, diagnoses, and promotes the replica: another thirty minutes. So M-T-T-R is about an hour.",
           "reveal": 2
         },
         {
-          "say": "Detection counts. M-T-T-D, mean time to detect: an outage nobody notices for thirty minutes has at least thirty minutes of repair time.",
+          "say": "Availability: a thousand over a thousand and one, about ninety-nine point nine percent.",
           "reveal": 3
         },
         {
-          "say": "Recap: you can't prevent every failure, so recover fast with monitoring and automation.",
+          "say": "Version two, same failure rate. A health check spots it and automatic failover finishes in ten seconds.",
           "reveal": 4
+        },
+        {
+          "say": "Availability: about ninety-nine point nine nine nine seven percent. Three nines to five, without the machine failing any less. At scale something is always failing, so cutting M-T-T-R is usually the cheaper lever.",
+          "reveal": 5
         }
       ]
     },
     {
-      "id": "s036",
+      "id": "s042",
       "layout": "table",
       "kicker": "Concept 13 of 23",
       "title": "Reliability, availability and durability",
@@ -1258,7 +1809,7 @@
       },
       "steps": [
         {
-          "say": "Availability: can I use it right now?",
+          "say": "Three words people mix up. Availability: can I use it right now?",
           "reveal": 1
         },
         {
@@ -1266,19 +1817,21 @@
           "reveal": 2
         },
         {
-          "say": "Durability: will saved data survive crashes and dead disks? A system can be down but durable. S-three promises eleven nines durability but only four nines availability: separate promises, separate techniques. And replication isn't backup: a deleting bug is copied everywhere.",
+          "say": "Durability: will saved data survive crashes and dead disks? A system can be down but durable: offline for an hour, nothing lost.",
           "reveal": 3
         }
       ]
     },
     {
-      "id": "s037",
+      "id": "s043",
       "layout": "bullets",
       "title": "Telling them apart",
       "bullets": [
         "Machine works now: availability",
         "Right amount, right account: reliability",
         "Survives a flood: durability",
+        "S3: 11 nines durable, 4 nines available",
+        "Replication is not backup",
         "Durable but unavailable? Yes"
       ],
       "steps": [
@@ -1291,173 +1844,190 @@
           "reveal": 2
         },
         {
-          "say": "Your balance survives a flood: durability. Availability comes from redundancy and failover; durability from copies in separate places, writing to disk before confirming, and backups.",
+          "say": "Your balance survives a flood at the branch: durability.",
           "reveal": 3
         },
         {
-          "say": "Pause: can a system be durable but not available? Yes. A database down for maintenance can't be read, but its data is safe on disk. Recap: usable now, correct over time, data survives.",
+          "say": "A real number: S-three is designed for eleven nines of durability. Store ten million objects and you'd lose one about once in ten thousand years. But availability is only four nines. Separate promises, separate techniques: availability from redundancy and failover, durability from copies in separate places, writing to disk before confirming, and backups.",
           "reveal": 4
+        },
+        {
+          "say": "And replication isn't backup. A bug that deletes your photos is faithfully copied to every replica. Only a backup brings them back.",
+          "reveal": 5
+        },
+        {
+          "say": "Pause: can a system be durable but not available? Yes. A database down for maintenance can't be read, but its data is safe on disk. Recap: usable now, correct over time, data survives.",
+          "reveal": 6
         }
       ]
     },
     {
-      "id": "s038",
+      "id": "s044",
       "layout": "table",
       "kicker": "Concept 14 of 23",
       "title": "Faults, failures and fault tolerance",
       "table": {
         "head": [
           "Fault",
-          "Example",
+          "In the photo app",
           "Defence"
         ],
         "rows": [
           [
             "Hardware",
-            "Disk dies",
-            "Redundant machines, replicas"
+            "Database disk dies",
+            "Replica on another machine"
           ],
           [
             "Software",
-            "Bug, memory leak",
-            "Tests, gradual rollouts"
+            "Release leaks memory",
+            "Tests, 5% rollout first"
           ],
           [
             "Network",
-            "Lost packets, cut link",
+            "Link between zones drops",
             "Timeouts, retries, other zones"
           ],
           [
             "Human",
-            "Bad config, deleted table",
+            "Bad config pushed everywhere",
             "Reviews, backups, rollback"
           ],
           [
             "Dependency",
-            "Third-party API down",
-            "Timeouts, fallbacks, breakers"
+            "Face-tagging API is slow",
+            "Timeout, fallback, breaker"
           ]
         ]
       },
       "steps": [
         {
-          "say": "A fault is one part going wrong. A failure is the whole system not serving users. Fault tolerance stops faults becoming failures, like a twin-engine plane landing on one engine. Hardware faults: defend with redundancy.",
+          "say": "A fault is one part going wrong. A failure is the whole system not serving users. Fault tolerance stops faults becoming failures, like a twin-engine plane landing on one engine. Here are five kinds of fault, each in our photo app. Hardware: a disk in the database server dies. Defence: a replica on another machine.",
           "reveal": 1
         },
         {
-          "say": "Software bugs: tests and gradual rollouts.",
+          "say": "Software: a release leaks memory and app servers crash every few hours. Defence: tests, and rolling out to five percent first.",
           "reveal": 2
         },
         {
-          "say": "Network faults: timeouts, retries, other zones.",
+          "say": "Network: a link between two zones drops packets. Defence: timeouts, retries, and replicas in other zones.",
           "reveal": 3
         },
         {
-          "say": "Human error, like a bad config: reviews, backups, rollback.",
+          "say": "Human: someone pushes a config pointing every server at the wrong database. Defence: reviews, backups, and fast rollback. Big cloud outages are often this kind.",
           "reveal": 4
         },
         {
-          "say": "Slow dependencies: timeouts, fallbacks, circuit breakers.",
+          "say": "Dependency: the third-party face-tagging A-P-I is slow. Defence: timeouts, a fallback that skips tagging, and a circuit breaker that stops calling it for a while.",
           "reveal": 5
         }
       ]
     },
     {
-      "id": "s039",
+      "id": "s045",
       "layout": "table",
       "title": "Failure models: how a broken part behaves",
       "table": {
         "head": [
           "Model",
-          "What the faulty part does",
+          "Real case",
           "Cost to tolerate"
         ],
         "rows": [
           [
             "Fail-stop",
-            "Halts; others are told",
+            "Fencing switch cuts power",
             "f+1 copies for f failures"
           ],
           [
             "Crash-stop",
-            "Halts silently; looks slow",
+            "Process killed, silent",
             "2f+1 with majority quorums"
           ],
           [
             "Crash-recovery",
-            "Restarts with disk state",
+            "Reboot, replay the log",
             "Write durably before ack"
           ],
           [
             "Omission",
-            "Drops some messages",
+            "Full buffer drops a message",
             "Acks, retries, idempotency"
           ],
           [
             "Timing",
-            "Correct but late; clock drift",
-            "Timeouts, deadlines, hedging"
+            "10 s GC pause, stale leader",
+            "Timeouts, deadlines, leases"
           ],
           [
             "Byzantine",
-            "Anything, even lies",
-            "3f+1 replicas, signatures"
+            "S3 2008: one flipped bit",
+            "3f+1 replicas, checksums"
           ]
         ]
       },
       "steps": [
         {
-          "say": "Failure models describe how a broken part behaves; each row allows more misbehaviour. Fail-stop halts and everyone is told: an idealisation.",
+          "say": "Faults also differ by how the broken part behaves. These are failure models. Each row allows more misbehaviour than the last, so it's harder to tolerate. Here's a real case for each.",
+          "reveal": 0
+        },
+        {
+          "say": "Fail-stop: the part halts, and everyone is reliably told. It's an idealisation, approximated by fencing: a power switch cuts a suspect node off, so the rest know for sure it's down.",
           "reveal": 1
         },
         {
-          "say": "Crash-stop halts silently, so it looks just like a slow node. Majority quorums need two f plus one nodes to survive f crashes.",
+          "say": "Crash-stop: the process halts silently, say killed by the operating system for using too much memory. Nobody is told, and a dead node looks exactly like a slow one. Majority quorums need two f plus one nodes to survive f crashes: three survive one.",
           "reveal": 2
         },
         {
-          "say": "Crash-recovery restarts with only what it saved, so write durably before acknowledging.",
+          "say": "Crash-recovery: the node crashes and restarts with only what it saved to disk. A server loses power, reboots, and replays its write-ahead log. Anything it acknowledged but held only in memory is gone, so write durably before you acknowledge.",
           "reveal": 3
         },
         {
-          "say": "Omission drops some messages: use acknowledgements and retries.",
+          "say": "Omission: the node keeps running but drops some messages. A full network buffer silently loses a payment-done message. The sender retries, so the handler must be idempotent, or the customer pays twice.",
           "reveal": 4
         },
         {
-          "say": "Timing gives right answers too late, like a long G-C pause: use timeouts and deadlines.",
+          "say": "Timing: right answers, too late. A database node freezes for ten seconds in a garbage-collection pause. Its leader lease expires, another node takes over, and the old one wakes up still thinking it leads. Defences: timeouts, deadlines, careful leases.",
           "reveal": 5
         },
         {
-          "say": "Byzantine does anything, even lies, and needs three f plus one replicas. Most data centres assume crash-recovery, omission and timing, plus checksums for corrupted data. So Raft survives one crash with three nodes; a Byzantine protocol needs four.",
+          "say": "Byzantine: anything at all, even lies. In twenty oh eight, an Amazon S-three outage of several hours was traced to a single flipped bit in the servers' internal status messages. Defences are checksums and signatures, and full Byzantine tolerance needs three f plus one replicas. That's why Raft survives one crash with three nodes, but a Byzantine protocol needs four.",
           "reveal": 6
         }
       ]
     },
     {
-      "id": "s040",
+      "id": "s046",
       "layout": "bullets",
       "title": "Detect, isolate, recover",
       "bullets": [
-        "Detect: health checks, heartbeats",
-        "Isolate: timeouts; slow is not fine",
-        "Recover; beware correlated failure"
+        "Detect: health check fails 3 times",
+        "Isolate: 2 s timeout, not 30 s",
+        "Recover: route around, restart",
+        "Beware correlated failure; Chaos Monkey"
       ],
       "steps": [
         {
-          "say": "Detect with health checks and heartbeats.",
+          "say": "Most data centres assume crash-recovery, omission and timing faults, and add checksums for corrupted data. Then you handle a fault in three moves. Say the thumbnail service starts hanging. Detect: a health check every five seconds fails three times in a row.",
           "reveal": 1
         },
         {
-          "say": "Isolate with timeouts, so one fault doesn't spread. A dependency that takes thirty seconds to fail can tie up every thread; a fast error is better.",
+          "say": "Isolate: app servers call it with a two-second timeout. Without that, a dependency taking thirty seconds to fail ties up every thread, and the whole app hangs. A fast error is better than a slow one.",
           "reveal": 2
         },
         {
-          "say": "Recover by routing around, restarting or failing over. And remember correlated failure: one bad deploy breaks every copy.",
+          "say": "Recover: route around the bad copies and restart them. Uploads still work. Thumbnails are just late.",
           "reveal": 3
+        },
+        {
+          "say": "And watch for correlated failure: one bad deploy breaks every copy at once. Netflix's Chaos Monkey randomly kills production servers so teams have to build for this. Recap: faults happen to parts, failures to the system.",
+          "reveal": 4
         }
       ]
     },
     {
-      "id": "s041",
+      "id": "s047",
       "layout": "bullets",
       "kicker": "Concept 15 of 23",
       "title": "Redundancy, SPOFs and failover",
@@ -1465,7 +2035,7 @@
         "Redundancy: spares",
         "SPOF: one failure stops everything",
         "Failover: switch to the spare",
-        "Separate zones, health checks, automation"
+        "Ask of every box: if it vanishes?"
       ],
       "steps": [
         {
@@ -1473,68 +2043,215 @@
           "reveal": 1
         },
         {
-          "say": "A single point of failure, a SPOF, is any part whose loss stops everything: one database, one load balancer, one D-N-S provider. Ask of every box: if this disappears, what happens?",
+          "say": "A single point of failure, a spof, is any part whose loss alone stops everything: one database, one load balancer, one D-N-S provider, even one engineer who knows the password.",
           "reveal": 2
         },
         {
-          "say": "Failover moves work to the spare, like a hospital's backup generator.",
+          "say": "Failover moves work to the spare, like a hospital switching to backup generators within seconds of a blackout.",
           "reveal": 3
         },
         {
-          "say": "Run two or more copies in separate failure domains, such as availability zones, with health checks and automatic failover in seconds.",
+          "say": "To find spofs, ask of every box: if this disappears, what happens? Let's do that to the photo app.",
           "reveal": 4
         }
       ]
     },
     {
-      "id": "s042",
+      "id": "s048",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Hunting SPOFs in the photo app",
+      "table": {
+        "head": [
+          "Box",
+          "If it disappears",
+          "Fix"
+        ],
+        "rows": [
+          [
+            "DNS provider",
+            "Nobody finds the app",
+            "Second provider"
+          ],
+          [
+            "Load balancer",
+            "Everything stops",
+            "A pair, or managed"
+          ],
+          [
+            "App servers (3)",
+            "Others absorb load",
+            "Already redundant"
+          ],
+          [
+            "Database (1)",
+            "Uploads and misses fail",
+            "Standby in another zone"
+          ],
+          [
+            "Cache",
+            "DB swamped at peak",
+            "Cache replicas"
+          ],
+          [
+            "Object storage",
+            "Managed, multi-zone",
+            "Fine"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "D-N-S. If our one D-N-S provider goes down, nobody can find the app at all. Fix: a second provider, or a managed service that's redundant inside.",
+          "reveal": 1
+        },
+        {
+          "say": "Load balancer. A single one is a spof. Run a pair, or use a managed one.",
+          "reveal": 2
+        },
+        {
+          "say": "App servers. We run three across zones. Lose one and the others carry on. Not a spof.",
+          "reveal": 3
+        },
+        {
+          "say": "Database. One primary. If it dies, every upload and every cache miss fails. That's our biggest spof. Fix: a standby in another zone with automatic failover.",
+          "reveal": 4
+        },
+        {
+          "say": "Cache. If it dies, nothing is lost, but all fifteen thousand peak reads hit the database at once and swamp it. So run cache replicas too.",
+          "reveal": 5
+        },
+        {
+          "say": "Object storage. A managed service that already copies data across zones. Fine. Common mistake: making app servers redundant but leaving one database, or putting all the copies in one rack.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s049",
       "layout": "diagram",
       "title": "Active-passive versus active-active",
       "mermaid": "flowchart LR\n  subgraph AP[\"Active-passive\"]\n    C1[\"Clients\"] --> P[\"Primary serves all\"]\n    P -.->|\"replicates\"| S[\"Standby idle\"]\n  end\n  subgraph AA[\"Active-active\"]\n    C2[\"Clients\"] --> LB[\"Load balancer\"]\n    LB --> N1[\"Node 1 serves\"]\n    LB --> N2[\"Node 2 serves\"]\n  end",
-      "caption": "Cold: hours. Warm: minutes. Hot: seconds",
+      "caption": "Passive for single-writer databases, active for stateless",
       "steps": [
         {
-          "say": "Active-passive: a primary serves everything and replicates to an idle standby. Simple, but failover takes seconds to minutes. Active-active: all nodes serve, and survivors absorb a failure. Better, but hard for databases, where two writers conflict.",
+          "say": "Two ways to run the copies. Active-passive: a primary serves everything and replicates to an idle standby. Simple, but failover takes seconds to minutes. It suits single-writer databases, like our photo database.",
           "reveal": 0
         },
         {
-          "say": "Standbys are cold, warm or hot: ready in hours, minutes, or seconds. Run N plus one to survive a failure, N plus two to survive one during maintenance. Beware split brain: two primaries both accepting writes. And test failover, or it fails when needed. Real example: Amazon R-D-S Multi-A-Z keeps a synchronous standby in another zone and fails over in a minute or two. In the interview: active-passive suits single-writer databases; active-active suits stateless services.",
+          "say": "Active-active: all nodes serve, and survivors absorb a failure. Better use of hardware and faster recovery, but hard for databases, where two writers can conflict. It suits stateless services, like our app servers.",
           "reveal": 0
         }
       ]
     },
     {
-      "id": "s043",
+      "id": "s050",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Cold, warm and hot standby",
+      "table": {
+        "head": [
+          "Option",
+          "Photo DB at 8 p.m.",
+          "Back in"
+        ],
+        "rows": [
+          [
+            "Cold",
+            "Restore last night's backup",
+            "Hours; lose a day"
+          ],
+          [
+            "Warm",
+            "Promote a lagging replica",
+            "Minutes; lose seconds"
+          ],
+          [
+            "Hot",
+            "Synced replica, auto failover",
+            "Seconds; lose nothing"
+          ],
+          [
+            "N+1 / N+2",
+            "13 needed: run 14 or 15",
+            "Survive 1 (+ maintenance)"
+          ],
+          [
+            "Watch out",
+            "Split brain; untested failover",
+            "-"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Standbys come in three temperatures. Let's apply each to the photo database dying at eight p.m.",
+          "reveal": 0
+        },
+        {
+          "say": "Cold standby: the spare is only last night's backup. Someone restores it onto a fresh machine. That takes hours, and every photo since the backup is lost. Cheap, and fine for an internal tool.",
+          "reveal": 1
+        },
+        {
+          "say": "Warm standby: a replica is already running, but copying a few minutes behind. Promote it and you're back in minutes, maybe losing the last few seconds of writes.",
+          "reveal": 2
+        },
+        {
+          "say": "Hot standby: a replica fully in sync, confirming every write before the primary acknowledges it. Failover is automatic, in seconds, losing nothing. A real managed example: Amazon R-D-S Multi-A-Z keeps a synchronous standby in another zone and fails over on its own, typically within a minute or two.",
+          "reveal": 3
+        },
+        {
+          "say": "How many spares? If N servers handle peak, run N plus one to survive a failure: if thirteen handle peak, run fourteen. N plus two, fifteen, survives a failure during maintenance.",
+          "reveal": 4
+        },
+        {
+          "say": "Two warnings. Split brain: if a slow primary is wrongly declared dead, two primaries accept writes and the data forks. And test failover, because untested failover fails when you need it.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s051",
       "layout": "bullets",
       "kicker": "Concept 16 of 23",
       "title": "Scalability",
       "bullets": [
         "More load by adding resources",
-        "Name the parameter and factor",
-        "Load, data, geographic, organisational",
-        "Scale the real bottleneck; next 10x"
+        "Name the parameter and the factor",
+        "Load: 15,000 to 150,000 reads/s",
+        "Data: 1 TB/day, ~1.8 PB in 5 years",
+        "Geography: Sydney as fast as Virginia",
+        "Organisation: 5 to 50 engineers"
       ],
       "steps": [
         {
-          "say": "Scalability is handling more load by adding resources, without a redesign and without collapsing.",
+          "say": "Scalability is handling more load by adding resources, without a redesign and without collapsing. A restaurant that serves more diners by adding tables and cooks scales. One whose tiny kitchen tops out at fifty meals an hour doesn't.",
           "reveal": 1
         },
         {
-          "say": "Always name the load parameter: requests per second, data size, users. Say: we scale to ten times the requests by adding servers.",
+          "say": "Always name the load parameter and the factor. Not, it's scalable. Say: we can go to ten times the requests per second by adding servers.",
           "reveal": 2
         },
         {
-          "say": "Dimensions: load, data, geography, and organisation, meaning more engineers.",
+          "say": "Four dimensions, shown on the photo app. Load: peak reads grow from fifteen thousand to a hundred and fifty thousand a second.",
           "reveal": 3
         },
         {
-          "say": "Techniques: stateless servers, caches, read replicas, sharding, queues and C-D-Ns. More app servers don't help if the database is the bottleneck. Make the next ten times easy, not a thousand.",
+          "say": "Data: one terabyte a day becomes nearly two petabytes in five years.",
           "reveal": 4
+        },
+        {
+          "say": "Geography: users in Sydney want the feed as fast as users in Virginia.",
+          "reveal": 5
+        },
+        {
+          "say": "Organisation: the team grows from five engineers to fifty, who must ship without stepping on each other. Techniques: stateless servers, caches, replicas, sharding, queues and C-D-Ns. Scale the real bottleneck, and make the next ten times easy, not a thousand.",
+          "reveal": 6
         }
       ]
     },
     {
-      "id": "s044",
+      "id": "s052",
       "layout": "diagram",
       "kicker": "Concept 17 of 23",
       "title": "Vertical and horizontal scaling",
@@ -1546,13 +2263,75 @@
           "reveal": 0
         },
         {
-          "say": "Scaling up is often just a config change. Scaling out needs divisible work. Stateless app servers are easy. Database writes need sharding.",
+          "say": "Scaling up is often just a config change in the cloud. Scaling out needs work you can divide. Stateless app servers are easy. Database writes need sharding: each machine holds part of the data.",
           "reveal": 0
         }
       ]
     },
     {
-      "id": "s045",
+      "id": "s053",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Scaling the photo app as it grows",
+      "table": {
+        "head": [
+          "Users",
+          "Move",
+          "Kind"
+        ],
+        "rows": [
+          [
+            "1,000",
+            "One 4-core, 16 GB box",
+            "Start small"
+          ],
+          [
+            "100,000",
+            "Resize to 64 cores, 512 GB",
+            "Up"
+          ],
+          [
+            "1 million",
+            "3 app servers + LB",
+            "Out (stateless)"
+          ],
+          [
+            "10 million",
+            "Read replicas + cache",
+            "Out for reads"
+          ],
+          [
+            "Beyond",
+            "Shard the database",
+            "Out for writes"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Let's grow the photo app. At launch, a thousand users: one machine with four cores and sixteen gigabytes runs everything. That's correct, not lazy.",
+          "reveal": 1
+        },
+        {
+          "say": "At a hundred thousand users, it's busy. Scale up: stop it, pick a sixty-four core, five hundred gigabyte machine, start it. A few minutes of downtime, zero code changes.",
+          "reveal": 2
+        },
+        {
+          "say": "At a million users, one machine is a spof. Scale out the app tier: three stateless servers behind a load balancer. Keep one big database, plus a standby.",
+          "reveal": 3
+        },
+        {
+          "say": "At ten million users, the database is the limit. Send reads to replicas and a cache. That's out for reads, but writes still go to one primary.",
+          "reveal": 4
+        },
+        {
+          "say": "Beyond that, writes outgrow the biggest machine. Now shard: split users across several databases. That's real redesign work, so you delay it.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s054",
       "layout": "twocol",
       "title": "Up versus out",
       "left": {
@@ -1577,11 +2356,11 @@
           "reveal": 1
         },
         {
-          "say": "But it has a ceiling, the biggest machine.",
+          "say": "But it has a hard ceiling: the biggest machine you can buy.",
           "reveal": 2
         },
         {
-          "say": "And it's still a SPOF, with big boxes costing disproportionately more.",
+          "say": "And it's still a spof, with big boxes costing disproportionately more.",
           "reveal": 3
         },
         {
@@ -1589,42 +2368,104 @@
           "reveal": 4
         },
         {
-          "say": "Losing a node loses only a fraction, and nodes add live.",
+          "say": "Losing a node loses only a fraction, and you add nodes live.",
           "reveal": 5
         },
         {
-          "say": "But it needs statelessness or sharding, and consistency gets harder. Stack Overflow in twenty sixteen ran on eleven web servers and four database servers, so don't dismiss scaling up. Most systems do both.",
+          "say": "But it needs statelessness or sharding, and consistency gets harder. Don't dismiss scaling up: Stack Overflow in twenty sixteen ran a huge site on eleven web servers and four database servers.",
           "reveal": 6
         }
       ]
     },
     {
-      "id": "s046",
+      "id": "s055",
       "layout": "bullets",
       "kicker": "Concept 18 of 23",
       "title": "Elasticity",
       "bullets": [
         "Automatic, both directions",
-        "Thresholds: above 70% add, below 30% remove",
+        "Above 70% CPU for 5 min: add; below 30%: remove",
         "Start-up lag, stateless only, flapping"
       ],
       "steps": [
         {
-          "say": "Elasticity is scaling up and down automatically as load changes, so you pay for what you use. Scalability says we can grow; elasticity says we do it ourselves.",
+          "say": "Elasticity is scaling up and down automatically as load changes, so you pay for roughly what you use. Scalability says we can grow. Elasticity says we grow and shrink by ourselves, like a supermarket opening checkouts when queues get long.",
           "reveal": 1
         },
         {
-          "say": "Autoscaling watches a metric: above seventy percent C-P-U for five minutes, add servers; below thirty, remove some. Serverless can scale to zero.",
+          "say": "Autoscaling watches a metric, like C-P-U, requests per second or queue length. Above a threshold, add servers. Below another, remove some. Serverless platforms can even scale to zero.",
           "reveal": 2
         },
         {
-          "say": "Limits: containers take seconds and V-Ms minutes to start, so spikes can outrun you. Mostly stateless parts are elastic. Over-eager scale-down causes flapping. In the interview: scalability is the capability; elasticity is doing it automatically, in both directions.",
+          "say": "The limits: containers start in seconds, virtual machines in minutes, so a sudden spike can outrun you. Mostly stateless parts are elastic. And over-eager scale-down causes flapping.",
           "reveal": 3
         }
       ]
     },
     {
-      "id": "s047",
+      "id": "s056",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Black Friday for an online shop",
+      "table": {
+        "head": [
+          "Time",
+          "What happens",
+          "Servers"
+        ],
+        "rows": [
+          [
+            "Normal day",
+            "~40% CPU",
+            "10"
+          ],
+          [
+            "8 p.m. sale",
+            "Traffic x4; CPU > 70% for 5 min",
+            "Adding"
+          ],
+          [
+            "8:05 p.m.",
+            "Containers up in seconds",
+            "~30"
+          ],
+          [
+            "After midnight",
+            "CPU < 30%; remove slowly",
+            "Back to 10"
+          ],
+          [
+            "Next year",
+            "Pre-scale at 7:30 on a schedule",
+            "30 early"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "An online shop normally runs ten app servers at about forty percent C-P-U.",
+          "reveal": 1
+        },
+        {
+          "say": "At eight p.m. the Black Friday sale opens and traffic jumps four times in a few minutes. C-P-U passes seventy percent and stays there for five minutes, so the autoscaler adds servers.",
+          "reveal": 2
+        },
+        {
+          "say": "Containers start in seconds, and the fleet grows to about thirty, with C-P-U near sixty percent. Virtual machines taking minutes would have left users with a slow first few minutes.",
+          "reveal": 3
+        },
+        {
+          "say": "After midnight traffic falls and C-P-U drops below thirty percent. The autoscaler removes servers gradually, with a cooldown so it doesn't flap.",
+          "reveal": 4
+        },
+        {
+          "say": "Next year they pre-scale at seven thirty on a schedule, so the spike never outruns them. In the interview: scalability is the capability, elasticity is doing it automatically, both ways.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s057",
       "layout": "diagram",
       "kicker": "Concept 19 of 23",
       "title": "Stateless and stateful services",
@@ -1632,45 +2473,57 @@
       "caption": "Sessions in Redis or a signed token, files in object storage",
       "steps": [
         {
-          "say": "State is data remembered between requests, like logins or carts. A stateless service keeps none in memory, so any copy serves any request, like a call centre. A stateful one ties you to a server, like a family doctor who's away on holiday.",
+          "say": "State is data remembered between requests, like who's logged in, or a cart. A stateless service keeps none of it in its own memory, so any copy can serve any request, like a call centre where any agent can pull up your file. A stateful one ties you to one server, like a family doctor who keeps your history in their head: great until they're on holiday.",
           "reveal": 0
         },
         {
-          "say": "To go stateless, keep sessions in Redis or a signed token, files in object storage, and carts in a database. If you must stay stateful, like a game server, use sticky sessions and plan for that server dying.",
-          "reveal": 0
-        },
-        {
-          "say": "Cost: one extra hop, usually under a millisecond. Classic bug: local sessions, a second server, random logouts. And the state store itself still needs scaling.",
+          "say": "On the left, user A's session lives inside server one. On the right, any server can take the request, because the session lives in a shared Redis. Let's watch why that matters with one login.",
           "reveal": 0
         }
       ]
     },
     {
-      "id": "s048",
+      "id": "s058",
       "layout": "bullets",
-      "title": "Why stateless wins for app servers",
+      "kicker": "Example",
+      "title": "One login session, step by step",
       "bullets": [
-        "Any copy, any request",
-        "Add, remove, kill freely",
-        "State lives in dedicated stores"
+        "1. Login: session in server 1's memory",
+        "2. Next request hits server 2: logged out",
+        "3. Sticky sessions: fine until server 1 dies",
+        "4. Session in Redis, ID in a cookie",
+        "5. Or a signed token (JWT): no lookup",
+        "Any server can die; Redis needs spares too"
       ],
       "steps": [
         {
-          "say": "Any copy handles any request.",
+          "say": "Step one. Priya logs in to the photo app. The load balancer sends her to server one, which stores her session in its own memory.",
           "reveal": 1
         },
         {
-          "say": "Add, remove or kill copies freely without losing data.",
+          "say": "Step two. Her next tap goes to server two, which has never heard of her, so she's back at the login page. Local sessions plus a second server means random logouts. A classic bug.",
           "reveal": 2
         },
         {
-          "say": "State lives in stores built for replication. Recap: keep app servers stateless.",
+          "say": "Step three, the patch: sticky sessions. The load balancer always sends Priya to server one. It works, until server one crashes or gets redeployed, and every user on it is logged out at once.",
           "reveal": 3
+        },
+        {
+          "say": "Step four, the fix. Server one puts the session in Redis and gives Priya a cookie with just a session I-D. Any server looks it up in about half a millisecond.",
+          "reveal": 4
+        },
+        {
+          "say": "Step five, the other fix: a signed token, a J-W-T, holding her user I-D. Any server checks the signature, with no lookup at all.",
+          "reveal": 5
+        },
+        {
+          "say": "Now kill any server and Priya doesn't notice. The cost is that small extra hop, and Redis now needs its own spares, because the state moved, it didn't vanish. Game and chat servers stay stateful by nature, so they use sticky sessions and plan for that server dying.",
+          "reveal": 6
         }
       ]
     },
     {
-      "id": "s049",
+      "id": "s059",
       "layout": "twocol",
       "kicker": "Concept 20 of 23",
       "title": "Performance versus scalability",
@@ -1687,12 +2540,12 @@
         "bullets": [
           "Stays fast as load grows",
           "Slow only under load",
-          "3 a.m. slow = performance"
+          "Sports car vs train"
         ]
       },
       "steps": [
         {
-          "say": "Performance is speed for one request at current load.",
+          "say": "Performance is speed for one request at the current load.",
           "reveal": 1
         },
         {
@@ -1700,7 +2553,7 @@
           "reveal": 2
         },
         {
-          "say": "Diagnostic: if one request to an idle system is slow, it's performance.",
+          "say": "Diagnostic: send one request to an idle system. If even that's slow, it's performance.",
           "reveal": 3
         },
         {
@@ -1708,17 +2561,61 @@
           "reveal": 4
         },
         {
-          "say": "Fast alone but slow under traffic means scalability.",
+          "say": "Fast alone but slow under traffic: that's scalability.",
           "reveal": 5
         },
         {
-          "say": "Pause: slow at three a.m. with no traffic? Performance. Profile the request, maybe an unindexed query. More servers won't help.",
+          "say": "A sports car is fast for one person but seats two. A train is slower off the mark but carries a thousand. Let's diagnose two real-looking complaints.",
           "reveal": 6
         }
       ]
     },
     {
-      "id": "s050",
+      "id": "s060",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Two slow feeds, two diagnoses",
+      "table": {
+        "head": [
+          "Symptom",
+          "Diagnosis",
+          "Fix"
+        ],
+        "rows": [
+          [
+            "2 s even at 3 a.m.",
+            "Performance: unindexed scan",
+            "Add index: ~5 ms"
+          ],
+          [
+            "100 ms alone, 3 s at peak",
+            "Scalability: DB at 100%",
+            "Cache, read replicas"
+          ],
+          [
+            "Shared cache hop",
+            "+0.5 ms per request",
+            "But scales out"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Complaint one: the feed takes two seconds even at three a.m., with almost no traffic. Even one request is slow, so it's performance. Profiling shows a query scanning all ten million photos because a column has no index. Add the index and it takes about five milliseconds. More servers would have done nothing.",
+          "reveal": 1
+        },
+        {
+          "say": "Complaint two: the feed takes a hundred milliseconds alone, but three seconds at the evening peak. Fast alone, slow under load, so it's scalability. The database sits at a hundred percent, so add a cache and read replicas.",
+          "reveal": 2
+        },
+        {
+          "say": "And one change can trade them: a hop to a shared cache costs every request half a millisecond, but lets you scale out. Recap: diagnose which one before you fix.",
+          "reveal": 3
+        }
+      ]
+    },
+    {
+      "id": "s061",
       "layout": "twocol",
       "kicker": "Concept 21 of 23",
       "title": "Concurrency versus parallelism",
@@ -1740,74 +2637,125 @@
       },
       "steps": [
         {
-          "say": "Concurrency is many tasks in progress, interleaved while each waits.",
+          "say": "Concurrency is many tasks in progress over the same period, interleaved while each one waits.",
           "reveal": 1
         },
         {
-          "say": "It's about organisation, and one core is enough.",
+          "say": "It's about how work is organised, and one core is enough.",
           "reveal": 2
         },
         {
-          "say": "Rob Pike: concurrency is dealing with lots of things at once.",
+          "say": "Rob Pike, a co-creator of Go, put it this way: concurrency is dealing with lots of things at once.",
           "reveal": 3
         },
         {
-          "say": "Parallelism is tasks running at the same instant.",
+          "say": "Parallelism is tasks running at the very same instant.",
           "reveal": 4
         },
         {
-          "say": "It's about execution, and needs multiple cores.",
+          "say": "It's about execution, and needs multiple cores or machines.",
           "reveal": 5
         },
         {
-          "say": "Parallelism is doing lots at once. One barista juggling orders is concurrent; three baristas is parallel.",
+          "say": "Parallelism is doing lots of things at once. Let's see both in a kitchen, then in a web server.",
           "reveal": 6
         }
       ]
     },
     {
-      "id": "s051",
-      "layout": "diagram",
-      "title": "One thread, many requests",
-      "mermaid": "flowchart LR\n  T1[\"Thread sends query A\"] --> T2[\"Starts request B\"]\n  T2 --> T3[\"Sends query B\"]\n  T3 --> T4[\"Result A: finish A\"]\n  T4 --> T5[\"Result B: finish B\"]",
-      "caption": "Amdahl: 10% serial caps speed-up at 10x",
+      "id": "s062",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "A kitchen, then a web server",
+      "table": {
+        "head": [
+          "Setting",
+          "What happens",
+          "Kind"
+        ],
+        "rows": [
+          [
+            "Kitchen, 1 cook",
+            "Pasta boils while salad is chopped",
+            "Concurrent"
+          ],
+          [
+            "Kitchen, 3 cooks",
+            "Three dishes at the same moment",
+            "Parallel"
+          ],
+          [
+            "Blocking thread",
+            "1 / 0.05 s wait",
+            "20 req/s"
+          ],
+          [
+            "Event loop",
+            "Overlaps the waits; 1 ms CPU each",
+            "~1,000 req/s"
+          ],
+          [
+            "Resize 100 photos",
+            "20 s on 1 core, ~2.5 s on 8",
+            "Parallel"
+          ],
+          [
+            "Amdahl's law",
+            "10% serial",
+            "Max 10x"
+          ]
+        ]
+      },
       "steps": [
         {
-          "say": "Web servers mostly wait on I-O. An event loop sends query A, doesn't wait, starts request B, then finishes each as results arrive. Threads, processes and goroutines are other routes to concurrency. Parallelism speeds up C-P-U-heavy work.",
-          "reveal": 0
-        },
-        {
-          "say": "Hazards: a race condition, where two withdrawals both read a hundred and write ninety, losing one. Deadlock, where two tasks wait on each other's locks. And Amdahl's law: if ten percent of a job is serial, infinite cores give at most ten times.",
-          "reveal": 0
-        }
-      ]
-    },
-    {
-      "id": "s052",
-      "layout": "bullets",
-      "title": "Concurrency in practice",
-      "bullets": [
-        "I/O-bound: concurrency",
-        "CPU-bound: parallelism, threads <= cores",
-        "Node: concurrent, not parallel"
-      ],
-      "steps": [
-        {
-          "say": "Use concurrency for I-O-bound work that mostly waits.",
+          "say": "The kitchen. One cook puts pasta on to boil for ten minutes, and meanwhile chops the salad and plates a dessert. One person, three dishes in progress: concurrency.",
           "reveal": 1
         },
         {
-          "say": "Use parallelism for C-P-U-bound work, but no more C-P-U threads than cores, or you only add switching overhead.",
+          "say": "Hire three cooks, each making a dish at the same moment. That's parallelism.",
           "reveal": 2
         },
         {
-          "say": "Interview question: is single-threaded Node concurrent? Yes, via its event loop. But not parallel for JavaScript; run several processes for more cores. Recap: concurrency juggles, parallelism does at once.",
+          "say": "Now a web server. Each feed request spends fifty milliseconds waiting on the database and about one millisecond computing. One blocking thread handles one request at a time: one divided by point zero five is twenty requests a second, mostly waiting.",
           "reveal": 3
+        },
+        {
+          "say": "An event loop sends query A, doesn't wait, starts request B, and finishes each when its result arrives. The same thread now handles roughly a thousand a second, limited only by that millisecond of C-P-U. That's how Node and NGINX work. Threads and goroutines are other routes to concurrency.",
+          "reveal": 4
+        },
+        {
+          "say": "Parallelism is for C-P-U-heavy work. Resizing a hundred photos at two hundred milliseconds each takes twenty seconds on one core, and about two and a half seconds across eight.",
+          "reveal": 5
+        },
+        {
+          "say": "But Amdahl's law caps it. If ten percent of a job must run serially, even infinite cores give at most ten times.",
+          "reveal": 6
         }
       ]
     },
     {
-      "id": "s053",
+      "id": "s063",
+      "layout": "diagram",
+      "title": "Concurrency hazards",
+      "mermaid": "flowchart LR\n  A[\"Request A reads balance 100\"] --> C[\"A writes 90\"]\n  B[\"Request B reads balance 100\"] --> D[\"B writes 90\"]\n  C --> E[\"Final balance 90, not 80\"]\n  D --> E",
+      "caption": "A race condition: one withdrawal is lost",
+      "steps": [
+        {
+          "say": "Shared data brings hazards. A race condition: two withdrawals of ten both read a balance of a hundred, both write ninety, and one withdrawal vanishes.",
+          "reveal": 0
+        },
+        {
+          "say": "Deadlock: task one holds lock A and waits for B, task two holds B and waits for A, forever. Locks, atomic operations and transactions handle these.",
+          "reveal": 0
+        },
+        {
+          "say": "Rules: use concurrency for I-O-bound work that mostly waits. Use parallelism for C-P-U-bound work, with no more C-P-U threads than cores. Interview question: is single-threaded Node concurrent? Yes, through its event loop. But not parallel for JavaScript, so run several processes for more cores.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s064",
       "layout": "table",
       "kicker": "Concept 22 of 23",
       "title": "Bottlenecks: CPU, memory, disk, network",
@@ -1815,7 +2763,7 @@
         "head": [
           "Resource",
           "Signs",
-          "Fixes"
+          "Usual fixes"
         ],
         "rows": [
           [
@@ -1825,7 +2773,7 @@
           ],
           [
             "Memory",
-            "Swapping, out-of-memory",
+            "Swapping, OOM, hit rate falls",
             "More RAM, evict wisely"
           ],
           [
@@ -1842,25 +2790,78 @@
       },
       "steps": [
         {
-          "say": "A bottleneck is the part that limits capacity; fixing anything else won't help. C-P-U: near a hundred percent. Optimise, cache, or add cores.",
+          "say": "A bottleneck is the part that limits capacity, like a bottle's narrow neck. Fixing anything else won't help. Each of the four resources has its own symptom. C-P-U: near a hundred percent, latency rising with load.",
           "reveal": 1
         },
         {
-          "say": "Memory: swapping or out-of-memory crashes. Add RAM or evict wisely.",
+          "say": "Memory: swapping to disk, out-of-memory crashes, or a cache whose hit rate falls.",
           "reveal": 2
         },
         {
-          "say": "Disk: high wait times. Use S-S-Ds, caching, sharding.",
+          "say": "Disk: high wait times, with I-O-P-S or megabytes per second at their limit.",
           "reveal": 3
         },
         {
-          "say": "Network: saturated links. Compress, use C-D-Ns, make fewer calls.",
+          "say": "Network: a saturated link and dropped packets.",
           "reveal": 4
         }
       ]
     },
     {
-      "id": "s054",
+      "id": "s065",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Four bottlenecks in the photo app",
+      "table": {
+        "head": [
+          "Resource",
+          "Symptom in the photo app",
+          "Fix"
+        ],
+        "rows": [
+          [
+            "CPU",
+            "Resizing in request: 100%, 4 s uploads",
+            "Move to workers"
+          ],
+          [
+            "Memory",
+            "80 GB hot set, 64 GB cache: 95% to 70%",
+            "More cache RAM"
+          ],
+          [
+            "Disk",
+            "5,000 random reads/s, 3,000 IOPS",
+            "More IOPS, NVMe"
+          ],
+          [
+            "Network",
+            "20 Gbps of photos, 10 Gbps cards",
+            "CDN"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "C-P-U. Someone made app servers resize photos inside the upload request. C-P-U pins at a hundred percent and uploads take four seconds. Fix: move resizing to workers on the queue.",
+          "reveal": 1
+        },
+        {
+          "say": "Memory. The cache box has sixty-four gigabytes, but the hot set has grown to eighty. The hit rate falls from ninety-five to seventy percent, so misses go from five to thirty percent. That's six times the database load. Fix: more cache memory or more nodes.",
+          "reveal": 2
+        },
+        {
+          "say": "Disk. The database's cloud disk allows three thousand I-O-P-S, but cache misses now need five thousand random reads a second. Disk wait climbs, and p ninety-nine with it, while C-P-U looks idle. Fix: buy more I-O-P-S, move to N-V-M-e, or fix the cache first.",
+          "reveal": 3
+        },
+        {
+          "say": "Network. Twenty gigabits a second of photos through ten gigabit cards. Links saturate and packets drop. Fix: a C-D-N.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s066",
       "layout": "table",
       "title": "IOPS versus throughput",
       "table": {
@@ -1894,7 +2895,7 @@
       },
       "steps": [
         {
-          "say": "Disks have two limits. I-O-P-S counts small random operations, like lookups. Throughput counts megabytes per second for big sequential transfers. A hard disk does about seventy-five to a hundred and fifty I-O-P-S, since the arm must move.",
+          "say": "Disks have two separate limits. I-O-P-S counts small random operations per second, like lookups. Throughput counts megabytes per second for big sequential transfers. A hard disk does about seventy-five to a hundred and fifty I-O-P-S, because the arm must move.",
           "reveal": 1
         },
         {
@@ -1906,42 +2907,47 @@
           "reveal": 3
         },
         {
-          "say": "A cloud gp3 disk starts at three thousand I-O-P-S and a hundred and twenty-five megabytes per second. Twenty thousand random reads a second needs over a hundred hard disks, or one N-V-M-e drive.",
+          "say": "A cloud g-p-three disk starts at three thousand I-O-P-S and a hundred and twenty-five megabytes per second. So twenty thousand random reads a second needs over a hundred hard disks, or one N-V-M-e drive.",
           "reveal": 4
         }
       ]
     },
     {
-      "id": "s055",
+      "id": "s067",
       "layout": "bullets",
       "title": "Finding the bottleneck",
       "bullets": [
-        "Measure, don't guess",
-        "Find limits and growing queues",
-        "Fix and re-measure: it moves",
-        "Low CPU but slow? Find the queue"
+        "1. Measure, don't guess",
+        "2. Find the limit or the growing queue",
+        "3. Fix and re-measure: it moves",
+        "Pause: latency up, CPU at 30%?",
+        "Find the queue: disk, pool, lock, network"
       ],
       "steps": [
         {
-          "say": "Measure each resource under load. Don't guess.",
+          "say": "Step one, measure each resource under load. Don't guess.",
           "reveal": 1
         },
         {
-          "say": "Look for limits and queues: full thread pools, exhausted connections, lock waits. Also hot rows and rate limits.",
+          "say": "Step two, look for the one at its limit, or a queue growing in front of something: a full thread pool, exhausted database connections, lock waits. Also hot rows and rate limits.",
           "reveal": 2
         },
         {
-          "say": "Fix, then re-measure. The bottleneck moves.",
+          "say": "Step three, fix it and measure again. The bottleneck moves. Fix the cache and the network may be next.",
           "reveal": 3
         },
         {
-          "say": "Pause: latency rises but C-P-U is at thirty percent? Look elsewhere: disk, network, a pool, a lock. Most web services are I-O bound.",
+          "say": "Pause: latency rises under load, but C-P-U is at thirty percent. Where do you look?",
           "reveal": 4
+        },
+        {
+          "say": "Elsewhere: disk, network, a pool, a lock, a slow dependency. Find where requests queue. Most web services are I-O bound.",
+          "reveal": 5
         }
       ]
     },
     {
-      "id": "s056",
+      "id": "s068",
       "layout": "diagram",
       "kicker": "Concept 23 of 23",
       "title": "How to approach a system design interview",
@@ -1949,52 +2955,89 @@
       "caption": "Seven steps for a 45-minute interview",
       "steps": [
         {
-          "say": "The interview is forty-five to sixty open-ended minutes. Seven steps: requirements, five minutes. Estimates, three to five. A-P-I, five. Data model, five. High-level design, ten. Deep dives, ten to fifteen. Trade-offs, three to five.",
+          "say": "Last concept: the interview itself. Forty-five to sixty open-ended minutes. A repeatable seven-step structure shows how you think.",
+          "reveal": 0
+        },
+        {
+          "say": "Requirements, five minutes. Estimates, three to five. A-P-I, five. Data model, five. High-level design, ten. Deep dives, ten to fifteen. Trade-offs and wrap-up, three to five. Let's run all seven on a classic question: design a U-R-L shortener.",
           "reveal": 0
         }
       ]
     },
     {
-      "id": "s057",
-      "layout": "bullets",
-      "title": "The seven steps, for a URL shortener",
-      "bullets": [
-        "1. Functional + non-functional; scope",
-        "2. Estimates and implications",
-        "3. API: POST /links, GET /{code} -> 301",
-        "4. links(short_code PK, long_url, expires_at)",
-        "5. Walk a write and a read",
-        "6-7. Deep dives, then weaknesses"
-      ],
+      "id": "s069",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Seven steps on a URL shortener",
+      "table": {
+        "head": [
+          "Step",
+          "URL shortener"
+        ],
+        "rows": [
+          [
+            "1. Requirements",
+            "Shorten, redirect, expire; p99 < 50 ms"
+          ],
+          [
+            "2. Estimates",
+            "~40 writes/s; 4,000 reads/s, 12,000 peak"
+          ],
+          [
+            "3. API",
+            "POST /links; GET /{code} -> 301"
+          ],
+          [
+            "4. Data model",
+            "links(short_code PK, long_url, expires_at)"
+          ],
+          [
+            "5. High-level design",
+            "LB, app servers, cache, database"
+          ],
+          [
+            "6. Deep dives",
+            "7 chars of 62 = ~3.5 trillion codes"
+          ],
+          [
+            "7. Trade-offs",
+            "Stale cache, DB SPOF, shard at 10x"
+          ]
+        ]
+      },
       "steps": [
         {
-          "say": "One: requirements. Functional is what it does: create short links, redirect. Non-functional is how well: a hundred million links a month, redirects under fifty milliseconds at p ninety-nine. Agree what's out of scope.",
+          "say": "Step one, requirements. Never start by drawing. Functional, what it does: shorten a long link, redirect, expire after a year. Non-functional, how well: a hundred million new links a month, redirects under fifty milliseconds at p ninety-nine, four nines, never lose a link. Out of scope: analytics and accounts.",
           "reveal": 1
         },
         {
-          "say": "Two: estimates, and what they imply. A hundred reads per write means caching matters.",
+          "say": "Step two, estimates. A month is about two point six million seconds, so a hundred million links is about forty writes a second. At a hundred reads per write: four thousand redirects a second, twelve thousand at peak. At five hundred bytes a link, that's six hundred gigabytes a year. One database fits, and a hundred to one reads means caching matters.",
           "reveal": 2
         },
         {
-          "say": "Three: the A-P-I. POST slash links returns a short code; GET slash code returns a three oh one redirect.",
+          "say": "Step three, the A-P-I. POST slash links with the long U-R-L returns a short code. GET slash code returns a three oh one redirect to the long U-R-L.",
           "reveal": 3
         },
         {
-          "say": "Four: data model. A links table keyed by short code, with long U-R-L and expiry.",
+          "say": "Step four, the data model. One links table: short code as the primary key, long U-R-L, expiry. Every read is a lookup by key.",
           "reveal": 4
         },
         {
-          "say": "Five: high-level design. Walk one write and one read.",
+          "say": "Step five, the high-level design: load balancer, stateless app servers, cache, database. Walk one write: make a code, insert the row, return it. Walk one read: check the cache, on a miss read the database, then redirect.",
           "reveal": 5
         },
         {
-          "say": "Six: deep dives, like collision-free codes and caching hot links. Seven: weaknesses, SPOFs, monitoring, and what changes at ten times. Get a complete simple design before going deep. If they say design Twitter, your first move is clarifying questions: which features, how many users, what read and write mix.",
+          "say": "Step six, deep dives. Codes without collisions: seven characters from sixty-two letters and digits gives about three and a half trillion codes, from a counter or random with a uniqueness check. And a celebrity's viral link stays in the cache, so it never hammers the database.",
           "reveal": 6
+        },
+        {
+          "say": "Step seven, trade-offs and wrap-up. The cache can serve a deleted link for a minute. The single database primary is a spof, so add a hot standby. At ten times the load, shard by short code. Then check the design against the requirements you wrote down.",
+          "reveal": 7
         }
       ]
     },
     {
-      "id": "s058",
+      "id": "s070",
       "layout": "table",
       "title": "Non-functional requirements and their levers",
       "table": {
@@ -2055,7 +3098,7 @@
           "reveal": 3
         },
         {
-          "say": "Consistency: who sees a write, and how soon. Lever: leaders, quorums, consensus.",
+          "say": "Consistency: after a write, who sees it, and how soon? For the shortener: a new link should work immediately. Lever: leaders, quorums, consensus.",
           "reveal": 4
         },
         {
@@ -2063,23 +3106,23 @@
           "reveal": 5
         },
         {
-          "say": "Reliability: error rate and M-T-T-R, via timeouts and retries. Security: auth and encryption.",
+          "say": "Reliability: error rate and M-T-T-R, via timeouts and retries. Security: authentication and encryption.",
           "reveal": 6
         },
         {
-          "say": "Maintainability means operable, simple, and evolvable: dashboards per S-L-O, versioned schemas, canary deploys. And cost per request. Common mistakes: drawing before requirements, naming tech without reasons, and over-engineering a hundred Q-P-S system.",
+          "say": "Maintainability means operable, simple and evolvable: dashboards per S-L-O, versioned schemas, canary deploys. And cost per request. Common mistakes: drawing before requirements, naming tech without reasons, and over-engineering a hundred Q-P-S system.",
           "reveal": 7
         }
       ]
     },
     {
-      "id": "s059",
+      "id": "s071",
       "layout": "recap",
       "kicker": "Episode 1 complete",
       "title": "Episode 1 recap",
       "bullets": [
-        "Design = parts + trade-offs; 8 boxes",
-        "Percentiles; latency spikes near 100%",
+        "Loop: goal, load, sketch, weak spots, fix",
+        "Percentiles; biggest term first",
         "L = lambda x W; ns, 0.5 ms, 70-150 ms",
         "/10^5, peak, ceiling, zone loss",
         "99.9% = 43 min/month; cut MTTR; no SPOFs",
@@ -2087,11 +3130,11 @@
       ],
       "steps": [
         {
-          "say": "Design is parts plus trade-offs, built from eight standard boxes.",
+          "say": "Design is a loop: goal, load, sketch, weak spots, fix. Built from eight standard boxes, each justified by a number.",
           "reveal": 1
         },
         {
-          "say": "Use percentiles, not averages. Latency explodes near full load.",
+          "say": "Use percentiles, not averages, and fix the biggest latency term first. Latency explodes near full load.",
           "reveal": 2
         },
         {
@@ -2103,7 +3146,7 @@
           "reveal": 4
         },
         {
-          "say": "Three nines is forty-three minutes a month. Cut M-T-T-R and remove SPOFs.",
+          "say": "Three nines is forty-three minutes a month. One bad afternoon can spend it, so cut M-T-T-R and remove spofs.",
           "reveal": 5
         },
         {

@@ -90,9 +90,9 @@ def main():
     mp4 = os.path.join(a.out, name + '.mp4')
     run(['ffmpeg', '-y', '-v', 'error', '-f', 'concat', '-safe', '0', '-i', os.path.join(a.out, 'images.txt'),
          '-i', full, '-i', srt, '-map', '0:v', '-map', '1:a', '-map', '2:s',
-         '-c:v', 'libx264', '-preset', 'medium', '-tune', 'stillimage', '-crf', '20', '-r', '30',
+         '-c:v', 'libx264', '-preset', 'veryfast', '-tune', 'stillimage', '-crf', '27', '-r', '10', '-g', '300',
          '-pix_fmt', 'yuv420p', '-vf', 'scale=1920:1080',
-         '-c:a', 'aac', '-b:a', '128k', '-c:s', 'mov_text', '-metadata:s:s:0', 'language=eng',
+         '-c:a', 'aac', '-b:a', '64k', '-ac', '1', '-c:s', 'mov_text', '-metadata:s:s:0', 'language=eng',
          '-movflags', '+faststart', mp4])
     print(f'wrote {mp4}  ({dur(mp4)/60:.1f} min, {os.path.getsize(mp4)/1e6:.1f} MB, {len(frames)} steps)')
 

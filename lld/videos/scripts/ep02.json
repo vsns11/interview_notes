@@ -1,0 +1,2192 @@
+{
+  "series": "LLD Workshop",
+  "episode": 2,
+  "title": "OOP Fundamentals in Java",
+  "subtitle": "Classes, the four pillars, interfaces, equality, records and OOAD",
+  "scenes": [
+    {
+      "id": "s001",
+      "layout": "title",
+      "title": "OOP Fundamentals in Java",
+      "subtitle": "Classes, the four pillars, interfaces, equality, records and OOAD",
+      "steps": [
+        {
+          "say": "Welcome to episode two of the L-L-D Workshop, the low-level design series. Today: object-oriented programming in Java.",
+          "reveal": 0
+        },
+        {
+          "say": "By the end you'll explain the four pillars on one bank example, pick between an interface and an abstract class, keep equals and hash code honest, and turn a one-line problem into classes.",
+          "reveal": 0
+        },
+        {
+          "say": "Keep the chapter two notes open. Each concept matches a section there, in order, and every listing runs. Pause and predict each output before I show it.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s002",
+      "layout": "bullets",
+      "kicker": "Concept 1 of 17",
+      "title": "What object-oriented programming is",
+      "bullets": [
+        "Bundle data with the only code allowed to change it",
+        "Procedural: data here, any function changes it",
+        "OOP: a vault with a teller who checks every request",
+        "Each rule lives in one place, next to its data",
+        "Grow the design by adding classes, not editing old ones"
+      ],
+      "caption": "Book: Ch 2 · 2.1 What object-oriented programming is",
+      "steps": [
+        {
+          "say": "Who is allowed to change a bank balance? Object-oriented programming, O-O-P, answers by bundling data with the only code allowed to modify it. That bundle is an object.",
+          "reveal": 1
+        },
+        {
+          "say": "Procedural programming separates the two. The data sits in one place, and free-standing functions anywhere in the program can change it.",
+          "reveal": 2
+        },
+        {
+          "say": "Cash on a table versus a vault with a teller. In O-O-P the teller, the object's methods, checks every request.",
+          "reveal": 3
+        },
+        {
+          "say": "Take the rule a balance never goes negative. If any code can write the balance, that rule is copied into every caller, and one forgotten copy is a bug. In O-O-P it lives once.",
+          "reveal": 4
+        },
+        {
+          "say": "And the design grows by adding classes, not editing old ones. In the interview, they watch you break a problem into objects, give each data and responsibilities, and justify it.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s003",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Four pillars, four questions",
+      "table": {
+        "head": [
+          "Pillar",
+          "Question it answers"
+        ],
+        "rows": [
+          [
+            "Encapsulation",
+            "Who is allowed to change this data?"
+          ],
+          [
+            "Abstraction",
+            "What does a caller actually need?"
+          ],
+          [
+            "Inheritance",
+            "What do these types already share?"
+          ],
+          [
+            "Polymorphism",
+            "One call, so why do answers differ?"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Encapsulation asks who may change this data. For our bank: only the account itself may touch its balance.",
+          "reveal": 1
+        },
+        {
+          "say": "Abstraction asks what a caller actually needs to know. The bank's transfer code needs three operations, not the account's insides.",
+          "reveal": 2
+        },
+        {
+          "say": "Inheritance asks what two types already share. A savings account and a checking account share a balance and its rules.",
+          "reveal": 3
+        },
+        {
+          "say": "Polymorphism asks why one call gives different answers. Month end on savings pays interest, on checking it charges a fee. The first two pillars guard a single class. The last two let the design grow with new classes.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s004",
+      "layout": "bullets",
+      "kicker": "Concept 2 of 17",
+      "title": "Classes, objects, constructors, this, static, final",
+      "bullets": [
+        "Class = blueprint; object = one instance with values",
+        "Constructor: same name, no return type, valid state",
+        "this = the current object",
+        "static = one per class, shared by all objects",
+        "final = cannot change: variable, method or class",
+        "Variables hold references, like an address"
+      ],
+      "caption": "Book: Ch 2 · 2.2 Classes, objects, constructors, this, static, final",
+      "steps": [
+        {
+          "say": "A class is the blueprint: fields and operations, written once. An object is one concrete thing built from it. Account is a class. Ada's account S one, holding fifty thousand cents, is an object.",
+          "reveal": 1
+        },
+        {
+          "say": "A constructor runs when an object is created. It has the class's name, no return type, and one job: put the object into a valid state.",
+          "reveal": 2
+        },
+        {
+          "say": "Inside an object's methods, this means the current object. It tells a field from a parameter, as in this dot id equals id, and returning this lets calls chain.",
+          "reveal": 3
+        },
+        {
+          "say": "Static means the member belongs to the class, one copy shared by every object. A static method has no this, so it's for utilities like Math dot max and factories.",
+          "reveal": 4
+        },
+        {
+          "say": "Final means it can't change. A final variable is assigned once. A final method can't be overridden. A final class, like String, can't be extended.",
+          "reveal": 5
+        },
+        {
+          "say": "And a class-type variable holds a reference, like an address. Writing alias equals a copies the address, not the object.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s005",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Building accounts, step by step",
+      "table": {
+        "head": [
+          "Code",
+          "What happens"
+        ],
+        "rows": [
+          [
+            "new Account(\"S-1\", \"Ada\", 50_000)",
+            "Canonical constructor validates, count 1"
+          ],
+          [
+            "new Account(\"C-1\", \"Kai\")",
+            "Chains this(id, owner, 0), count 2"
+          ],
+          [
+            "b.deposit(1_000).deposit(500)",
+            "return this: Kai has 1,500c"
+          ],
+          [
+            "alias = a; alias.deposit(1)",
+            "Same object: a is 50,001c"
+          ],
+          [
+            "new Account(\"X\", \"Bad\", -5)",
+            "Throws before counting: still 2"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Step one. We open Ada's account with fifty thousand cents. The three-argument constructor is the canonical one that all others call. It validates, sets fields, and bumps a static counter to one.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two. Kai's two-argument constructor chains with this, passing zero, so validation lives in one place. That call must be the first statement. Counter: two.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three. Deposit returns this, so we chain: deposit one thousand, then five hundred. Kai now has fifteen hundred cents.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four. alias equals a, then alias deposit one. Print a and it shows fifty thousand and one cents, and alias double-equals a is true. One object, two names.",
+          "reveal": 4
+        },
+        {
+          "say": "Step five. A negative opening balance throws before touching the counter, so it still says two. Validate first, then change state. In the interview: I chain constructors so validation lives once, and avoid mutable static state, which is hidden global state.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s006",
+      "layout": "bullets",
+      "kicker": "Concept 3 of 17",
+      "title": "Encapsulation",
+      "bullets": [
+        "Fields private, final where possible",
+        "Expose behaviour: deposit, withdraw. Not setBalance",
+        "Validate inside those methods, once",
+        "Return copies or read-only views of collections",
+        "For each field: which code may modify it?"
+      ],
+      "caption": "Book: Ch 2 · 2.3 Encapsulation",
+      "steps": [
+        {
+          "say": "Encapsulation means an object hides its data and lets the outside change it only through methods it guards. Like a child-proof medicine cap. Step one, make fields private, and final where you can.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two, expose behaviour, not setters. Deposit and withdraw, named after the business action. A set balance method is a public field in disguise.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three, validate inside those methods. Deposit rejects zero or negative amounts. Withdraw rejects anything above the balance. The rule lives once.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four, never hand out your live internal list. Return a copy or an unmodifiable view, which throws if someone tries to change it.",
+          "reveal": 4
+        },
+        {
+          "say": "Step five, for every field ask which code may modify it. If only this class, say so out loud. That makes a field list a visible decision.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s007",
+      "layout": "twocol",
+      "kicker": "Example",
+      "title": "Open fields versus a guarded balance",
+      "left": {
+        "heading": "Public fields",
+        "bullets": [
+          "Any file can write balance = -5",
+          "A rule change has nowhere to go",
+          "Getter + setter per field: same"
+        ]
+      },
+      "right": {
+        "heading": "Private + methods",
+        "bullets": [
+          "withdraw(90,000) on 40,000: refused",
+          "Rule lives once, in withdraw",
+          "Records for plain data carriers"
+        ]
+      },
+      "steps": [
+        {
+          "say": "Imagine the balance were public. Any file in the code base could set it to minus five.",
+          "reveal": 1
+        },
+        {
+          "say": "If the bank then adds an overdraft rule, there's no central place to put it. You'd hunt through every caller.",
+          "reveal": 2
+        },
+        {
+          "say": "A getter and setter for every field is the same problem: an anemic object.",
+          "reveal": 3
+        },
+        {
+          "say": "Now make it private. Someone tries to withdraw ninety thousand cents from an account holding forty thousand. Withdraw says no, and returns false.",
+          "reveal": 4
+        },
+        {
+          "say": "Every route to the balance goes through a method that can refuse. In the interview: encapsulation hides state behind methods, and those methods are the single home of every rule about that state.",
+          "reveal": 5
+        },
+        {
+          "say": "When not to bother: plain data carriers with no rules. A record gives those for free.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s008",
+      "layout": "bullets",
+      "kicker": "Concept 4 of 17",
+      "title": "Abstraction",
+      "bullets": [
+        "Give callers just the operations they need",
+        "Hide how, so the how can be rewritten",
+        "Name operations for what they do: transfer",
+        "Callers depend only on that small surface",
+        "Test: the caller does not need to know that"
+      ],
+      "caption": "Book: Ch 2 · 2.4 Abstraction",
+      "steps": [
+        {
+          "say": "Abstraction gives a caller just the operations it needs and hides how. Steering wheel and pedals: you drive without knowing about fuel injection.",
+          "reveal": 1
+        },
+        {
+          "say": "And an electric motor can replace the engine without changing how you drive. Encapsulation hides state. Abstraction hides design choices, so the short list of operations survives a full rewrite behind it.",
+          "reveal": 2
+        },
+        {
+          "say": "Step one, pick the smallest set of operations a caller needs. Step two, name them for what they do, like transfer, not how.",
+          "reveal": 3
+        },
+        {
+          "say": "Step three, put them on an interface or the class's public surface, keep the rest private, and let callers depend only on that.",
+          "reveal": 4
+        },
+        {
+          "say": "My test is one sentence: the caller does not need to know that. Every time you can honestly say it, something moves behind the surface and the design shrinks.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s009",
+      "layout": "diagram",
+      "kicker": "Example",
+      "title": "Bank.transfer sees three operations",
+      "mermaid": "flowchart LR\n  B[\"Bank.transfer\"] --> I[\"id()\"]\n  B --> W[\"withdraw()\"]\n  B --> D[\"deposit()\"]\n  I --> H[\"Hidden: cents, checks, subclasses, storage\"]\n  W --> H\n  D --> H",
+      "caption": "Six public operations on Account; transfer needs three",
+      "steps": [
+        {
+          "say": "Account has six public operations. Bank dot transfer uses exactly three: id, withdraw and deposit.",
+          "reveal": 0
+        },
+        {
+          "say": "It knows nothing about whole cents, the checks inside withdraw, or which subclass it's holding. Move the balance into a database table tomorrow and transfer doesn't change.",
+          "reveal": 0
+        },
+        {
+          "say": "The costs: a wrong abstraction is expensive to change, and a leaky one, like get hash map of seats, exposes what it should hide. Don't abstract before two concrete cases exist.",
+          "reveal": 0
+        },
+        {
+          "say": "In the interview: encapsulation hides and protects data with access control. Abstraction hides complexity and decisions behind a small set of operations. They work together.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s010",
+      "layout": "bullets",
+      "kicker": "Concept 5 of 17",
+      "title": "Inheritance",
+      "bullets": [
+        "Child extends parent: gets members, adds or overrides",
+        "One parent class; many interfaces",
+        "Constructors not inherited: super(...) runs first",
+        "super.method() reuses the parent inside an override",
+        "Every class extends java.lang.Object",
+        "Is-a test: true in every situation, or don't"
+      ],
+      "caption": "Book: Ch 2 · 2.5 Inheritance",
+      "steps": [
+        {
+          "say": "Inheritance lets a subclass start with everything its parent has, then add fields and methods or replace methods. Savings account extends account: an account with one extra rule.",
+          "reveal": 1
+        },
+        {
+          "say": "In Java a class has exactly one parent class but can implement many interfaces.",
+          "reveal": 2
+        },
+        {
+          "say": "Constructors aren't inherited. The child's constructor calls super first, then stores its own fields, like the interest rate.",
+          "reveal": 3
+        },
+        {
+          "say": "Inside an override, super dot method calls the parent's version, so you can reuse it and then extend it.",
+          "reveal": 4
+        },
+        {
+          "say": "Every class ultimately extends Object, which is why everything has to string, equals and hash code.",
+          "reveal": 5
+        },
+        {
+          "say": "The is-a test must hold in every situation. A car is not an engine, so a car holds an engine instead.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s011",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Overriding rules",
+      "table": {
+        "head": [
+          "Rule",
+          "Detail"
+        ],
+        "rows": [
+          [
+            "Same signature",
+            "Same name and parameter types"
+          ],
+          [
+            "Return type",
+            "Same, or a subtype (covariant)"
+          ],
+          [
+            "Access",
+            "Same or wider: protected to public OK"
+          ],
+          [
+            "Checked exceptions",
+            "Fewer or narrower, never new"
+          ],
+          [
+            "Cannot override",
+            "final, static (hidden), private"
+          ],
+          [
+            "Annotation",
+            "Always @Override"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Overriding means a subclass replaces a parent method. Rule one: same name, same parameter types.",
+          "reveal": 1
+        },
+        {
+          "say": "Rule two: the return type is the same, or a subtype, called a covariant return. Circle's copy method can return Circle where Shape's returns Shape.",
+          "reveal": 2
+        },
+        {
+          "say": "Rule three: access can stay the same or widen. Protected to public is fine. Public to protected won't compile.",
+          "reveal": 3
+        },
+        {
+          "say": "Rule four: checked exceptions, the ones you must catch or declare, can only shrink. Unchecked ones are free.",
+          "reveal": 4
+        },
+        {
+          "say": "Rule five: you can't override final methods, private methods, or static methods. A static method with the same signature in the child hides the parent's instead.",
+          "reveal": 5
+        },
+        {
+          "say": "Rule six: always write the at-override annotation. It catches typos. When not to inherit: just to reuse code, or when the child would disable a parent method. Java's Stack extends Vector, so a stack exposes insert at any index. In the interview: inheritance for genuine type families, composition otherwise.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s012",
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "Can you override a static method?",
+      "bullets": [
+        "Yes, with @Override",
+        "No, a same-signature static hides it",
+        "Only if the parent method is final"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. Can you override a static method in a subclass? Pick one before I go on.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s013",
+      "layout": "bullets",
+      "kicker": "Concept 6 of 17",
+      "title": "Polymorphism",
+      "bullets": [
+        "No: a static method in the child only hides it",
+        "One call, different behaviour per object",
+        "1. Declare the method on the parent type",
+        "2. Each child overrides it",
+        "3. Callers hold the parent type and call it",
+        "4. JVM picks the real class's version: dynamic dispatch"
+      ],
+      "caption": "Book: Ch 2 · 2.6 Polymorphism (and the full bank example)",
+      "steps": [
+        {
+          "say": "No. A same-signature static in the child only hides the parent's, and the declared type decides which runs.",
+          "reveal": 1
+        },
+        {
+          "say": "Polymorphism means one method call does different things depending on the object it lands on. One start button on a car, a washing machine, a laptop.",
+          "reveal": 2
+        },
+        {
+          "say": "Here's how, applied to our bank. Step one: declare monthly update on Account, with a default that returns no change.",
+          "reveal": 3
+        },
+        {
+          "say": "Step two: each child overrides it. Savings pays interest. Checking charges a fee unless the balance is high enough.",
+          "reveal": 4
+        },
+        {
+          "say": "Step three: the bank's month-end loop holds every account as plain Account and calls monthly update.",
+          "reveal": 5
+        },
+        {
+          "say": "Step four: at run time the J-V-M, the Java virtual machine, looks at the actual class of each object and runs that version. That's dynamic dispatch. No if statement ever asks which type it is.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s014",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "The bank: all four pillars",
+      "table": {
+        "head": [
+          "Class",
+          "Holds or adds",
+          "monthlyUpdate()"
+        ],
+        "rows": [
+          [
+            "Bank",
+            "List of Accounts; transfer, monthEnd",
+            "calls it on each"
+          ],
+          [
+            "Account",
+            "private balance; final deposit, withdraw",
+            "no change"
+          ],
+          [
+            "SavingsAccount",
+            "rate: 25 bp a month",
+            "pays interest"
+          ],
+          [
+            "CheckingAccount",
+            "fee 250c, waived at 50,000c",
+            "charges a fee"
+          ],
+          [
+            "Account (Ravi, P-1)",
+            "nothing extra",
+            "no change"
+          ]
+        ]
+      },
+      "caption": "Bank holds Accounts; two subclasses override monthlyUpdate",
+      "steps": [
+        {
+          "say": "Here's the bank. Bank holds accounts and offers transfer and month end. Account has a private balance and final deposit and withdraw, so no child can weaken the rule.",
+          "reveal": 2
+        },
+        {
+          "say": "Savings account adds one field, a monthly rate of twenty-five basis points. A basis point is one hundredth of a percent, so that's a quarter of a percent.",
+          "reveal": 3
+        },
+        {
+          "say": "Checking account adds two fields: a fee of two hundred fifty cents, waived when the balance is at least fifty thousand cents. And Ravi has a plain account that uses the parent's no change.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s015",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Running the bank",
+      "table": {
+        "head": [
+          "Step",
+          "What happens",
+          "Pillar"
+        ],
+        "rows": [
+          [
+            "Open S-1 $500, C-1 $80, P-1 $30",
+            "Three accounts in Bank",
+            "Inheritance"
+          ],
+          [
+            "Transfer $100 S-1 to C-1",
+            "Moved: S-1 $400, C-1 $180",
+            "Abstraction"
+          ],
+          [
+            "Transfer $900 S-1 to C-1",
+            "Rejected inside withdraw",
+            "Encapsulation"
+          ],
+          [
+            "S-1 month end",
+            "0.25% of $400 = $1.00",
+            "Polymorphism"
+          ],
+          [
+            "C-1 month end",
+            "$180 below $500: fee $2.50",
+            "Polymorphism"
+          ],
+          [
+            "P-1 month end",
+            "No change, $30.00",
+            "Polymorphism"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Let's run it. Ada's savings opens with five hundred dollars, Kai's checking with eighty, Ravi's plain account with thirty. Each child constructor called super first. That's inheritance.",
+          "reveal": 1
+        },
+        {
+          "say": "Transfer one hundred dollars from Ada to Kai. Transfer only uses id, withdraw and deposit. Ada now has four hundred, Kai one eighty. That's abstraction.",
+          "reveal": 2
+        },
+        {
+          "say": "Now transfer nine hundred dollars from Ada, who has four hundred. Withdraw refuses, and the bank prints rejected, not enough money. The rule lived in one place. That's encapsulation.",
+          "reveal": 3
+        },
+        {
+          "say": "Month end. One loop, one method name. Ada's savings earns a quarter percent of four hundred dollars, exactly one dollar, so she has four hundred and one.",
+          "reveal": 4
+        },
+        {
+          "say": "Kai's checking holds one eighty, below the five hundred dollar waiver, so it pays a two dollar fifty fee, leaving one seventy-seven fifty.",
+          "reveal": 5
+        },
+        {
+          "say": "Ravi's plain account says no change. Three objects, three results, no type check, so a fourth account type needs no edit. Money is whole cents in a long, never a double, which can't store ten cents exactly. In the interview: I code against the parent type, each subtype overrides, the J-V-M picks at run time. And when you spot a long switch on type, point it out.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s016",
+      "layout": "twocol",
+      "kicker": "Concept 7 of 17",
+      "title": "Overloading versus overriding",
+      "left": {
+        "heading": "Overloading: compile time",
+        "bullets": [
+          "Same name, different parameters",
+          "Compiler picks by declared types",
+          "add(int,int), add(double,double)"
+        ]
+      },
+      "right": {
+        "heading": "Overriding: run time",
+        "bullets": [
+          "Same signature in a subclass",
+          "JVM picks by the actual object",
+          "Circle.area() over Shape.area()"
+        ]
+      },
+      "caption": "Book: Ch 2 · 2.7 Compile-time vs runtime polymorphism",
+      "steps": [
+        {
+          "say": "Two kinds of polymorphism. Overloading means the same method name with different parameter lists, usually in the same class.",
+          "reveal": 1
+        },
+        {
+          "say": "The compiler chooses which overload to call, using the declared types of the arguments. That's why it's called compile-time polymorphism.",
+          "reveal": 2
+        },
+        {
+          "say": "Example: a calculator with add for two ints, add for two longs, add for two doubles, and add for any number of ints.",
+          "reveal": 3
+        },
+        {
+          "say": "Overriding means a subclass re-implements the same signature. It needs inheritance or an interface.",
+          "reveal": 4
+        },
+        {
+          "say": "The J-V-M chooses at run time from the actual class of the receiver. That's runtime polymorphism.",
+          "reveal": 5
+        },
+        {
+          "say": "Example: Circle's area overrides Shape's area. Remember: two methods can't differ only in return type. That's a compile error.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s017",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Overload resolution, three phases",
+      "table": {
+        "head": [
+          "Phase",
+          "Allows",
+          "Example call"
+        ],
+        "rows": [
+          [
+            "1",
+            "Exact match or widening",
+            "add(2, 3), add(2L, 3) to long"
+          ],
+          [
+            "2",
+            "Boxing: int to Integer",
+            "only if phase 1 found nothing"
+          ],
+          [
+            "3",
+            "Varargs: int...",
+            "add(1, 2, 3) prints 6"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "The compiler tries three phases, and the first with a match wins. Phase one: exact match or widening, automatic conversion to a bigger type, int to long to double. Add two and three hits add int int. Add two-L and three has no long int version, so three widens and add long long runs.",
+          "reveal": 1
+        },
+        {
+          "say": "Phase two also allows boxing, which wraps an int in its object form, Integer.",
+          "reveal": 2
+        },
+        {
+          "say": "Phase three finally allows varargs, any number of arguments. Add one, two, three only matches the varargs version, so it prints six. Several candidates in one phase? The most specific wins, and if none is most specific, it's an ambiguous call and won't compile.",
+          "reveal": 3
+        }
+      ]
+    },
+    {
+      "id": "s018",
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "Shape s = new Circle(1). Which runs?",
+      "bullets": [
+        "s.area(): Circle's or Shape's?",
+        "calc.greet(s): greet(Shape) or greet(Circle)?",
+        "s.kind: \"shape\" or \"circle\"?"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. We declare Shape s equals new Circle with radius one. Shape and Circle both have an area method, the calculator has a greet overload for Shape and one for Circle, and both classes declare a public field called kind. Predict all three before the next slide.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s019",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "The favourite interview surprise",
+      "table": {
+        "head": [
+          "Expression",
+          "Prints",
+          "Why"
+        ],
+        "rows": [
+          [
+            "s.area()",
+            "3.14",
+            "Override: runtime class Circle"
+          ],
+          [
+            "calc.greet(s)",
+            "greet(Shape)",
+            "Overload: declared type Shape"
+          ],
+          [
+            "s.kind",
+            "shape",
+            "Fields are never polymorphic"
+          ],
+          [
+            "s.copy() class",
+            "Circle",
+            "Covariant return override"
+          ],
+          [
+            "equals(Point p)",
+            "never called",
+            "Overload, not override"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "s dot area prints three point one four. That's an override, so the J-V-M dispatches on the real object, a circle.",
+          "reveal": 1
+        },
+        {
+          "say": "calc dot greet of s prints greet Shape. Overloads are chosen at compile time from the declared type, and s is declared as Shape. The classic surprise.",
+          "reveal": 2
+        },
+        {
+          "say": "s dot kind prints shape. Fields resolve by the declared type, so a same-named child field just hides the parent's. Lesson: never hide fields. Use private fields and overridable methods.",
+          "reveal": 3
+        },
+        {
+          "say": "s dot copy returns a Circle, because Circle overrides copy with a covariant return.",
+          "reveal": 4
+        },
+        {
+          "say": "And the bug to name: equals taking a Point instead of an Object. It's an overload, so collections never call it, and at-override would have caught it.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s020",
+      "layout": "bullets",
+      "kicker": "Concept 8 of 17",
+      "title": "Interfaces",
+      "bullets": [
+        "A contract: methods a class promises to provide",
+        "A class implements many; fields are constants",
+        "default methods (Java 8): body, inheritable",
+        "static methods: belong to the interface",
+        "private methods (Java 9): helpers for defaults",
+        "Functional interface: exactly one abstract method"
+      ],
+      "caption": "Book: Ch 2 · 2.8 Interfaces",
+      "steps": [
+        {
+          "say": "An interface is a contract: methods a class promises to provide, without saying how. Like a wall-socket standard. Any plug fits any socket, whoever made them.",
+          "reveal": 1
+        },
+        {
+          "say": "A class can implement many interfaces but extend only one class. Fields in an interface are always public static final constants, so it holds no per-object state.",
+          "reveal": 2
+        },
+        {
+          "say": "Default methods, since Java eight, have a body implementers inherit. They let old interfaces grow, like Collection gaining stream, without breaking implementers.",
+          "reveal": 3
+        },
+        {
+          "say": "Static methods belong to the interface itself and aren't inherited. They're handy for factories.",
+          "reveal": 4
+        },
+        {
+          "say": "Private methods, since Java nine, are helpers for default methods, invisible to implementers.",
+          "reveal": 5
+        },
+        {
+          "say": "A functional interface has exactly one abstract method, so a lambda, a short unnamed inline function, can implement it. The at-functional-interface annotation makes the compiler enforce that.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s021",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "One Notifier, every kind of method",
+      "table": {
+        "head": [
+          "Code",
+          "Kind",
+          "Result"
+        ],
+        "rows": [
+          [
+            "send(to, message)",
+            "abstract",
+            "Email: [email] to ada: ..."
+          ],
+          [
+            "(to, msg) -> \"[sms] \" + ...",
+            "lambda",
+            "[sms] ada: your order shipped"
+          ],
+          [
+            "sendAll(list, msg)",
+            "default",
+            "One line per recipient"
+          ],
+          [
+            "clean(message)",
+            "private",
+            "Strips spaces, hidden"
+          ],
+          [
+            "Notifier.console()",
+            "static",
+            "A ready-made notifier"
+          ],
+          [
+            "tenPercent.then(minus$5)",
+            "functional",
+            "10,000c to 9,000c to 8,500c"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Our example: a Notifier interface for an online shop. Send is abstract. Email Notifier implements it: email to Ada, your order shipped.",
+          "reveal": 1
+        },
+        {
+          "say": "Because send is the only abstract method, Notifier is functional, so an S-M-S notifier is just a lambda. No class needed.",
+          "reveal": 2
+        },
+        {
+          "say": "Send all is a default method. It loops over recipients, Kai and Ravi, and calls send for each. Every implementer gets it free.",
+          "reveal": 3
+        },
+        {
+          "say": "Inside, send all calls clean, a private helper that strips the spaces from around sale starts today. Implementers can't see it.",
+          "reveal": 4
+        },
+        {
+          "say": "Notifier dot console is a static factory returning a console notifier.",
+          "reveal": 5
+        },
+        {
+          "say": "And a discount rule interface with one apply method. Ten percent off, then five dollars off, on a hundred dollars, which is ten thousand cents: nine thousand, then eighty-five hundred. The default method then joins two rules into one.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s022",
+      "layout": "bullets",
+      "title": "Interfaces: when, and the interview",
+      "bullets": [
+        "Callers depend on what, not a concrete class",
+        "Tests pass fakes; new implementations need no edits",
+        "Two defaults clash? Override, pick with A.super.m()",
+        "Not for one implementation and no test double",
+        "Avoid fat interfaces and constant-only interfaces"
+      ],
+      "steps": [
+        {
+          "say": "Callers depend on what, not on a concrete class. Checkout depends on Notifier, not email.",
+          "reveal": 1
+        },
+        {
+          "say": "So adding push notifications needs no edit to checkout, and tests can pass a fake notifier.",
+          "reveal": 2
+        },
+        {
+          "say": "If two interfaces give the same default method, the class must override it, and can pick one with A dot super dot method.",
+          "reveal": 3
+        },
+        {
+          "say": "When not: one implementation, no realistic second, no test double. That's an extra layer with no benefit. Add the interface when the second implementation shows up.",
+          "reveal": 4
+        },
+        {
+          "say": "Avoid fat interfaces that force empty methods. In the interview: services depend on interfaces like payment gateway, so I add implementations without editing callers.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s023",
+      "layout": "table",
+      "kicker": "Concept 9 of 17",
+      "title": "Abstract classes versus interfaces",
+      "table": {
+        "head": [
+          "",
+          "Abstract class",
+          "Interface"
+        ],
+        "rows": [
+          [
+            "Instance fields",
+            "Yes",
+            "No, only constants"
+          ],
+          [
+            "Constructors",
+            "Yes",
+            "No"
+          ],
+          [
+            "How many per class",
+            "One",
+            "Many"
+          ],
+          [
+            "Expresses",
+            "is-a: shared state",
+            "can-do: a capability"
+          ],
+          [
+            "Typical use",
+            "Partial implementation",
+            "Contracts, strategies, seams"
+          ]
+        ]
+      },
+      "caption": "Book: Ch 2 · 2.9 Abstract classes vs interfaces",
+      "steps": [
+        {
+          "say": "An abstract class can't be instantiated. It can hold fields, constructors, finished methods, and abstract methods subclasses must fill in, like a form with some fields pre-printed. An abstract class has instance fields. An interface only has constants.",
+          "reveal": 1
+        },
+        {
+          "say": "An abstract class has constructors. An interface never does.",
+          "reveal": 2
+        },
+        {
+          "say": "A class extends one abstract class but implements many interfaces.",
+          "reveal": 3
+        },
+        {
+          "say": "An abstract class expresses is-a with shared state. An interface expresses can-do, a capability or role.",
+          "reveal": 4
+        },
+        {
+          "say": "So use abstract classes for partial implementation in a close family, and interfaces for contracts, strategies, and test seams, the places a test swaps in a fake.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s024",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Report: a fixed skeleton, one blank",
+      "table": {
+        "head": [
+          "Part of Report",
+          "Kind",
+          "SalesReport"
+        ],
+        "rows": [
+          [
+            "title field, constructor",
+            "state",
+            "super(\"Sales\")"
+          ],
+          [
+            "render()",
+            "final skeleton",
+            "inherited as is"
+          ],
+          [
+            "header()",
+            "concrete, overridable",
+            "== Sales =="
+          ],
+          [
+            "body()",
+            "abstract",
+            "total: 12345 cents"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Here's the worked example. Report is abstract. It holds a title field, which an interface couldn't, and a constructor. SalesReport calls super with the word Sales.",
+          "reveal": 1
+        },
+        {
+          "say": "Render is final. It glues header, body and a closing line, so the order can never change. A fixed skeleton with variable steps is the Template Method pattern.",
+          "reveal": 2
+        },
+        {
+          "say": "Header is concrete and overridable.",
+          "reveal": 3
+        },
+        {
+          "say": "Body is abstract. SalesReport supplies only this: total twelve thousand three hundred forty-five cents. Rule of thumb for the interview: start with an interface for the contract, and add an abstract class underneath when implementations share real state or a fixed algorithm. The J-D-K does exactly this: List, then Abstract List, then Array List.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s025",
+      "layout": "bullets",
+      "kicker": "Concept 10 of 17",
+      "title": "Enums with fields and behaviour",
+      "bullets": [
+        "A fixed set of named instances: no 7-cent coin",
+        "Type-safe: \"PAID\" typos stop compiling",
+        "Fields, private constructors, methods, interfaces",
+        "Compare with ==; never persist ordinal()",
+        "Exhaustive switch: no default needed",
+        "Different data, same behaviour: use an enum"
+      ],
+      "caption": "Book: Ch 2 · 2.10 Enums with fields and behaviour",
+      "steps": [
+        {
+          "say": "An enum, short for enumerated type, is a fixed set of named instances, like coin denominations. There's no seven-cent coin.",
+          "reveal": 1
+        },
+        {
+          "say": "String or int constants allow typos and invalid values. With an enum, only valid values compile.",
+          "reveal": 2
+        },
+        {
+          "say": "In Java an enum is a full class: fields, a private constructor, methods, even a method body per constant.",
+          "reveal": 3
+        },
+        {
+          "say": "There's exactly one instance per constant, so compare with double equals. And never save ordinal, the position number, to a database. Reorder the constants and every saved value means something else. Store the name.",
+          "reveal": 4
+        },
+        {
+          "say": "A switch expression that covers every constant needs no default, and when someone adds a constant, the compiler flags the missing case.",
+          "reveal": 5
+        },
+        {
+          "say": "The design rule: when variations differ only in data, like spot types, vehicle types or statuses, use an enum. When they behave differently, use classes.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s026",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Coins and an order state machine",
+      "table": {
+        "head": [
+          "Step",
+          "Code",
+          "Result"
+        ],
+        "rows": [
+          [
+            "Coin field",
+            "QUARTER(25), DIME(10), PENNY(1)",
+            "cents() on each"
+          ],
+          [
+            "Insert 25+25+10+1",
+            "sum of Coin::cents",
+            "61 cents, no switch"
+          ],
+          [
+            "PLACED to SHIPPED",
+            "canMoveTo(SHIPPED)",
+            "Refused"
+          ],
+          [
+            "PLACED to PAID",
+            "canMoveTo(PAID)",
+            "Moved"
+          ],
+          [
+            "PAID to SHIPPED to DELIVERED",
+            "next() per constant",
+            "Moved twice"
+          ],
+          [
+            "DELIVERED",
+            "isFinal(), switch label",
+            "true, done"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Example one, a vending machine. Each coin constant carries its value in cents through a private constructor: quarter twenty-five, dime ten, penny one.",
+          "reveal": 1
+        },
+        {
+          "say": "Insert two quarters, a dime and a penny. Summing each coin's cents gives sixty-one. No switch anywhere.",
+          "reveal": 2
+        },
+        {
+          "say": "Example two, an order lifecycle. Each status constant overrides a next method listing where it may go. Placed can go to paid or cancelled. Trying placed to shipped is refused.",
+          "reveal": 3
+        },
+        {
+          "say": "Placed to paid is allowed, so the order moves.",
+          "reveal": 4
+        },
+        {
+          "say": "Paid to shipped, then shipped to delivered. Both allowed.",
+          "reveal": 5
+        },
+        {
+          "say": "Delivered has no next states, so is final returns true, and the exhaustive switch labels it done. That's a tiny state machine in one guarded method. When not: values created by admins at run time, like product categories, can't be an enum.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s027",
+      "layout": "bullets",
+      "kicker": "Concept 11 of 17",
+      "title": "Composition over inheritance",
+      "bullets": [
+        "Has-a and delegate, instead of is-a",
+        "Fragile base class: parent internals break the child",
+        "1. Pick the behaviour to reuse or vary",
+        "2. Put it behind an interface",
+        "3. Hold it in a private field from the constructor",
+        "4. Forward calls, adding your logic around them"
+      ],
+      "caption": "Book: Ch 2 · 2.11 Composition over inheritance",
+      "steps": [
+        {
+          "say": "Composition builds a class by holding other objects and delegating to them. Has-a instead of is-a. A phone has a camera module. It isn't a kind of camera.",
+          "reveal": 1
+        },
+        {
+          "say": "Inheritance couples the child to the parent's internals, so a parent change can silently break it. That's the fragile base class problem. It's also fixed at compile time.",
+          "reveal": 2
+        },
+        {
+          "say": "The recipe, applied to a car. Step one: pick the behaviour to vary. Here, the engine.",
+          "reveal": 3
+        },
+        {
+          "say": "Step two: put it behind an interface, Engine, with one start method.",
+          "reveal": 4
+        },
+        {
+          "say": "Step three: hold it in a private field from the constructor, replaceable or fakeable.",
+          "reveal": 5
+        },
+        {
+          "say": "Step four: forward calls to it. Drive returns the model name plus engine dot start. Call replace engine with an electric motor and the same car now says electric motor hum. Inheritance can't swap a parent at run time.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s028",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Counting adds: inherit versus compose",
+      "table": {
+        "head": [
+          "Version",
+          "Call",
+          "Attempts counted"
+        ],
+        "rows": [
+          [
+            "extends HashSet",
+            "addAll(a, b, c)",
+            "6, wrong"
+          ],
+          [
+            "Why",
+            "parent addAll calls add",
+            "each element counted twice"
+          ],
+          [
+            "CountingSet has a Set",
+            "addAll(a, b, c)",
+            "3"
+          ],
+          [
+            "Then add(a) again",
+            "inner set ignores duplicate",
+            "4 attempts, size 3"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Imagine a set that counts attempted adds. Version one extends Hash Set and overrides add and add all. Add three letters with add all: the count says six.",
+          "reveal": 1
+        },
+        {
+          "say": "Why? The inherited add all calls add once per element, and our add counts again. The child depended on a parent internal detail nobody promised to keep.",
+          "reveal": 2
+        },
+        {
+          "say": "Version two, Counting Set, holds any Set in a private field and forwards to it. Its add all counts three and calls the inner set's add directly, not its own.",
+          "reveal": 3
+        },
+        {
+          "say": "Add a again: four attempts, size still three, with any Set. In the interview: I prefer composition, holding an interface-typed collaborator and delegating. It powers Strategy, Decorator and State. Inheritance stays for genuine is-a designed for extension.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s029",
+      "layout": "quiz",
+      "kicker": "Pause and think",
+      "title": "Only equals is overridden. What breaks?",
+      "bullets": [
+        "Nothing, equals is enough",
+        "HashSet.contains may miss an equal object",
+        "The code won't compile"
+      ],
+      "steps": [
+        {
+          "say": "Pause and think. A Point class overrides equals but not hash code. Two points with x one and y two are equal. You add one to a Hash Set and ask whether it contains the other. What happens?",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s030",
+      "layout": "bullets",
+      "kicker": "Concept 12 of 17",
+      "title": "Identity versus equality",
+      "bullets": [
+        "contains returns false: the hash sends it astray",
+        "Identity: same object? Use ==",
+        "Equality: same value? Use equals",
+        "HashSet: hash picks a bucket, equals checks inside",
+        "Equal objects must have equal hash codes",
+        "Override equals: override hashCode on same fields"
+      ],
+      "caption": "Book: Ch 2 · 2.12 Object identity vs equality",
+      "steps": [
+        {
+          "say": "The answer: contains returns false. Let's see why.",
+          "reveal": 1
+        },
+        {
+          "say": "Identity asks: do two references point at the same object? That's double equals.",
+          "reveal": 2
+        },
+        {
+          "say": "Equality asks: same value? That's equals. The default equals is identity, so value classes override it. Two printed copies of a book are equal, not identical.",
+          "reveal": 3
+        },
+        {
+          "say": "A Hash Set stores entries in slots called buckets. It computes the hash code, an int from the fields, jumps to one bucket, then compares the few objects there with equals.",
+          "reveal": 4
+        },
+        {
+          "say": "So equal objects must have equal hash codes. Otherwise the search starts in the wrong bucket. Unequal objects may share a hash code. That's a collision, allowed, just slower.",
+          "reveal": 5
+        },
+        {
+          "say": "Hence the rule: override equals, override hash code, on the same fields. Equals must also be reflexive, symmetric, transitive, consistent, and false for null.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s031",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Points, strings and boxed numbers",
+      "table": {
+        "head": [
+          "Check",
+          "Result",
+          "Lesson"
+        ],
+        "rows": [
+          [
+            "a == b, both Point(1,2)",
+            "false",
+            "Different objects"
+          ],
+          [
+            "a.equals(b), same hash",
+            "true, true",
+            "Equal values"
+          ],
+          [
+            "HashSet add a, add b",
+            "size 1",
+            "Contract kept"
+          ],
+          [
+            "BrokenPoint set.contains",
+            "false",
+            "No hashCode: wrong bucket"
+          ],
+          [
+            "\"hi\" == new String(\"hi\")",
+            "false",
+            "Use equals for strings"
+          ],
+          [
+            "Integer 1000 == 1000",
+            "unreliable",
+            "Cache only -128 to 127"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Two points, both one comma two. Double equals is false: two separate objects.",
+          "reveal": 1
+        },
+        {
+          "say": "Equals is true, and their hash codes match, because hash code uses the same x and y.",
+          "reveal": 2
+        },
+        {
+          "say": "Add both to a Hash Set and the size is one. The set saw they're the same value.",
+          "reveal": 3
+        },
+        {
+          "say": "Broken Point overrides only equals. Its inherited hash code is identity-based, so an equal point lands in a different bucket and contains says false.",
+          "reveal": 4
+        },
+        {
+          "say": "Strings: hi double-equals a new string hi is false. Always compare strings with equals.",
+          "reveal": 5
+        },
+        {
+          "say": "Boxed numbers too. Integer caches only small values, so double equals works for ten and fails for a thousand. The design choice: value objects like Money compare all fields. Entities like User or Order compare by a stable I-D.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s032",
+      "layout": "bullets",
+      "kicker": "Concept 13 of 17",
+      "title": "Immutability and records",
+      "bullets": [
+        "1. Class final, or private constructor + factory",
+        "2. All fields private final",
+        "3. No setters: changes return a new object",
+        "4. Defensive copies in and out",
+        "5. Don't let this escape during construction",
+        "Records: all of this in one line, shallowly"
+      ],
+      "caption": "Book: Ch 2 · 2.13 Immutability and records",
+      "steps": [
+        {
+          "say": "An immutable object can't change after construction. A change makes a new object, like reprinting a receipt. It's thread-safe without locks and safe as a map key. The checklist, on a Money class. Step one: class final, or a private constructor plus a static factory, Money dot of.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two: all fields private and final. Money holds a Big Decimal amount and a currency.",
+          "reveal": 2
+        },
+        {
+          "say": "Step three: no setters. Plus returns a new Money. Five dollars plus two dollars gives seven, and the five is untouched.",
+          "reveal": 3
+        },
+        {
+          "say": "Step four: defensive copies. Copy mutable inputs in the constructor and never hand out internal mutable objects.",
+          "reveal": 4
+        },
+        {
+          "say": "Step five: don't leak this before construction finishes.",
+          "reveal": 5
+        },
+        {
+          "say": "A record, since Java sixteen, gives you this in one line: private final fields, a constructor, accessors, and equals, hash code and to string. But only shallowly. A list component can still change unless you copy it.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s033",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Order: a record with a compact constructor",
+      "table": {
+        "head": [
+          "Step",
+          "What happens",
+          "Result"
+        ],
+        "rows": [
+          [
+            "new Order(\"O-1\", [pen], $5.00)",
+            "Compact constructor: List.copyOf",
+            "Validated, copied"
+          ],
+          [
+            "callerList.add(\"SNEAKY\")",
+            "Caller's own list changes",
+            "o1 still [pen]"
+          ],
+          [
+            "o1.withItem(\"ink\", $1.50)",
+            "Returns a new Order",
+            "[pen, ink], $6.50"
+          ],
+          [
+            "o1.items().add(\"hack\")",
+            "List is unmodifiable",
+            "Exception thrown"
+          ],
+          [
+            "o1.equals(copy)",
+            "Records compare components",
+            "true"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Order is a record with an id, a list of items and a Money total. Its compact constructor checks the id isn't blank and replaces items with List dot copy of: a defensive, unmodifiable copy.",
+          "reveal": 1
+        },
+        {
+          "say": "The caller then adds sneaky to its own list. The order doesn't see it. Still just pen.",
+          "reveal": 2
+        },
+        {
+          "say": "With item is a wither: it returns a new order with pen and ink, total six fifty. The original is untouched.",
+          "reveal": 3
+        },
+        {
+          "say": "Try adding hack through the items accessor and you get an unsupported operation exception.",
+          "reveal": 4
+        },
+        {
+          "say": "And a record with the same components is equal. In the interview: value objects are immutable records. Entities whose state changes, like an account balance, stay mutable but encapsulated.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s034",
+      "layout": "table",
+      "kicker": "Concept 14 of 17",
+      "title": "Access modifiers and packages",
+      "table": {
+        "head": [
+          "Modifier",
+          "Who can see it",
+          "Like a"
+        ],
+        "rows": [
+          [
+            "private",
+            "This class only",
+            "Desk drawer"
+          ],
+          [
+            "(none) package-private",
+            "Same package",
+            "Team room"
+          ],
+          [
+            "protected",
+            "Package + subclasses anywhere",
+            "Shared floor"
+          ],
+          [
+            "public",
+            "Everyone",
+            "Lobby"
+          ]
+        ]
+      },
+      "caption": "Book: Ch 2 · 2.14 Access modifiers and packages",
+      "steps": [
+        {
+          "say": "A package is a named group of related classes. Access modifiers control who sees a member, making encapsulation compiler-enforced. Private: this class only, a desk drawer.",
+          "reveal": 1
+        },
+        {
+          "say": "No modifier at all means package-private: anything in the same package. The team room.",
+          "reveal": 2
+        },
+        {
+          "say": "Protected: the same package, plus subclasses in other packages through inheritance. The shared floor.",
+          "reveal": 3
+        },
+        {
+          "say": "Public: everyone, the lobby. The rule: start everything private and widen only when needed. Group packages by feature, like parking or payment, and keep helpers package-private behind a small public facade, one simple front class.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s035",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "One Wallet, four levels",
+      "table": {
+        "head": [
+          "From PremiumWallet in client",
+          "Field",
+          "Compiles?"
+        ],
+        "rows": [
+          [
+            "Read owner",
+            "public",
+            "Yes"
+          ],
+          [
+            "bonusCents += 300",
+            "protected",
+            "Yes, via inheritance"
+          ],
+          [
+            "auditCount++",
+            "package-private",
+            "No"
+          ],
+          [
+            "balanceCents += 300",
+            "private",
+            "No"
+          ],
+          [
+            "new AuditLog()",
+            "package-private class",
+            "No: use Audits facade"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "A Wallet class lives in package core. A Premium Wallet subclass lives in package client. Let's try each field from the subclass. Owner is public, so anyone reads it.",
+          "reveal": 1
+        },
+        {
+          "say": "Bonus cents is protected, so the subclass can add a three hundred cent bonus.",
+          "reveal": 2
+        },
+        {
+          "say": "Audit count is package-private, so the subclass in another package can't touch it. That line won't compile.",
+          "reveal": 3
+        },
+        {
+          "say": "The balance is private. Not even the subclass can change it, only through add, which validates.",
+          "reveal": 4
+        },
+        {
+          "say": "Audit Log is a package-private class, so outsiders use the public Audits facade. Common mistakes: everything public to be safe, and a whole machine-coding solution in one package. Use packages like model, repository, service and strategy.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s036",
+      "layout": "bullets",
+      "kicker": "Concept 15 of 17",
+      "title": "Generics basics for LLD",
+      "bullets": [
+        "Any type, still checked at compile time",
+        "Bounded: T extends X lets you call X's methods",
+        "Generic method: <T extends Comparable> T max(...)",
+        "PECS: Producer extends, Consumer super",
+        "Erasure: no new T(), no List<String> at run time",
+        "Avoid raw types: they switch checks off"
+      ],
+      "caption": "Book: Ch 2 · 2.15 Generics basics for LLD",
+      "steps": [
+        {
+          "say": "Generics let code work with any type while keeping compile-time type safety. A list of String holds only strings, with no casts that fail at run time.",
+          "reveal": 1
+        },
+        {
+          "say": "A bounded type parameter, T extends X, means T is X or a subtype, so you can call X's methods on it.",
+          "reveal": 2
+        },
+        {
+          "say": "A generic method declares its own type parameter. Max takes a list of anything comparable and returns the largest.",
+          "reveal": 3
+        },
+        {
+          "say": "Wildcards: question-mark extends T is a producer you read from. Question-mark super T is a consumer you write into. P-E-C-S: producer extends, consumer super.",
+          "reveal": 4
+        },
+        {
+          "say": "Type erasure: type arguments exist only at compile time. At run time a list of strings and a list of integers are the same class. So no new T, and no primitive type arguments: Integer, not int.",
+          "reveal": 5
+        },
+        {
+          "say": "And avoid raw types, a List with no angle brackets. They switch the checks off.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s037",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "One Repository for every entity",
+      "table": {
+        "head": [
+          "Call",
+          "Result",
+          "Idea"
+        ],
+        "rows": [
+          [
+            "Repository<String, User>",
+            "save Ada u1, Kai u2",
+            "Bounded T: has id()"
+          ],
+          [
+            "findById(\"u2\") / (\"u9\")",
+            "Kai / none",
+            "Optional, not null"
+          ],
+          [
+            "max(products)",
+            "lamp ($25)",
+            "Generic method"
+          ],
+          [
+            "copy(ints, numbers)",
+            "[3, 1, 2]",
+            "PECS"
+          ],
+          [
+            "users.save(product)",
+            "Compile error",
+            "Type safety"
+          ],
+          [
+            "List<String> vs List<Integer>",
+            "same class",
+            "Erasure"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "In machine coding you'll want an in-memory repository. One generic Repository, with an I-D type and an entity type bounded to have an id method. Save Ada as u one and Kai as u two.",
+          "reveal": 1
+        },
+        {
+          "say": "Find by id u two gives Kai. Find u nine returns an empty Optional, a box that holds a value or nothing, instead of null.",
+          "reveal": 2
+        },
+        {
+          "say": "A product repository keyed by Integer holds a pen at a dollar fifty, a lamp at twenty-five, and a mug at eight. Max returns the lamp.",
+          "reveal": 3
+        },
+        {
+          "say": "Copy takes a list of integers as the producer and a list of numbers as the consumer. That's P-E-C-S. Note a list of Integer is not a list of Number.",
+          "reveal": 4
+        },
+        {
+          "say": "Saving a product into the user repository doesn't compile. The mistake is caught before the code ever runs.",
+          "reveal": 5
+        },
+        {
+          "say": "And comparing the runtime class of a string list and an integer list gives true. That's erasure.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s038",
+      "layout": "twocol",
+      "kicker": "Concept 16 of 17",
+      "title": "Coupling and cohesion",
+      "left": {
+        "heading": "Cohesion: aim high",
+        "bullets": [
+          "Inside one class",
+          "Every method, one purpose",
+          "One sentence, no and"
+        ]
+      },
+      "right": {
+        "heading": "Coupling: aim low",
+        "bullets": [
+          "Between classes",
+          "Talk through small interfaces",
+          "A change does not ripple"
+        ]
+      },
+      "caption": "Book: Ch 2 · 2.16 Coupling and cohesion",
+      "steps": [
+        {
+          "say": "Two yardsticks. Cohesion is how closely the responsibilities inside one class belong together.",
+          "reveal": 1
+        },
+        {
+          "say": "High cohesion is good. Account's methods all work on the balance toward one purpose.",
+          "reveal": 2
+        },
+        {
+          "say": "The test: describe the class in one sentence without the word and. A class that manages accounts and sends emails fails it.",
+          "reveal": 3
+        },
+        {
+          "say": "Coupling is how much one class depends on other classes' details.",
+          "reveal": 4
+        },
+        {
+          "say": "Low coupling is good. Bank talks to Account through three operations, and checkout talks to a Notifier interface.",
+          "reveal": 5
+        },
+        {
+          "say": "So a change doesn't ripple. Everything today pushes the same way: encapsulation and access modifiers cut coupling, single-purpose classes raise cohesion, and interfaces and composition decouple callers from implementations.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s039",
+      "layout": "table",
+      "kicker": "Concept 17 of 17",
+      "title": "Analysis, design, implementation",
+      "table": {
+        "head": [
+          "Activity",
+          "Question",
+          "Talks about"
+        ],
+        "rows": [
+          [
+            "Analysis (OOA)",
+            "What is the system, what must it do?",
+            "books, members, loans"
+          ],
+          [
+            "Design (OOD)",
+            "Which objects do it, how linked?",
+            "Book, Member, Loan classes"
+          ],
+          [
+            "Implementation (OOP)",
+            "How do we write it?",
+            "ArrayList, HashMap"
+          ]
+        ]
+      },
+      "caption": "Book: Ch 2 · 2.17 Object-oriented analysis and design",
+      "steps": [
+        {
+          "say": "Object-oriented analysis and design, O-O-A-D, turns a written description into objects and links. Analysis asks what the system is and must do, in business terms: books, members, loans.",
+          "reveal": 1
+        },
+        {
+          "say": "Design asks which objects, with which responsibilities, deliver that behaviour, and how they're linked.",
+          "reveal": 2
+        },
+        {
+          "say": "Implementation is the code: array lists and hash maps. If you mention a hash map two minutes in, you skipped the two activities the interviewer wanted to watch.",
+          "reveal": 3
+        }
+      ]
+    },
+    {
+      "id": "s040",
+      "layout": "diagram",
+      "title": "The four OOAD steps",
+      "mermaid": "flowchart LR\n  A[\"1. Find the objects\"] --> B[\"2. Define relationships\"]\n  B --> C[\"3. Establish interfaces\"]\n  C --> D[\"4. Make the design\"]",
+      "caption": "Steps 1 and 2 are analysis; 3 and 4 are design",
+      "steps": [
+        {
+          "say": "Four steps, in a fixed order, each using the previous one's output. One: find the objects. Two: define the relationships. Three: establish each object's interface. Four: make the design.",
+          "reveal": 0
+        },
+        {
+          "say": "Steps one and two are analysis. Steps three and four are design. Let's run all four on one sentence: library members borrow books, and each book on loan must be returned by a due date.",
+          "reveal": 0
+        }
+      ]
+    },
+    {
+      "id": "s041",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "Running the four steps on a library",
+      "table": {
+        "head": [
+          "Step",
+          "Applied to the library"
+        ],
+        "rows": [
+          [
+            "1. Find the objects",
+            "Library, Member, Book, Loan; date = field"
+          ],
+          [
+            "2. Relationships",
+            "Library owns Books, registers Members"
+          ],
+          [
+            "",
+            "Loan points to 1 Book and 1 Member"
+          ],
+          [
+            "3. Interfaces",
+            "Library: lend, takeBack, isOut"
+          ],
+          [
+            "",
+            "Loan: isLate. Everything else private"
+          ],
+          [
+            "4. Make the design",
+            "Class diagram, checked against sentence"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Step one, find the objects, mostly nouns. Candidates: member, library, book, date, borrowed book. A date is a single value, so a field. The borrowed book becomes Loan, the one people miss.",
+          "reveal": 1
+        },
+        {
+          "say": "Step two, relationships: who holds whom, owns it, how many? The library owns its book records: composition. It registers members without owning them: association.",
+          "reveal": 2
+        },
+        {
+          "say": "Each loan points to exactly one book and one member, owning neither.",
+          "reveal": 3
+        },
+        {
+          "say": "Step three, interfaces, meaning the operations each object offers to other objects. Library can lend, take back, and say whether a book is out. Notice who answers is this book out: not Book, which knows nothing of loans, but Library, which keeps them.",
+          "reveal": 4
+        },
+        {
+          "say": "Loan answers is it late. Book gives title and I-S-B-N, Member a loan count. Everything else, including every field, is private. This is where encapsulation is actually decided.",
+          "reveal": 5
+        },
+        {
+          "say": "Step four: one class diagram, checked against the original sentence. The code comes from it.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s042",
+      "layout": "bullets",
+      "title": "The connection object rule",
+      "bullets": [
+        "A link with its own data becomes an object",
+        "Loan: borrower + due date fit neither Book nor Member",
+        "Hotel: Reservation",
+        "Parking lot: Ticket (vehicle, spot, entry time)",
+        "Student and course: Enrollment"
+      ],
+      "steps": [
+        {
+          "say": "Here's the general rule. When two objects are linked and the link has data of its own, model the link as an object.",
+          "reveal": 1
+        },
+        {
+          "say": "A lent book has a borrower and a due date. Neither fits on Book, because a book on the shelf has neither.",
+          "reveal": 2
+        },
+        {
+          "say": "In a hotel it's the reservation, linking guest and room with dates.",
+          "reveal": 3
+        },
+        {
+          "say": "In a parking lot, the ticket: vehicle, spot and entry time.",
+          "reveal": 4
+        },
+        {
+          "say": "Students and courses: the enrollment. Spot the connection object early and the interviewer notices.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s043",
+      "layout": "table",
+      "kicker": "Example",
+      "title": "The library, running",
+      "table": {
+        "head": [
+          "Day",
+          "Call",
+          "Result"
+        ],
+        "rows": [
+          [
+            "1",
+            "lend(DDD, Ada)",
+            "Due day 15 (14-day loans)"
+          ],
+          [
+            "2",
+            "lend(DDD, Kai)",
+            "Refused: already out"
+          ],
+          [
+            "2",
+            "lend(GoF, Kai)",
+            "Due day 16"
+          ],
+          [
+            "10",
+            "takeBack(DDD)",
+            "Returned on time"
+          ],
+          [
+            "20",
+            "takeBack(GoF)",
+            "Returned LATE"
+          ],
+          [
+            "21",
+            "takeBack(GoF)",
+            "Was not on loan"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "The Java version, running. Loans last fourteen days. On day one Ada borrows Domain-Driven Design. Due day fifteen.",
+          "reveal": 1
+        },
+        {
+          "say": "On day two Kai asks for the same book. Library checks is out, and it's out, so refused.",
+          "reveal": 2
+        },
+        {
+          "say": "Kai borrows Design Patterns instead. Due day sixteen. Ada's loan count is one, and only Library can change it, because the count methods are package-private.",
+          "reveal": 3
+        },
+        {
+          "say": "Day ten, Ada returns her book. Ten isn't after fifteen, so on time.",
+          "reveal": 4
+        },
+        {
+          "say": "Day twenty, Kai returns his. Twenty is after sixteen, so the loan says late.",
+          "reveal": 5
+        },
+        {
+          "say": "Day twenty-one, returning it again: was not on loan. Every answer came from the object that owns the information.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s044",
+      "layout": "bullets",
+      "title": "Why UML, and three ways it goes wrong",
+      "bullets": [
+        "UML: filled diamond = owns, arrow = refers, + / - ",
+        "1. Classes named after tables: UserRow, BookData",
+        "2. Missing the connection object",
+        "3. Listing every imaginable operation"
+      ],
+      "steps": [
+        {
+          "say": "U-M-L, the Unified Modeling Language, is the standard notation. A filled diamond means ownership, an arrow means a reference, plus and minus mean public and private. Each symbol records a decision.",
+          "reveal": 1
+        },
+        {
+          "say": "Three ways this goes wrong. One: classes named after database tables, like user row or book data, with only fields and getters. Ask: what does it do?",
+          "reveal": 2
+        },
+        {
+          "say": "Two: missing the connection object. If borrower and due date are drifting onto Book, you've missed Loan.",
+          "reveal": 3
+        },
+        {
+          "say": "Three: listing every operation you can imagine. Step three is what an object provides to others. Long method lists everywhere show no decisions were made. In the interview: I find objects, set relationships with ownership and multiplicity, decide each public interface, then draw the diagram.",
+          "reveal": 4
+        }
+      ]
+    },
+    {
+      "id": "s045",
+      "layout": "bullets",
+      "kicker": "Summary",
+      "title": "Chapter summary: explain the pillars",
+      "bullets": [
+        "Encapsulation: data plus its rules, in one class",
+        "Abstraction: expose only what callers need",
+        "Inheritance: only when child is-a parent, always",
+        "Polymorphism: one call, many behaviours",
+        "Prefer interfaces and composition; enums, records"
+      ],
+      "steps": [
+        {
+          "say": "If they ask you to explain the pillars of O-O-P, here's thirty seconds. Encapsulation hides data and gathers the rules about it into the class that owns it.",
+          "reveal": 1
+        },
+        {
+          "say": "Abstraction exposes only what callers need.",
+          "reveal": 2
+        },
+        {
+          "say": "Inheritance lets a child reuse a parent when child is a parent is truly correct.",
+          "reveal": 3
+        },
+        {
+          "say": "Polymorphism lets one call behave differently per object, which removes type switches.",
+          "reveal": 4
+        },
+        {
+          "say": "And in design I prefer interfaces and composition over deep inheritance, use enums for fixed sets, records for immutable values, and keep equals and hash code consistent.",
+          "reveal": 5
+        }
+      ]
+    },
+    {
+      "id": "s046",
+      "layout": "table",
+      "kicker": "Self-check",
+      "title": "Self-check: answer before I do",
+      "table": {
+        "head": [
+          "Question",
+          "Answer"
+        ],
+        "rows": [
+          [
+            "What does this(...) do?",
+            "Calls another constructor of the class"
+          ],
+          [
+            "What is dynamic dispatch?",
+            "JVM picks override by the actual class"
+          ],
+          [
+            "Can an interface method have a body?",
+            "Yes: default, static, private"
+          ],
+          [
+            "Which spot types fit a truck?",
+            "Data on the VehicleType enum"
+          ],
+          [
+            "The hashCode rule?",
+            "Equal objects, equal hash codes"
+          ],
+          [
+            "The OOAD steps?",
+            "Objects, relationships, interfaces, design"
+          ]
+        ]
+      },
+      "steps": [
+        {
+          "say": "Self-check. Pause and answer each yourself. What does this, with parentheses, do in a constructor? Calls another constructor of the same class.",
+          "reveal": 1
+        },
+        {
+          "say": "What is dynamic dispatch? The J-V-M choosing an override from the object's actual class at run time.",
+          "reveal": 2
+        },
+        {
+          "say": "Can an interface method have a body? Yes: default, static and private methods.",
+          "reveal": 3
+        },
+        {
+          "say": "Where should which spot types fit a truck live? As data on the vehicle type enum.",
+          "reveal": 4
+        },
+        {
+          "say": "The hash code rule in one line? Equal objects must have equal hash codes.",
+          "reveal": 5
+        },
+        {
+          "say": "The O-O-A-D steps? Find objects, define relationships, establish interfaces, make the design.",
+          "reveal": 6
+        }
+      ]
+    },
+    {
+      "id": "s047",
+      "layout": "recap",
+      "kicker": "Episode 2 complete",
+      "title": "Episode 2 recap",
+      "bullets": [
+        "OOP: data + the only code that may change it",
+        "Four pillars on one bank; no type switches",
+        "Overload = compiler; override = JVM",
+        "Interfaces, abstract classes, enums, composition",
+        "== vs equals + hashCode; records; private first",
+        "OOA, OOD, OOP; links with data become objects"
+      ],
+      "steps": [
+        {
+          "say": "O-O-P bundles data with the only code allowed to change it. Constructors make valid objects, static means one per class, final means it can't change.",
+          "reveal": 1
+        },
+        {
+          "say": "Encapsulation decides who may change data. Abstraction shows callers only what they need. Inheritance is for true is-a only. Polymorphism means one call, many behaviours, and no type switches.",
+          "reveal": 2
+        },
+        {
+          "say": "Overloading is picked by the compiler from declared types. Overriding is picked by the J-V-M from the actual object. Fields and statics never dispatch.",
+          "reveal": 3
+        },
+        {
+          "say": "Interfaces are contracts, abstract classes share state and skeletons, enums hold data for fixed sets, and composition beats inheritance for reuse.",
+          "reveal": 4
+        },
+        {
+          "say": "Double equals is identity, equals is value, so override hash code with equals. Immutable records for values, private by default, generics for reuse.",
+          "reveal": 5
+        },
+        {
+          "say": "Analysis, then design, then code, and a link with its own data becomes an object, like Loan. Next episode, episode three: Class Relationships and U-M-L. See you there.",
+          "reveal": 6
+        }
+      ]
+    }
+  ]
+}

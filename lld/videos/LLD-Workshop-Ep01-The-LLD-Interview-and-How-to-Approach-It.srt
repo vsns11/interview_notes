@@ -1,0 +1,1988 @@
+1
+00:00:00,000 --> 00:00:05,064
+Welcome to episode one of the LLD Workshop. LLD means low-level design. By the
+
+2
+00:00:05,064 --> 00:00:10,129
+end you'll know what this round is, how it's scored, and a repeatable method
+
+3
+00:00:10,129 --> 00:00:14,469
+that turns one vague sentence into a class diagram and working Java.
+
+4
+00:00:14,969 --> 00:00:19,858
+First a complete tiny answer, a music playlist. Then the method, with every step
+
+5
+00:00:19,858 --> 00:00:24,746
+applied to one running example: a parking lot, the most asked question in this
+
+6
+00:00:24,746 --> 00:00:25,095
+round.
+
+7
+00:00:25,595 --> 00:00:30,214
+Keep the chapter one notes open beside the video. When I say pause and
+
+8
+00:00:30,214 --> 00:00:31,204
+think, really pause.
+
+9
+00:00:32,104 --> 00:00:38,067
+Concept one. Imagine an interviewer says: design a parking lot. Then they stop talking.
+
+10
+00:00:38,067 --> 00:00:41,049
+What are they actually asking you for?
+
+11
+00:00:41,949 --> 00:00:47,528
+The low-level design round gives you one application to design while someone watches, usually
+
+12
+00:00:47,528 --> 00:00:53,108
+in forty-five to sixty minutes. A parking lot, a vending machine, a chess game.
+
+13
+00:00:53,608 --> 00:00:58,454
+You design the classes inside the program. A class is a named type holding
+
+14
+00:00:58,454 --> 00:01:03,300
+data, called fields, and methods that work on it. An object is one instance
+
+15
+00:01:03,300 --> 00:01:04,339
+with real values.
+
+16
+00:01:04,839 --> 00:01:10,232
+A responsibility is the one job a class does, in a single sentence. A
+
+17
+00:01:10,232 --> 00:01:15,626
+relationship is how two classes connect: one uses, holds, owns or extends the other.
+
+18
+00:01:16,126 --> 00:01:21,647
+U-M-L, the Unified Modeling Language, is the standard set of symbols for drawing classes.
+
+19
+00:01:21,647 --> 00:01:26,379
+A design pattern is a named, reusable answer to a recurring problem.
+
+20
+00:01:26,879 --> 00:01:32,282
+Analogy: system design is the city plan, roads and power. Low-level design is the
+
+21
+00:01:32,282 --> 00:01:36,912
+floor plan of one house: which rooms, and which doors connect them.
+
+22
+00:01:37,812 --> 00:01:45,475
+Same product, two zoom levels. Low-level design stays inside one application. System design spans
+
+23
+00:01:45,475 --> 00:01:46,569
+many machines.
+
+24
+00:01:47,069 --> 00:01:54,741
+The vocabulary: classes, interfaces and patterns here, versus load balancers, databases, caches and queues
+
+25
+00:01:54,741 --> 00:01:55,289
+there.
+
+26
+00:01:55,789 --> 00:02:01,977
+The output: a class diagram plus code, versus an architecture diagram plus capacity numbers.
+
+27
+00:02:02,477 --> 00:02:07,517
+The question: design the classes for a parking lot, versus a parking service for
+
+28
+00:02:07,517 --> 00:02:11,117
+ten million users. Practising one gives little for the other.
+
+29
+00:02:12,017 --> 00:02:16,794
+After this handbook you'll do four things. Turn design a parking lot into a
+
+30
+00:02:16,794 --> 00:02:19,182
+bounded requirement list with an out-of-scope list.
+
+31
+00:02:19,682 --> 00:02:24,152
+Pick classes with exactly one job each, and connect them correctly.
+
+32
+00:02:24,652 --> 00:02:27,461
+Code the Java behind the core flows until it runs.
+
+33
+00:02:27,961 --> 00:02:33,241
+And name the pattern you used, the one you rejected, and why. The reusable
+
+34
+00:02:33,241 --> 00:02:35,881
+part is the method, not memorised answers.
+
+35
+00:02:36,781 --> 00:02:42,029
+Concept two. This is for anyone facing this round, especially if you write object-oriented
+
+36
+00:02:42,029 --> 00:02:46,152
+code daily but have never defended a class diagram out loud.
+
+37
+00:02:46,652 --> 00:02:52,111
+You need one object-oriented language, enough that a class with a constructor, the method
+
+38
+00:02:52,111 --> 00:02:56,789
+that sets up a new object, reads easily. Examples are Java twenty-one.
+
+39
+00:02:57,289 --> 00:03:02,899
+You don't need U-M-L or system design. This round stays inside one running program.
+
+40
+00:03:03,399 --> 00:03:08,295
+Basic data structures are enough. A list keeps order, a map looks up by
+
+41
+00:03:08,295 --> 00:03:13,192
+key, a set has no duplicates, a queue is first in first out, a
+
+42
+00:03:13,192 --> 00:03:18,088
+heap gives the smallest item fast. Maps and lists will be your in-memory storage.
+
+43
+00:03:18,988 --> 00:03:23,918
+Concept three. The interviewer says one sentence and goes quiet. Nothing tells you how
+
+44
+00:03:23,918 --> 00:03:28,847
+many classes, whether to code, or how long you have. That silence is the
+
+45
+00:03:28,847 --> 00:03:32,368
+hard part, so let's learn the shape of the round.
+
+46
+00:03:33,268 --> 00:03:39,602
+Two flavours. The object-oriented design round, O-O-D, runs forty-five to sixty minutes. Machine coding
+
+47
+00:03:39,602 --> 00:03:44,127
+is about ninety minutes of coding, two hours with review.
+
+48
+00:03:44,627 --> 00:03:50,173
+O-O-D happens on a whiteboard or shared doc. Machine coding happens in your own
+
+49
+00:03:50,173 --> 00:03:51,757
+I-D-E, your code editor.
+
+50
+00:03:52,257 --> 00:03:58,321
+O-O-D produces requirements, a class diagram and code for two or three flows. Machine
+
+51
+00:03:58,321 --> 00:04:00,920
+coding produces a complete running program.
+
+52
+00:04:01,420 --> 00:04:07,051
+Machine coding stores data in memory, in maps and lists, unless asked otherwise.
+
+53
+00:04:07,551 --> 00:04:13,799
+O-O-D is a continuous conversation. Machine coding is mostly silent coding, then a demo.
+
+54
+00:04:14,299 --> 00:04:22,498
+O-O-D judges scope, responsibilities and trade-offs. Machine coding judges working code, data models, interfaces
+
+55
+00:04:22,498 --> 00:04:23,669
+and extensibility.
+
+56
+00:04:24,169 --> 00:04:30,218
+The typical failures: talking without converging, versus not finishing or one giant class.
+
+57
+00:04:31,118 --> 00:04:38,086
+Machine-coding words, with our parking lot. Data models hold the problem's data: Ticket, Spot.
+
+58
+00:04:38,586 --> 00:04:43,149
+The service interface is the public methods a caller uses: park and exit.
+
+59
+00:04:43,649 --> 00:04:49,361
+Extensibility: an electric vehicle type is a new value, not edits everywhere.
+
+60
+00:04:49,861 --> 00:04:55,329
+Edge cases: an empty lot, a full lot, a negative time, a duplicate ticket.
+
+61
+00:04:55,829 --> 00:05:01,233
+Thread safety: staying correct when two entry gates, two threads, run at once. A
+
+62
+00:05:01,233 --> 00:05:03,934
+thread is an independent line of execution.
+
+63
+00:05:04,834 --> 00:05:10,867
+Concept four, the heart of the method. Every answer follows five core steps, in
+
+64
+00:05:10,867 --> 00:05:16,899
+this order. Clarify the requirements. Find the actors and use cases. Find the classes.
+
+65
+00:05:16,899 --> 00:05:19,485
+Connect the classes. Write the code.
+
+66
+00:05:19,985 --> 00:05:24,476
+Order matters more than speed. Skip step one, and in step three you'll invent
+
+67
+00:05:24,476 --> 00:05:28,968
+classes no requirement asked for. Let's walk each step on the parking lot so
+
+68
+00:05:28,968 --> 00:05:30,251
+you see it happen.
+
+69
+00:05:31,151 --> 00:05:37,058
+Step one, clarify. For the parking lot: multiple floors, five spot types, pay at
+
+70
+00:05:37,058 --> 00:05:40,011
+exit, refuse when full, about ten lines.
+
+71
+00:05:40,511 --> 00:05:45,780
+Step two, actors and use cases. An actor is anyone outside who uses it,
+
+72
+00:05:45,780 --> 00:05:51,049
+a use case is one thing they do. Customer takes a ticket. Admin adds
+
+73
+00:05:51,049 --> 00:05:51,801
+a floor.
+
+74
+00:05:52,301 --> 00:05:59,349
+Step three, classes, one job each: ParkingLot, Floor, Spot, Vehicle, Ticket, Rate.
+
+75
+00:05:59,849 --> 00:06:04,898
+Step four, connect them. A lot owns floors, a floor owns spots, a ticket
+
+76
+00:06:04,898 --> 00:06:06,340
+points at one spot.
+
+77
+00:06:06,840 --> 00:06:11,974
+Step five, code the two or three main flows: park, exit and pricing. Not
+
+78
+00:06:11,974 --> 00:06:13,808
+every class at full depth.
+
+79
+00:06:14,708 --> 00:06:20,774
+Concept five, time-boxing. Clarify requirements: five to eight minutes, ending with eight to twelve
+
+80
+00:06:20,774 --> 00:06:22,941
+lines plus out of scope.
+
+81
+00:06:23,441 --> 00:06:26,518
+Actors and use cases: three to five minutes.
+
+82
+00:06:27,018 --> 00:06:29,200
+Find the classes: eight to ten minutes.
+
+83
+00:06:29,700 --> 00:06:34,507
+Connect them: eight to ten minutes, with multiplicity, meaning how many of each.
+
+84
+00:06:35,007 --> 00:06:39,704
+Code: twelve to fifteen minutes for two or three methods. Up to a quarter
+
+85
+00:06:39,704 --> 00:06:44,402
+of the hour passes before you name a class. Nobody finishes the whole product.
+
+86
+00:06:44,402 --> 00:06:47,086
+You're judged on the part you built properly.
+
+87
+00:06:47,986 --> 00:06:52,674
+Machine coding: five to ten minutes reading, then requirements as a comment at the
+
+88
+00:06:52,674 --> 00:06:54,349
+top of Main dot java.
+
+89
+00:06:54,849 --> 00:06:59,782
+Ten to fifteen minutes modelling entities, enums and interfaces that compile. An enum is
+
+90
+00:06:59,782 --> 00:07:04,011
+a type with a fixed list of values, like compact and large.
+
+91
+00:07:04,511 --> 00:07:08,829
+Thirty to forty minutes on one happy path end to end, meaning the main
+
+92
+00:07:08,829 --> 00:07:12,221
+flow with valid input. Park a car, exit, print the fee.
+
+93
+00:07:12,721 --> 00:07:15,949
+Fifteen to twenty on remaining features and edge cases.
+
+94
+00:07:16,449 --> 00:07:18,690
+Five to ten on polish and a demo script.
+
+95
+00:07:19,190 --> 00:07:23,824
+And five minutes buffer, never zero. Get something running by halfway.
+
+96
+00:07:24,724 --> 00:07:30,740
+Concept six, what's scored. One: did you bound the problem? Saying reservations are out
+
+97
+00:07:30,740 --> 00:07:32,459
+beats a sprawling design.
+
+98
+00:07:32,959 --> 00:07:38,791
+Two: one job per class, in one sentence. If not, it's two classes glued
+
+99
+00:07:38,791 --> 00:07:39,207
+together.
+
+100
+00:07:39,707 --> 00:07:44,953
+Three: right relationships. A lot owns its floors, a ticket only points at a
+
+101
+00:07:44,953 --> 00:07:45,328
+spot.
+
+102
+00:07:45,828 --> 00:07:48,382
+Four: does the code match the diagram?
+
+103
+00:07:48,882 --> 00:07:55,289
+Five: can you explain a trade-off? Machine coding adds: it runs, it's modular, it
+
+104
+00:07:55,289 --> 00:08:00,323
+handles bad input. Perfect U-M-L isn't graded. The model is graded.
+
+105
+00:08:01,223 --> 00:08:06,552
+A parking lot has about twelve requirements, twelve classes and fifteen relationships.
+
+106
+00:08:07,052 --> 00:08:12,092
+Only three carry the main flows: issue a ticket, hold a vehicle, price the
+
+107
+00:08:12,092 --> 00:08:17,132
+stay. Write those properly, name the rest in a sentence. Writing all twelve at
+
+108
+00:08:17,132 --> 00:08:19,292
+equal depth is the costliest mistake.
+
+109
+00:08:20,192 --> 00:08:26,035
+Concept seven. Before any more theory, let's see a complete answer. The question: design
+
+110
+00:08:26,035 --> 00:08:31,879
+a music playlist. It's small on purpose, but the bigger case studies later follow
+
+111
+00:08:31,879 --> 00:08:33,131
+the identical outline.
+
+112
+00:08:34,031 --> 00:08:40,424
+Step one. Three clarifying questions give three requirements. Songs sit in a playlist, and
+
+113
+00:08:40,424 --> 00:08:41,337
+order matters.
+
+114
+00:08:41,837 --> 00:08:45,308
+You can ask for the next song, so the player tracks a position.
+
+115
+00:08:45,808 --> 00:08:47,747
+Shuffle changes the play order.
+
+116
+00:08:48,247 --> 00:08:54,679
+Out of scope, said out loud: accounts, downloads, storage, the audio. That list earns
+
+117
+00:08:54,679 --> 00:08:55,598
+credit too.
+
+118
+00:08:56,498 --> 00:09:01,951
+Step two, the only actor is the listener: add a song, play next, switch
+
+119
+00:09:01,951 --> 00:09:05,068
+shuffle on. Actors reveal which classes must exist.
+
+120
+00:09:05,568 --> 00:09:11,747
+Step three, classes. Song holds title, artist and length. Playlist holds songs in order,
+
+121
+00:09:11,747 --> 00:09:13,512
+it doesn't play them.
+
+122
+00:09:14,012 --> 00:09:19,550
+PlayOrder is an interface, a set of methods with no implementation. Its job: pick
+
+123
+00:09:19,550 --> 00:09:20,736
+the next position.
+
+124
+00:09:21,236 --> 00:09:26,706
+InOrder walks positions in order. Shuffled uses an order decided once, up front.
+
+125
+00:09:27,206 --> 00:09:31,870
+Player holds a playlist, an order and the current position. Key insight: a rule
+
+126
+00:09:31,870 --> 00:09:36,534
+that can vary becomes its own type, and Player never knows which version it
+
+127
+00:09:36,534 --> 00:09:36,867
+holds.
+
+128
+00:09:37,767 --> 00:09:42,791
+Step four, connect them. Three facts an interviewer checks. The arrow from Playlist to
+
+129
+00:09:42,791 --> 00:09:47,815
+Song says owns many: the playlist owns its songs, and they go when it
+
+130
+00:09:47,815 --> 00:09:52,839
+goes. That's called composition. In the book's U-M-L diagram it's drawn as a filled
+
+131
+00:09:52,839 --> 00:09:54,992
+diamond, with a star meaning many.
+
+132
+00:09:55,492 --> 00:10:00,438
+The arrow from Player to PlayOrder says uses: the player relies on an ordering
+
+133
+00:10:00,438 --> 00:10:05,385
+without owning it. And notice it touches only the interface, never InOrder or Shuffled.
+
+134
+00:10:05,885 --> 00:10:11,182
+The dashed arrows say InOrder and Shuffled implement PlayOrder. In U-M-L that's a dashed
+
+135
+00:10:11,182 --> 00:10:16,479
+line with a hollow triangle. Add a third rule later, and it's one extra
+
+136
+00:10:16,479 --> 00:10:18,371
+box. Nothing already drawn changes.
+
+137
+00:10:19,271 --> 00:10:24,551
+Step five, the code, explained in words. PlayOrder has two methods: first, which gives
+
+138
+00:10:24,551 --> 00:10:29,830
+the first position to play, and after, which gives the position after the current
+
+139
+00:10:29,830 --> 00:10:35,110
+one. Both return a constant called NONE, meaning minus one, when there's nothing left.
+
+140
+00:10:35,610 --> 00:10:40,528
+InOrder's first returns zero unless the list is empty. Its after returns current plus
+
+141
+00:10:40,528 --> 00:10:42,636
+one, or NONE at the end.
+
+142
+00:10:43,136 --> 00:10:48,345
+Shuffled is given its order as a list, say positions two, zero, one, instead
+
+143
+00:10:48,345 --> 00:10:53,554
+of calling a random generator. So the output is identical every run, which makes
+
+144
+00:10:53,554 --> 00:10:58,762
+it testable. In production you'd inject a random generator with a fixed seed. Inject
+
+145
+00:10:58,762 --> 00:11:02,483
+means hand it in from outside, usually through the constructor.
+
+146
+00:11:02,983 --> 00:11:07,706
+Player's playNext asks the order for first on the first call, and for after
+
+147
+00:11:07,706 --> 00:11:12,429
+on later calls. At the end, it stays at the end. Notice: nothing in
+
+148
+00:11:12,429 --> 00:11:17,152
+Player tests which mode is active. Its only if statements track where it is.
+
+149
+00:11:17,652 --> 00:11:23,259
+Song is a Java record: an immutable data carrier whose constructor and accessors are
+
+150
+00:11:23,259 --> 00:11:28,866
+generated, and its constructor rejects a blank title or a non-positive length. Playlist keeps
+
+151
+00:11:28,866 --> 00:11:34,072
+its list private. That's encapsulation: data reachable only through the class's own methods.
+
+152
+00:11:34,972 --> 00:11:40,669
+Here's the real run. Three songs: Sunrise by Ada Lane, Blue Line by The
+
+153
+00:11:40,669 --> 00:11:45,552
+Meridians, Paper Boats by Nori Kim. In order, it plays Sunrise first.
+
+154
+00:11:46,052 --> 00:11:47,399
+Then Blue Line.
+
+155
+00:11:47,899 --> 00:11:51,022
+Then Paper Boats, and then it says end of playlist.
+
+156
+00:11:51,522 --> 00:11:57,247
+Now the same Player class with Shuffled, given positions two, zero, one. Paper Boats
+
+157
+00:11:57,247 --> 00:12:00,928
+plays first, because position two is the third song.
+
+158
+00:12:01,428 --> 00:12:06,582
+Then position zero, Sunrise, then position one, Blue Line, then end of playlist. One
+
+159
+00:12:06,582 --> 00:12:11,368
+Player class, two behaviours, and not a single if statement about the mode.
+
+160
+00:12:12,268 --> 00:12:18,044
+One requirement became a type: shuffle produced an interface and two classes. Classes come
+
+161
+00:12:18,044 --> 00:12:19,282
+out of requirements.
+
+162
+00:12:19,782 --> 00:12:21,279
+One job per class.
+
+163
+00:12:21,779 --> 00:12:27,145
+Open to changes you didn't build: repeat one is a new class. That's Strategy
+
+164
+00:12:27,145 --> 00:12:28,677
+plus the open-closed principle.
+
+165
+00:12:29,177 --> 00:12:33,055
+Announce the gaps yourself: pause, volume, queue.
+
+166
+00:12:33,955 --> 00:12:39,147
+Pause and think. The interviewer asks for a repeat one mode, where the same
+
+167
+00:12:39,147 --> 00:12:44,340
+song plays forever. Which class do you change? Player, Playlist, or none of them?
+
+168
+00:12:45,240 --> 00:12:51,595
+Answer: change none. Add a RepeatOne class whose after returns the current position. Concept
+
+169
+00:12:51,595 --> 00:12:55,680
+eight: the full framework, five steps expanded into eleven.
+
+170
+00:12:56,580 --> 00:13:02,387
+Steps one and two: clarify and write requirements. Who uses it? One location or
+
+171
+00:13:02,387 --> 00:13:08,194
+many? What must it do, and how well, for example thread-safe, extensible, in memory?
+
+172
+00:13:08,194 --> 00:13:12,342
+Output: eight to twelve numbered lines plus out of scope.
+
+173
+00:13:12,842 --> 00:13:18,749
+Step three, use cases: for each actor, what can they do? Customer takes a
+
+174
+00:13:18,749 --> 00:13:20,436
+ticket, parks, pays, exits.
+
+175
+00:13:20,936 --> 00:13:25,997
+Step four, entities: which nouns hold state or behaviour, and which are just values?
+
+176
+00:13:25,997 --> 00:13:29,251
+Spot is a class, spot size is an enum.
+
+177
+00:13:29,751 --> 00:13:35,042
+Steps five and six, relationships and the class diagram: uses, has, owns, or is-a,
+
+178
+00:13:35,042 --> 00:13:40,334
+and how many. A lot has one or more floors, a floor has many
+
+179
+00:13:40,334 --> 00:13:40,712
+spots.
+
+180
+00:13:41,212 --> 00:13:46,336
+Step seven, key flows: step by step for the two or three main use
+
+181
+00:13:46,336 --> 00:13:51,459
+cases, and which states the core object moves through. A ticket goes active, then
+
+182
+00:13:51,459 --> 00:13:51,825
+closed.
+
+183
+00:13:52,325 --> 00:13:57,409
+Step eight, patterns and SOLID: is there a rule that varies? Pricing, so Strategy.
+
+184
+00:13:57,409 --> 00:14:00,676
+Is there a class with two reasons to change?
+
+185
+00:14:01,176 --> 00:14:06,748
+Steps nine and ten, code, then edge cases and concurrency. Two cars grabbing the
+
+186
+00:14:06,748 --> 00:14:12,320
+same spot? Exit before entry? Use exceptions and locks. An exception is Java's error
+
+187
+00:14:12,320 --> 00:14:17,892
+signal that stops the normal flow, a lock lets one thread at a time
+
+188
+00:14:17,892 --> 00:14:19,086
+into protected code.
+
+189
+00:14:19,586 --> 00:14:24,977
+Step eleven, extensions: what changes if requirement X is added? Short answers, maybe one
+
+190
+00:14:24,977 --> 00:14:30,368
+extra class. Say each step out loud as you enter it. Your progress being
+
+191
+00:14:30,368 --> 00:14:31,909
+visible is itself scored.
+
+192
+00:14:32,809 --> 00:14:37,208
+Spend eight to thirteen minutes on steps one to three, not coding at minute
+
+193
+00:14:37,208 --> 00:14:37,522
+two.
+
+194
+00:14:38,022 --> 00:14:42,249
+Code two or three flows fully, rather than stubbing twelve classes.
+
+195
+00:14:42,749 --> 00:14:45,906
+Name one or two patterns with a signal, not six.
+
+196
+00:14:46,406 --> 00:14:52,171
+Pass time into methods and hold money as BigDecimal, Java's exact decimal, or cents.
+
+197
+00:14:52,171 --> 00:14:56,288
+A double can't hold ten cents exactly, so sums drift.
+
+198
+00:14:57,188 --> 00:15:02,205
+Concept nine. Design a parking lot is four words. The design is about twelve
+
+199
+00:15:02,205 --> 00:15:06,504
+classes. How do you get from one to the other without guessing?
+
+200
+00:15:07,404 --> 00:15:13,401
+A requirement states one testable capability. Functional ones are behaviours: a customer takes a
+
+201
+00:15:13,401 --> 00:15:14,686
+ticket at entry.
+
+202
+00:15:15,186 --> 00:15:18,216
+The system refuses entry when no spot fits.
+
+203
+00:15:18,716 --> 00:15:24,569
+Non-functional ones are qualities. Two panels never assign the same spot: thread safety.
+
+204
+00:15:25,069 --> 00:15:30,979
+A new vehicle type edits no existing class: extensibility. Without a list, the design
+
+205
+00:15:30,979 --> 00:15:32,246
+has no edges.
+
+206
+00:15:33,146 --> 00:15:40,199
+Four questions, about five minutes. Who uses this? The actors: customer, attendant, admin, and
+
+207
+00:15:40,199 --> 00:15:41,206
+the system.
+
+208
+00:15:41,706 --> 00:15:46,933
+What does each do? Each action is a use case: take ticket, park, pay.
+
+209
+00:15:46,933 --> 00:15:49,546
+Most of the list comes from here.
+
+210
+00:15:50,046 --> 00:15:56,122
+What are the limits? Floors, spot kinds, rates. Limits become constants and checks.
+
+211
+00:15:56,622 --> 00:16:01,458
+What's out of scope? The only question that makes the problem smaller. If they
+
+212
+00:16:01,458 --> 00:16:04,566
+say your choice, choose, say it, write it down.
+
+213
+00:16:05,466 --> 00:16:10,321
+Here's what good looks like. Floors with many spots, and five spot types.
+
+214
+00:16:10,821 --> 00:16:13,898
+Five vehicle types, and a ticket at the entrance panel.
+
+215
+00:16:14,398 --> 00:16:18,507
+Pay at an exit panel, a portal or an attendant, by cash or card.
+
+216
+00:16:19,007 --> 00:16:23,406
+An hourly rate that depends on stay length, and each floor showing free spots
+
+217
+00:16:23,406 --> 00:16:24,035
+by type.
+
+218
+00:16:24,535 --> 00:16:30,026
+Refuse entry when nothing fits, and admins add floors, spots and update the rate.
+
+219
+00:16:30,926 --> 00:16:36,608
+Out of scope: season passes, plate recognition, booking ahead, refunds. If no line asked
+
+220
+00:16:36,608 --> 00:16:39,450
+for it, it's not in the design.
+
+221
+00:16:39,950 --> 00:16:44,789
+Put a number on each line. Book some seats becomes: at most ten seats
+
+222
+00:16:44,789 --> 00:16:48,591
+per show, released after ten minutes. A constant and a check.
+
+223
+00:16:49,091 --> 00:16:53,837
+Name the actor: a member can reserve, so you know which class owns the
+
+224
+00:16:53,837 --> 00:16:54,176
+method.
+
+225
+00:16:54,676 --> 00:16:59,585
+Declining is strong: let me park reservations and get ticketing working end to end
+
+226
+00:16:59,585 --> 00:16:59,935
+first.
+
+227
+00:17:00,835 --> 00:17:06,825
+A use case is one goal an actor achieves. A list is enough. Customer:
+
+228
+00:17:06,825 --> 00:17:08,536
+ticket, park, pay, exit.
+
+229
+00:17:09,036 --> 00:17:11,579
+Attendant: collect cash, help.
+
+230
+00:17:12,079 --> 00:17:16,281
+Admin: add floors, spots, panels, change the rate.
+
+231
+00:17:16,781 --> 00:17:22,993
+System: assign spots, update boards, refuse when full. Every class you create traces back
+
+232
+00:17:22,993 --> 00:17:25,212
+to one of these lines.
+
+233
+00:17:26,112 --> 00:17:31,958
+Concept ten: finding the classes. A ten-minute method. Collect candidates, cut the ones that
+
+234
+00:17:31,958 --> 00:17:35,299
+aren't classes, and give each survivor one job.
+
+235
+00:17:36,199 --> 00:17:43,062
+Step one: underline the nouns. Lot, floor, spot, compact spot, panel, display board.
+
+236
+00:17:43,562 --> 00:17:53,188
+Car, van, truck, customer, attendant, ticket, payment, cash, card, rate, hour. About twenty-two candidates.
+
+237
+00:17:53,688 --> 00:18:00,238
+Step two: underline the verbs. Park, pay, leave, refuse entry, show free spots. Each
+
+238
+00:18:00,238 --> 00:18:02,109
+verb becomes a method.
+
+239
+00:18:02,609 --> 00:18:05,836
+A verb with no class to live on means a class is missing.
+
+240
+00:18:06,736 --> 00:18:11,527
+Step three: cut with five tests. Test one: is it a value rather than
+
+241
+00:18:11,527 --> 00:18:16,318
+a thing? An hour is a number, a licence plate is a string, and
+
+242
+00:18:16,318 --> 00:18:21,109
+cash or card are options of a payment type. Those become fields or enum
+
+243
+00:18:21,109 --> 00:18:21,451
+constants.
+
+244
+00:18:21,951 --> 00:18:27,037
+Test two: is it just another name for a candidate already listed? Customer and
+
+245
+00:18:27,037 --> 00:18:31,034
+driver are the same actor. Merge them and pick one name.
+
+246
+00:18:31,534 --> 00:18:37,353
+Test three: does it have state that changes? A spot is free, then occupied.
+
+247
+00:18:37,353 --> 00:18:41,094
+An hour never changes. Changing state means a class.
+
+248
+00:18:41,594 --> 00:18:47,165
+Test four: does anything call it? Nobody asks an Hour object a question. Never
+
+249
+00:18:47,165 --> 00:18:49,155
+called means it's a value.
+
+250
+00:18:49,655 --> 00:18:55,152
+Test five, the big one: different behaviour, or only different data? Compact and large
+
+251
+00:18:55,152 --> 00:19:00,648
+spots differ only in which vehicle fits. That's data, so one ParkingSpot class with
+
+252
+00:19:00,648 --> 00:19:06,145
+a type field. Cash checks the amount handed over, while card calls a provider
+
+253
+00:19:06,145 --> 00:19:11,641
+and waits. That's behaviour, so two classes. Tests one to four cut twenty-two down
+
+254
+00:19:11,641 --> 00:19:15,960
+to about fifteen, test five alone gets you to about twelve.
+
+255
+00:19:16,860 --> 00:19:22,877
+Step four, one sentence each. ParkingLot issues tickets and knows when it's full. ParkingFloor
+
+256
+00:19:22,877 --> 00:19:24,596
+finds an empty spot.
+
+257
+00:19:25,096 --> 00:19:30,113
+ParkingSpot tracks its vehicle. Vehicle carries its plate and fitting spot types.
+
+258
+00:19:30,613 --> 00:19:36,257
+Ticket notes vehicle, spot and entry time. ParkingRate turns a duration into a price.
+
+259
+00:19:36,757 --> 00:19:42,506
+Payment collects money. The board shows free counts. ParkingLot's sentence has an and. Naming
+
+260
+00:19:42,506 --> 00:19:44,970
+that tension out loud is enough.
+
+261
+00:19:45,870 --> 00:19:51,083
+Step five: put each method where its data lives. Find a free spot goes
+
+262
+00:19:51,083 --> 00:19:51,828
+on ParkingFloor.
+
+263
+00:19:52,328 --> 00:19:58,703
+Pricing goes on ParkingRate, taking a ticket on ParkingLot. That's the Information Expert guideline.
+
+264
+00:19:59,203 --> 00:20:04,347
+Mistake: one subclass per value, like CompactSpot with no behaviour.
+
+265
+00:20:04,847 --> 00:20:09,200
+Mistake: missing the record keeper, a ticket, and the rule, a rate.
+
+266
+00:20:09,700 --> 00:20:12,928
+Mistake: a Manager god class owning everything.
+
+267
+00:20:13,828 --> 00:20:19,339
+Pause and think. Car, van and truck: should they be three subclasses of Vehicle,
+
+268
+00:20:19,339 --> 00:20:21,307
+or one enum called VehicleType?
+
+269
+00:20:22,207 --> 00:20:29,017
+Answer: an enum, if they differ only in which spots fit. Concept eleven, connecting
+
+270
+00:20:29,017 --> 00:20:30,476
+classes. Five choices.
+
+271
+00:20:30,976 --> 00:20:37,073
+Dependency: briefly uses, like the lot calling the rate. Association: holds a reference, like
+
+272
+00:20:37,073 --> 00:20:43,171
+a ticket and its spot. Aggregation: contains parts that live alone. Composition: owns parts
+
+273
+00:20:43,171 --> 00:20:46,655
+that die with it, like floor and spots.
+
+274
+00:20:47,155 --> 00:20:52,428
+Inheritance: is a kind of. Then add multiplicity. The classic error is inheritance where
+
+275
+00:20:52,428 --> 00:20:57,702
+composition is right. A car is not an engine, so Car has an Engine.
+
+276
+00:20:58,602 --> 00:21:03,784
+Concept twelve. SOLID is five rules, one per letter. Run them as five quick
+
+277
+00:21:03,784 --> 00:21:07,115
+checks on your own diagram, in about five minutes.
+
+278
+00:21:08,015 --> 00:21:14,208
+S, single responsibility: one reason to change. The signal it failed: the class sentence
+
+279
+00:21:14,208 --> 00:21:20,401
+needs and. Our ParkingLot issues tickets and finds spots. Finding: split it if time
+
+280
+00:21:20,401 --> 00:21:23,055
+allows, otherwise say it out loud.
+
+281
+00:21:23,555 --> 00:21:29,277
+O, open-closed: add behaviour without editing existing code. The signal: a switch or if
+
+282
+00:21:29,277 --> 00:21:35,000
+chain over a type. Our pricing sits behind ParkingRate, so a weekend rate is
+
+283
+00:21:35,000 --> 00:21:38,270
+a new class, not a switch edit. Passes.
+
+284
+00:21:38,770 --> 00:21:44,566
+L, Liskov substitution: a subclass must work anywhere its parent does. The signal: a
+
+285
+00:21:44,566 --> 00:21:50,362
+subclass that throws or does nothing. A ReadOnlySpot whose occupy method throws would fail.
+
+286
+00:21:50,362 --> 00:21:55,331
+Read every inheritance arrow at the end, since they get added late.
+
+287
+00:21:55,831 --> 00:22:03,179
+I, interface segregation: no class implements methods it doesn't use. The signal: empty method
+
+288
+00:22:03,179 --> 00:22:06,854
+bodies. We have no wide interfaces. Passes.
+
+289
+00:22:07,354 --> 00:22:13,474
+D, dependency inversion: depend on an interface, not a concrete class. The signal: a
+
+290
+00:22:13,474 --> 00:22:19,595
+business class constructs a technical one itself. If the lot did new CreditCardTransaction inside,
+
+291
+00:22:19,595 --> 00:22:25,715
+you couldn't test it or add cash. It depends on a Payment interface instead.
+
+292
+00:22:25,715 --> 00:22:31,836
+Passes. Two real findings is a good pass. Five means rework. Zero means you
+
+293
+00:22:31,836 --> 00:22:32,710
+didn't look.
+
+294
+00:22:33,610 --> 00:22:38,797
+S and O earn most credit. What if trucks are charged differently? Add a
+
+295
+00:22:38,797 --> 00:22:40,649
+class, not a switch branch.
+
+296
+00:22:41,149 --> 00:22:45,829
+Don't make an interface for everything. One implementer means pointless indirection.
+
+297
+00:22:46,329 --> 00:22:50,664
+Add one for a second implementation or a test double, a fake used in
+
+298
+00:22:50,664 --> 00:22:50,973
+tests.
+
+299
+00:22:51,473 --> 00:22:55,156
+And don't over-split. The one-sentence test is the line.
+
+300
+00:22:56,056 --> 00:23:01,474
+Concept thirteen. There are twenty-three classic Gang of Four patterns. Six recur here. A
+
+301
+00:23:01,474 --> 00:23:06,893
+misapplied pattern hurts more than an unknown one, so learn each with its signal.
+
+302
+00:23:07,793 --> 00:23:14,152
+Strategy. Signal: one operation with several interchangeable rules. Parking lot: ParkingRate with HourlyRate, WeekendRate
+
+303
+00:23:14,152 --> 00:23:20,512
+and MonthlyPass. Without it, the pricing method grows a switch you edit for every
+
+304
+00:23:20,512 --> 00:23:24,146
+rate. Skip it if there's only one rule.
+
+305
+00:23:24,646 --> 00:23:29,876
+Factory. Signal: what you create depends on a type value, and the caller shouldn't
+
+306
+00:23:29,876 --> 00:23:35,106
+know the concrete class. A factory turns a vehicle type into a Vehicle, so
+
+307
+00:23:35,106 --> 00:23:40,336
+the entrance panel doesn't know every vehicle class. A factory method is usually enough.
+
+308
+00:23:40,836 --> 00:23:46,532
+Observer. Signal: one thing changes and several others must know, without the source knowing
+
+309
+00:23:46,532 --> 00:23:52,228
+them. The spot is the subject. Display boards and panels register and update when
+
+310
+00:23:52,228 --> 00:23:56,296
+it fills. With only one listener, just call it directly.
+
+311
+00:23:56,796 --> 00:24:02,461
+State. Signal: behaviour depends on the current state, with a fixed set of transitions.
+
+312
+00:24:02,461 --> 00:24:08,125
+A ticket goes active, paid, closed. Choose it only for big transition tables. For
+
+313
+00:24:08,125 --> 00:24:13,790
+three or four states, an enum plus one guarded method is enough, and say
+
+314
+00:24:13,790 --> 00:24:14,194
+why.
+
+315
+00:24:14,694 --> 00:24:21,804
+Singleton. Signal: exactly one instance must exist, like the ParkingLot. Expect two follow-ups every
+
+316
+00:24:21,804 --> 00:24:28,913
+time: thread safety, and global state hurting tests. Many teams inject one shared instance
+
+317
+00:24:28,913 --> 00:24:29,421
+instead.
+
+318
+00:24:29,921 --> 00:24:35,687
+Builder. Signal: many optional fields and a long constructor. A library BookItem with eight
+
+319
+00:24:35,687 --> 00:24:41,454
+arguments is easy to mix up, since two adjacent strings compile fine. A builder
+
+320
+00:24:41,454 --> 00:24:46,808
+sets fields by name. Mention it at about six arguments and move on.
+
+321
+00:24:47,708 --> 00:24:50,634
+Strategy: a Comparator passed to List dot sort.
+
+322
+00:24:51,134 --> 00:24:55,430
+Factory: List dot of, and Executors' thread pool methods.
+
+323
+00:24:55,930 --> 00:24:59,227
+Observer: Swing's ActionListener, Spring events.
+
+324
+00:24:59,727 --> 00:25:03,605
+State: an order moving placed, paid, shipped, delivered.
+
+325
+00:25:04,105 --> 00:25:06,566
+Singleton: Runtime dot getRuntime.
+
+326
+00:25:07,066 --> 00:25:13,166
+Builder: StringBuilder. Use one or two patterns, and compare: rate gets Strategy, ticket doesn't
+
+327
+00:25:13,166 --> 00:25:16,217
+get State, because one guard is enough.
+
+328
+00:25:17,117 --> 00:25:24,834
+Concept fourteen, interview code in five layers. Models: entities like ParkingSpot, records like Vehicle,
+
+329
+00:25:24,834 --> 00:25:26,487
+enums like VehicleType.
+
+330
+00:25:26,987 --> 00:25:32,553
+Repositories store and find objects in an in-memory map. Strategies hold the rules that
+
+331
+00:25:32,553 --> 00:25:33,746
+vary, like pricing.
+
+332
+00:25:34,246 --> 00:25:39,351
+Services are the use cases, park and exit. The driver Main runs a scripted
+
+333
+00:25:39,351 --> 00:25:39,716
+demo.
+
+334
+00:25:40,616 --> 00:25:44,981
+Pass time in: park takes now minute as a parameter, so it's testable.
+
+335
+00:25:45,481 --> 00:25:48,407
+Money as BigDecimal or cents, never double.
+
+336
+00:25:48,907 --> 00:25:51,020
+Fail loudly with clear exceptions.
+
+337
+00:25:51,520 --> 00:25:56,620
+Return an Optional, a box that's full or empty, when not found is normal.
+
+338
+00:25:56,620 --> 00:25:58,441
+Park returns empty when full.
+
+339
+00:25:58,941 --> 00:26:02,041
+Fields private and final, and domain names.
+
+340
+00:26:02,941 --> 00:26:06,993
+Input: null, negative, an unknown ticket ID at exit.
+
+341
+00:26:07,493 --> 00:26:10,477
+Capacity: the lot is full for this vehicle type.
+
+342
+00:26:10,977 --> 00:26:14,286
+State: exiting twice, exiting without entering.
+
+343
+00:26:14,786 --> 00:26:18,768
+Time: exit before entry, and do part hours round up?
+
+344
+00:26:19,268 --> 00:26:25,559
+Concurrency: two panels grab one spot. Use synchronized or a lock, or atomic structures.
+
+345
+00:26:25,559 --> 00:26:30,951
+Lock the smallest thing that keeps the invariant: one spot, one vehicle.
+
+346
+00:26:31,851 --> 00:26:36,998
+Concept fifteen. Now let's run every step of the framework end to end, on
+
+347
+00:26:36,998 --> 00:26:41,409
+a deliberately small parking lot. Watch how each step feeds the next.
+
+348
+00:26:42,309 --> 00:26:46,421
+Single lot or many? One lot, one or more floors.
+
+349
+00:26:46,921 --> 00:26:49,812
+Vehicles: motorbike, car, truck.
+
+350
+00:26:50,312 --> 00:26:56,327
+Spots: motorbike, compact, large. Smaller vehicles may use bigger spots.
+
+351
+00:26:56,827 --> 00:26:59,881
+Payment is out of scope: we compute the fee only.
+
+352
+00:27:00,381 --> 00:27:04,444
+Pricing: tiered hourly, round up, trucks double, swappable.
+
+353
+00:27:04,944 --> 00:27:07,638
+Concurrency: several panels at once.
+
+354
+00:27:08,538 --> 00:27:13,043
+Requirement one: floors with motorbike, compact and large spots.
+
+355
+00:27:13,543 --> 00:27:19,567
+Two: a motorbike fits motorbike or compact, a car compact or large, a truck
+
+356
+00:27:19,567 --> 00:27:21,288
+large only. Smallest first.
+
+357
+00:27:21,788 --> 00:27:26,599
+Three and four: on entry, issue a ticket for a free fitting spot, or
+
+358
+00:27:26,599 --> 00:27:26,943
+refuse.
+
+359
+00:27:27,443 --> 00:27:32,704
+Five and six: on exit, free the spot and return the fee. Four dollars
+
+360
+00:27:32,704 --> 00:27:37,965
+first hour, three fifty for hours two and three, two fifty after. Round up.
+
+361
+00:27:37,965 --> 00:27:39,093
+Trucks pay double.
+
+362
+00:27:39,593 --> 00:27:45,618
+Seven and eight: swappable pricing, and free counts per floor. Plus thread-safe, in memory,
+
+363
+00:27:45,618 --> 00:27:46,909
+time passed in.
+
+364
+00:27:47,809 --> 00:27:53,019
+Use cases: the driver enters and gets a ticket, then exits and sees the
+
+365
+00:27:53,019 --> 00:27:58,228
+fee. The admin adds floors and spots and changes the pricing rule. The system
+
+366
+00:27:58,228 --> 00:28:03,438
+finds a free spot, refuses when full and computes the fee. Now the entities.
+
+367
+00:28:03,438 --> 00:28:06,043
+SpotType is an enum of spot sizes.
+
+368
+00:28:06,543 --> 00:28:11,942
+VehicleType is an enum, and each value knows which spot types fit, smallest first.
+
+369
+00:28:12,442 --> 00:28:15,913
+Vehicle is a record: a plate and a type, pure data.
+
+370
+00:28:16,413 --> 00:28:20,848
+ParkingSpot is a class that tracks whether it's occupied and by which vehicle.
+
+371
+00:28:21,348 --> 00:28:25,191
+ParkingFloor holds the spots on one floor and finds a free fitting one.
+
+372
+00:28:25,691 --> 00:28:31,056
+Ticket is a record: which vehicle went into which spot, and when. It's the
+
+373
+00:28:31,056 --> 00:28:33,738
+connection object, the record keeper beginners forget.
+
+374
+00:28:34,238 --> 00:28:40,396
+PricingStrategy is an interface that turns a stay into a fee, with two implementations:
+
+375
+00:28:40,396 --> 00:28:41,715
+HourlyRate and FlatWeekendRate.
+
+376
+00:28:42,215 --> 00:28:47,975
+And ParkingLot issues and closes tickets. It's the service the panels call. Notice spot
+
+377
+00:28:47,975 --> 00:28:52,911
+sizes are an enum, not three subclasses: different data means a field.
+
+378
+00:28:53,811 --> 00:28:56,865
+The lot owns its floors, each floor owns its spots.
+
+379
+00:28:57,365 --> 00:29:01,533
+The lot keeps active tickets, each pointing at a vehicle and a spot.
+
+380
+00:29:02,033 --> 00:29:06,038
+The lot depends only on PricingStrategy, with two implementations.
+
+381
+00:29:06,938 --> 00:29:11,247
+The key flow, as a sequence. The entry panel calls park with the vehicle
+
+382
+00:29:11,247 --> 00:29:15,556
+and the current minute. The lot asks each floor to find a free spot
+
+383
+00:29:15,556 --> 00:29:16,787
+for that vehicle type.
+
+384
+00:29:17,287 --> 00:29:22,389
+The floor returns an Optional spot. If a spot is found, the lot occupies
+
+385
+00:29:22,389 --> 00:29:27,491
+it and returns a ticket. If not, it returns empty, and the panel refuses
+
+386
+00:29:27,491 --> 00:29:27,855
+entry.
+
+387
+00:29:28,355 --> 00:29:33,088
+On exit, the lot removes the ticket, releases the spot, then asks the pricing
+
+388
+00:29:33,088 --> 00:29:36,807
+strategy for the fee using the vehicle type and minutes parked.
+
+389
+00:29:37,707 --> 00:29:39,925
+Strategy for pricing, not a switch.
+
+390
+00:29:40,425 --> 00:29:42,909
+Enums for types, not subclasses.
+
+391
+00:29:43,409 --> 00:29:46,138
+Ticket as a record, since it never changes.
+
+392
+00:29:46,638 --> 00:29:50,933
+BigDecimal, so three fifty plus three fifty is exactly seven.
+
+393
+00:29:51,433 --> 00:29:57,623
+Synchronized park and exit, so two panels never share a spot. Per-floor locks later.
+
+394
+00:29:58,123 --> 00:30:00,352
+No Singleton: inject the lot.
+
+395
+00:30:00,852 --> 00:30:03,755
+No State pattern: just active and closed.
+
+396
+00:30:04,655 --> 00:30:10,685
+VehicleType is an enum where each value carries its fitting list. Motorbike fits motorbike
+
+397
+00:30:10,685 --> 00:30:15,422
+then compact. Car fits compact then large. Truck fits large only.
+
+398
+00:30:15,922 --> 00:30:21,140
+ParkingSpot has a vehicle field, where null means free. Occupy throws an illegal state
+
+399
+00:30:21,140 --> 00:30:26,358
+exception if the spot's taken. Occupy and release are package-private, so only the lot
+
+400
+00:30:26,358 --> 00:30:27,849
+can change a spot.
+
+401
+00:30:28,349 --> 00:30:33,310
+HourlyRate rounds minutes up to whole hours, adds minutes plus fifty-nine and divides by
+
+402
+00:30:33,310 --> 00:30:38,270
+sixty, minimum one. Then it adds four dollars for hour one, three fifty for
+
+403
+00:30:38,270 --> 00:30:43,230
+hours two and three, and two fifty after. For a truck, it doubles the
+
+404
+00:30:43,230 --> 00:30:43,585
+total.
+
+405
+00:30:44,085 --> 00:30:49,098
+ParkingLot's park loops over floors, finds a spot, occupies it, creates ticket T one,
+
+406
+00:30:49,098 --> 00:30:54,111
+T two and so on, stores it in the active map and returns it.
+
+407
+00:30:54,111 --> 00:30:57,333
+If no floor has a spot, it returns empty.
+
+408
+00:30:57,833 --> 00:31:02,929
+Exit looks up the ticket, throws if it's unknown or if exit is before
+
+409
+00:31:02,929 --> 00:31:08,024
+entry, and only then removes it, releases the spot and returns the fee. Validate
+
+410
+00:31:08,024 --> 00:31:09,480
+first, then change state.
+
+411
+00:31:10,380 --> 00:31:15,277
+The demo: one floor with one motorbike, one compact and one large spot. A
+
+412
+00:31:15,277 --> 00:31:20,174
+car parks at minute zero and gets ticket T one, spot F zero dash
+
+413
+00:31:20,174 --> 00:31:21,574
+C one, the compact.
+
+414
+00:31:22,074 --> 00:31:26,694
+A truck parks at minute ten and gets T two, the only large spot.
+
+415
+00:31:27,194 --> 00:31:32,518
+A second car at minute twenty is refused. Compact and large are both taken.
+
+416
+00:31:32,518 --> 00:31:34,419
+That's requirement four in action.
+
+417
+00:31:34,919 --> 00:31:37,230
+The free compact count prints zero.
+
+418
+00:31:37,730 --> 00:31:42,667
+T one exits at minute one fifty. A hundred and fifty minutes rounds up
+
+419
+00:31:42,667 --> 00:31:47,251
+to three hours: four dollars plus three fifty plus three fifty, eleven dollars.
+
+420
+00:31:47,751 --> 00:31:52,431
+The truck exits at minute sixty, so fifty minutes rounds up to one hour,
+
+421
+00:31:52,431 --> 00:31:54,102
+four dollars, doubled to eight.
+
+422
+00:31:54,602 --> 00:31:59,612
+Then we swap in the weekend strategy at run time. The second car now
+
+423
+00:31:59,612 --> 00:32:04,622
+parks, and exits paying a flat ten dollars. Exiting T one again throws: unknown
+
+424
+00:32:04,622 --> 00:32:06,053
+or already closed ticket.
+
+425
+00:32:06,953 --> 00:32:12,263
+Why synchronized? Park and exit lock the whole lot, so find-then-occupy is atomic. Without
+
+426
+00:32:12,263 --> 00:32:17,573
+the lock, two panels could both see the compact spot free and both take
+
+427
+00:32:17,573 --> 00:32:22,883
+it. That's a check-then-act race condition, a bug whose result depends on which thread
+
+428
+00:32:22,883 --> 00:32:23,641
+runs first.
+
+429
+00:32:24,141 --> 00:32:29,029
+FreeSpots reads under the same lock, so a display never sees a half-finished park.
+
+430
+00:32:29,529 --> 00:32:34,618
+Exit validates the ticket and the time before changing anything, so a rejected exit
+
+431
+00:32:34,618 --> 00:32:39,706
+leaves the ticket open. Exit before entry, an unknown ticket and a double exit
+
+432
+00:32:39,706 --> 00:32:40,433
+all throw.
+
+433
+00:32:40,933 --> 00:32:45,588
+And occupy also throws if the spot's taken: a second line of defence.
+
+434
+00:32:46,488 --> 00:32:52,202
+Electric spots? New enum values, and a ChargingSpot if charging has behaviour.
+
+435
+00:32:52,702 --> 00:32:56,918
+Nearest spot? A SpotSelectionStrategy, injected.
+
+436
+00:32:57,418 --> 00:32:59,684
+Update boards? Observer.
+
+437
+00:33:00,184 --> 00:33:04,771
+More panels? Lock per floor, or a thread-safe queue of free spots.
+
+438
+00:33:05,271 --> 00:33:11,289
+Cash or card? A Payment interface and a payment service. That's dependency inversion.
+
+439
+00:33:12,189 --> 00:33:16,997
+Concept sixteen, communication. Think out loud and name your step.
+
+440
+00:33:17,497 --> 00:33:19,680
+Write things down and confirm scope.
+
+441
+00:33:20,180 --> 00:33:24,092
+State assumptions, and give trade-offs as X over Y, because.
+
+442
+00:33:24,592 --> 00:33:27,112
+Welcome hints, and say what you're leaving out.
+
+443
+00:33:27,612 --> 00:33:30,119
+Watch the clock and announce the move to code.
+
+444
+00:33:30,619 --> 00:33:35,893
+Use domain names, and when stuck, go back to the requirements. Never go silent
+
+445
+00:33:35,893 --> 00:33:36,647
+for minutes.
+
+446
+00:33:37,547 --> 00:33:44,319
+Concept seventeen. Reading case studies builds little skill. Attempt first, then compare.
+
+447
+00:33:44,819 --> 00:33:50,405
+After the question, write your own requirements. A shorter list means too few questions.
+
+448
+00:33:50,905 --> 00:33:56,064
+After the requirements, write your classes. Most people miss the record keeper and the
+
+449
+00:33:56,064 --> 00:33:56,433
+rule.
+
+450
+00:33:56,933 --> 00:33:59,301
+Predict each next stage of the diagram.
+
+451
+00:33:59,801 --> 00:34:04,937
+After six or seven, do timed blank-page runs, and never skip what was left
+
+452
+00:34:04,937 --> 00:34:05,304
+out.
+
+453
+00:34:06,204 --> 00:34:10,442
+Chapters one to three: this method, O-O-P, U-M-L.
+
+454
+00:34:10,942 --> 00:34:15,238
+Four to seven: SOLID, principles, clean code, refactoring.
+
+455
+00:34:15,738 --> 00:34:18,675
+Eight to eleven: all twenty-three patterns.
+
+456
+00:34:19,175 --> 00:34:21,462
+Twelve and thirteen: concurrency.
+
+457
+00:34:21,962 --> 00:34:24,145
+Fourteen to twenty: case studies.
+
+458
+00:34:24,645 --> 00:34:28,814
+Twenty-one: machine coding. Twenty-two: cheat sheets.
+
+459
+00:34:29,714 --> 00:34:35,405
+Interview tomorrow? Two hours: the method, then the parking lot and vending machine.
+
+460
+00:34:35,905 --> 00:34:40,224
+One week? Chapters one to three, two case studies a day, then redo the
+
+461
+00:34:40,224 --> 00:34:43,000
+parking lot from a blank page on day seven.
+
+462
+00:34:43,500 --> 00:34:48,834
+One month, about twenty hours? Add patterns and concurrency, one timed run in week
+
+463
+00:34:48,834 --> 00:34:51,501
+three, and three more in week four.
+
+464
+00:34:52,001 --> 00:34:57,531
+Beginner? Six weeks, O-O-P first. Every plan ends with a timed run.
+
+465
+00:34:58,431 --> 00:35:02,461
+Only six case studies? Parking lot, to learn bounding.
+
+466
+00:35:02,961 --> 00:35:04,529
+Library, for limits.
+
+467
+00:35:05,029 --> 00:35:07,142
+Vending machine, for lifecycles.
+
+468
+00:35:07,642 --> 00:35:09,755
+Movie tickets, for concurrency.
+
+469
+00:35:10,255 --> 00:35:11,648
+Splitwise, for money.
+
+470
+00:35:12,148 --> 00:35:17,479
+Amazon shopping, for choosing your part. The night before, no new questions.
+
+471
+00:35:18,379 --> 00:35:23,363
+Concept eighteen. Coding in minute two. Fix: requirements first.
+
+472
+00:35:23,863 --> 00:35:28,508
+No out-of-scope list. Fix: write it and decline extras.
+
+473
+00:35:29,008 --> 00:35:32,876
+One subclass per value. Fix: a field or enum.
+
+474
+00:35:33,376 --> 00:35:39,047
+A god class, or no record class. Fix: one sentence per class, and a
+
+475
+00:35:39,047 --> 00:35:40,262
+Ticket or Loan.
+
+476
+00:35:40,762 --> 00:35:46,511
+Car extends Engine, or six patterns. Fix: composition, one or two patterns.
+
+477
+00:35:47,011 --> 00:35:51,204
+Switch on type everywhere. Fix: polymorphism or Strategy.
+
+478
+00:35:51,704 --> 00:35:58,073
+No lock, code that doesn't run, double for money. Fix: guard shared state, run
+
+479
+00:35:58,073 --> 00:35:59,438
+by halfway, BigDecimal.
+
+480
+00:36:00,338 --> 00:36:06,124
+Concept nineteen, the thirty-second answer. I clarify and write eight to twelve requirements with
+
+481
+00:36:06,124 --> 00:36:09,430
+an out-of-scope list, then actors and use cases.
+
+482
+00:36:09,930 --> 00:36:14,110
+I pick classes from nouns, one job each, and draw the diagram.
+
+483
+00:36:14,610 --> 00:36:19,347
+I sketch the key flow, run SOLID checks, and pick one or two patterns.
+
+484
+00:36:19,847 --> 00:36:25,698
+Then I code two or three flows, handle edges and concurrency, and discuss extensions.
+
+485
+00:36:26,198 --> 00:36:34,212
+Patterns only by signal: swappable rules, Strategy. Big lifecycle, State. Many listeners, Observer.
+
+486
+00:36:35,112 --> 00:36:41,170
+Concept twenty, a quick self-check. Pause and think. Which two classes do beginners most
+
+487
+00:36:41,170 --> 00:36:42,035
+often forget?
+
+488
+00:36:42,935 --> 00:36:46,360
+The record keeper, like a ticket, and the rule, like a rate.
+
+489
+00:36:46,860 --> 00:36:50,668
+The five steps, and a quarter of the time before the first class.
+
+490
+00:36:51,168 --> 00:36:55,094
+Data differs: field. Behaviour differs: class.
+
+491
+00:36:55,594 --> 00:36:58,392
+One or two patterns, and end with a timed run.
+
+492
+00:36:59,292 --> 00:37:04,984
+Recap. L-L-D is designing the classes in one app. Machine coding must run.
+
+493
+00:37:05,484 --> 00:37:06,924
+Follow the steps in order.
+
+494
+00:37:07,424 --> 00:37:11,418
+Spend a quarter of the time before the first class, with an out-of-scope list.
+
+495
+00:37:11,918 --> 00:37:14,542
+Data is a field, behaviour is a class.
+
+496
+00:37:15,042 --> 00:37:19,094
+SOLID checks, one or two patterns, two or three flows coded.
+
+497
+00:37:19,594 --> 00:37:27,666
+Attempt first, then compare. Next, episode two: O-O-P fundamentals in Java. See you there.
+

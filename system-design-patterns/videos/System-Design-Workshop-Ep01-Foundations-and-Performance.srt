@@ -1,1872 +1,3056 @@
 1
-00:00:00,000 --> 00:00:04,304
+00:00:00,000 --> 00:00:04,840
 Welcome to episode one of the System Design Workshop. By the end you'll be
 
 2
-00:00:04,304 --> 00:00:08,608
+00:00:04,840 --> 00:00:09,680
 able to size a system with real numbers, explain latency, percentiles and the nines,
 
 3
-00:00:08,608 --> 00:00:12,298
+00:00:09,680 --> 00:00:13,829
 scale a service out, and run a design interview step by step.
 
 4
-00:00:12,648 --> 00:00:16,971
-Keep the Part 1 notes open. Each concept here matches a section there, in
+00:00:14,329 --> 00:00:19,122
+We'll follow one running example most of the way: a photo-sharing app, like an
 
 5
-00:00:16,971 --> 00:00:17,898
-the same order.
+00:00:19,122 --> 00:00:23,916
+early Instagram. Every time a slide lists steps or types, we'll apply each one
 
 6
-00:00:18,548 --> 00:00:23,319
-System design is deciding which parts software needs, what each does, how they talk,
+00:00:23,916 --> 00:00:25,627
+to that app, with numbers.
 
 7
-00:00:23,319 --> 00:00:28,091
-and where the data lives, so the whole meets its goals for users, speed,
+00:00:26,127 --> 00:00:31,211
+Keep the Part one notes open: each concept matches a section there, in order.
 
 8
-00:00:28,091 --> 00:00:29,113
-uptime and cost.
+00:00:31,211 --> 00:00:34,117
+Pause on any calculation and redo it yourself.
 
 9
-00:00:29,463 --> 00:00:34,574
-Coding asks how one function works. Design asks how twenty programs on two hundred
+00:00:35,017 --> 00:00:40,281
+System design is deciding which parts software needs, what each does, how they talk,
 
 10
-00:00:34,574 --> 00:00:39,685
-machines cooperate without losing data. Like an architect: floors and fire exits, not bricks.
+00:00:40,281 --> 00:00:45,545
+and where the data lives, so the whole meets its goals for users, speed,
 
 11
-00:00:40,035 --> 00:00:44,544
-A program that works for ten users can collapse at ten million because its
+00:00:45,545 --> 00:00:46,673
+uptime and cost.
 
 12
-00:00:44,544 --> 00:00:49,053
-shape is wrong. One database everyone queues for, one machine whose death kills the
+00:00:47,173 --> 00:00:53,090
+Coding asks how one function works. Design asks how twenty programs on two hundred
 
 13
-00:00:49,053 --> 00:00:51,630
-site. Better loops don't fix that. Design does.
+00:00:53,090 --> 00:00:59,007
+machines cooperate without losing data. Like an architect: floors and fire exits, not bricks.
 
 14
-00:00:51,980 --> 00:00:55,602
-Two working designs can also differ ten times over in their cloud bill.
+00:00:59,507 --> 00:01:04,670
+A program that works for ten users can collapse at ten million because its
 
 15
-00:00:56,252 --> 00:01:00,796
-Design runs as a loop. Understand the goal: what it must do, and how
+00:01:04,670 --> 00:01:09,832
+shape is wrong. One database everyone queues for, one machine whose death kills the
 
 16
-00:01:00,796 --> 00:01:05,339
-well. Estimate the load. Sketch the parts. Find the weak spots: what runs out
+00:01:09,832 --> 00:01:12,782
+site. Better loops don't fix that. Design does.
 
 17
-00:01:05,339 --> 00:01:09,559
-first, and what takes everything down. Then fix it and state the cost.
+00:01:13,282 --> 00:01:16,997
+And two working designs can differ ten times over in their cloud bill.
 
 18
-00:01:09,909 --> 00:01:14,188
-You repeat as the system grows. A design is right for a given load,
+00:01:17,897 --> 00:01:23,372
+Design runs as a loop of five steps. Understand the goal. Estimate the load.
 
 19
-00:01:14,188 --> 00:01:14,799
-never finished.
+00:01:23,372 --> 00:01:28,847
+Sketch the parts. Find the weak spots. Fix it and justify the fix. Then
 
 20
-00:01:15,449 --> 00:01:19,898
-Your main tool is abstraction: a simple contract hiding the details. A remote call
+00:01:28,847 --> 00:01:31,584
+go round again as the system grows.
 
 21
-00:01:19,898 --> 00:01:24,348
-that looks local. A database that looks like one table but is many machines.
+00:01:32,084 --> 00:01:36,202
+That's easy to say and hard to picture, so let's run the loop once,
 
 22
-00:01:24,698 --> 00:01:30,620
-Abstractions leak. Networks fail halfway, replicas lag, clocks drift. Good design names the leaks
+00:01:36,202 --> 00:01:38,261
+step by step, on our photo app.
 
 23
-00:01:30,620 --> 00:01:31,889
-it must handle.
+00:01:39,161 --> 00:01:43,782
+Step one, understand the goal: what it must do, and how well. Our app
 
 24
-00:01:32,239 --> 00:01:36,670
-And every choice gives something up. More copies are safer but cost more and
+00:01:43,782 --> 00:01:48,404
+lets people upload photos and scroll a feed. How well: the feed loads in
 
 25
-00:01:36,670 --> 00:01:38,886
-can disagree. Say the trade-off out loud.
+00:01:48,404 --> 00:01:53,026
+under two hundred milliseconds for ninety-nine percent of requests, and the app is up
 
 26
-00:01:39,236 --> 00:01:44,498
-In the interview there's rarely one right answer. They grade how you turn a
+00:01:53,026 --> 00:01:55,337
+ninety-nine point nine percent of the time.
 
 27
-00:01:44,498 --> 00:01:49,760
-vague idea into an architecture: asking questions, estimating scale, choosing parts, and explaining trade-offs.
+00:01:55,837 --> 00:02:01,003
+Step two, estimate the load. Ten million people a day each view fifty photos:
 
 28
-00:01:49,760 --> 00:01:55,022
-Coding is correctness inside one program; design is how many programs behave under load
+00:02:01,003 --> 00:02:06,170
+about five thousand reads a second on average, fifteen thousand at the evening peak.
 
 29
-00:01:55,022 --> 00:01:55,774
-and failure.
+00:02:06,170 --> 00:02:09,122
+We'll do this maths properly in concept nine.
 
 30
-00:01:56,423 --> 00:02:01,268
-A client is any program that asks: a browser, an app, or another server.
+00:02:09,622 --> 00:02:14,962
+Step three, sketch the parts. Phones talk to a load balancer, which spreads requests
 
 31
-00:02:01,268 --> 00:02:06,113
-A server waits for requests and answers them. On the web they speak H-T-T-P,
+00:02:14,962 --> 00:02:20,303
+over a few app servers. They store photo details in one database and the
 
 32
-00:02:06,113 --> 00:02:08,190
-a standard request and response format.
+00:02:20,303 --> 00:02:22,210
+image files in object storage.
 
 33
-00:02:08,540 --> 00:02:13,536
-Open example dot com slash profile. The browser finds the server's address through D-N-S,
+00:02:22,710 --> 00:02:28,280
+Step four, find the weak spots. What runs out first? One database handles roughly
 
 34
-00:02:13,536 --> 00:02:18,533
-the internet's phone book. It sends GET slash profile. The server looks up user
+00:02:28,280 --> 00:02:33,850
+one to ten thousand simple queries a second, so fifteen thousand reads at peak
 
 35
-00:02:18,533 --> 00:02:22,816
-forty-two in the database and replies two hundred, O-K, with the page.
+00:02:33,850 --> 00:02:39,419
+will swamp it. What takes everything down? That same database. If it dies, the
 
 36
-00:02:23,166 --> 00:02:27,783
-Inside big systems, servers are constantly clients of other servers. And a server is
+00:02:39,419 --> 00:02:40,215
+app dies.
 
 37
-00:02:27,783 --> 00:02:32,399
-a role, not a box. One name like api dot example dot com is
+00:02:40,715 --> 00:02:45,610
+Step five, fix and justify. Add a cache in front of the database, because
 
 38
-00:02:32,399 --> 00:02:35,037
-often hundreds of machines behind a load balancer.
+00:02:45,610 --> 00:02:50,505
+there are two hundred and fifty reads for every write. Add a standby database
 
 39
-00:02:35,687 --> 00:02:39,907
-A thin client, like a basic web page, relies on the server. A thick
+00:02:50,505 --> 00:02:55,400
+in another building. Then say the cost: the cache can show slightly stale data,
 
 40
-00:02:39,907 --> 00:02:42,621
-client, like a mobile game, does a lot locally.
+00:02:55,400 --> 00:02:57,148
+and the standby costs money.
 
 41
-00:02:42,971 --> 00:02:48,718
-Normally the client pulls. Chat needs the server to push, using WebSockets or server-sent
+00:02:57,648 --> 00:03:02,226
+Then the loop restarts. At ten times the users, step four finds a new
 
 42
-00:02:48,718 --> 00:02:50,360
-events. That's episode two.
+00:03:02,226 --> 00:03:06,804
+weak spot, maybe the cache or the network. A design is right for a
 
 43
-00:02:50,710 --> 00:02:55,066
-And the network between them is slow and unreliable compared with work inside one
+00:03:06,804 --> 00:03:08,112
+given load, never finished.
 
 44
-00:02:55,066 --> 00:02:55,377
-machine.
+00:03:09,012 --> 00:03:13,956
+Your main tool is abstraction: a simple contract hiding the details. A remote call
 
 45
-00:02:55,727 --> 00:03:00,106
-Recap: almost everything on the web is a chain of request and response, often
+00:03:13,956 --> 00:03:18,899
+that looks like a local function. A database that looks like one table but
 
 46
-00:03:00,106 --> 00:03:01,045
-server to server.
+00:03:18,899 --> 00:03:20,312
+is really many machines.
 
 47
-00:03:01,695 --> 00:03:06,655
-Nearly every web app uses the same parts. The client renders the interface.
+00:03:20,812 --> 00:03:26,590
+Abstractions leak. Networks fail halfway, replicas lag, clocks drift. Our new cache is one:
 
 48
-00:03:07,005 --> 00:03:10,975
-The load balancer spreads requests over app servers and skips dead ones.
+00:03:26,590 --> 00:03:31,543
+delete a photo, and the cache may show it for another minute.
 
 49
-00:03:11,325 --> 00:03:16,183
-App servers apply business rules. You run identical copies so one crash doesn't stop
+00:03:32,043 --> 00:03:37,165
+Every choice gives something up. More copies are safer but cost more and can
 
 50
-00:03:16,183 --> 00:03:16,877
-the site.
+00:03:37,165 --> 00:03:39,361
+disagree. Say the trade-off out loud.
 
 51
-00:03:17,227 --> 00:03:22,228
-The database stores data durably. It's usually the hardest part to scale, because it
+00:03:39,861 --> 00:03:45,993
+In the interview there's rarely one right answer. They grade the reasoning: questions, estimates,
 
 52
-00:03:22,228 --> 00:03:22,942
-holds state.
+00:03:45,993 --> 00:03:47,745
+chosen parts, and trade-offs.
 
 53
-00:03:23,292 --> 00:03:27,689
-A cache keeps hot data in RAM. A hit is well under a millisecond,
+00:03:48,645 --> 00:03:54,060
+A client is any program that asks: a browser, an app, or another server.
 
 54
-00:03:27,689 --> 00:03:30,516
-versus several milliseconds or more for a database query.
+00:03:54,060 --> 00:03:59,475
+A server waits for requests and answers them. On the web they speak H-T-T-P,
 
 55
-00:03:30,866 --> 00:03:35,417
-A queue lets slow jobs, like welcome emails, run later on workers, so the
+00:03:59,475 --> 00:04:04,889
+a standard request and response format. Let's follow one request through the five numbered
 
 56
-00:03:35,417 --> 00:03:36,718
-request returns at once.
+00:04:04,889 --> 00:04:05,276
+arrows.
 
 57
-00:03:37,068 --> 00:03:42,318
-Object storage holds big files by key. Databases are bad at large files.
+00:04:05,776 --> 00:04:11,325
+Arrow one. You open example dot com slash profile. The browser doesn't know where
 
 58
-00:03:42,668 --> 00:03:48,276
-A C-D-N, content delivery network, keeps static files near users, so Sydney doesn't fetch
+00:04:11,325 --> 00:04:16,874
+example dot com lives, so it asks D-N-S, the internet's phone book, and gets
 
 59
-00:03:48,276 --> 00:03:49,878
-every image from Virginia.
+00:04:16,874 --> 00:04:18,063
+back an address.
 
 60
-00:03:50,528 --> 00:03:54,634
-Users get static files from the C-D-N and send the rest to the load
+00:04:18,563 --> 00:04:23,766
+Arrow two. The browser connects to that address and sends a request: GET slash
 
 61
-00:03:54,634 --> 00:03:58,740
-balancer. App servers read the cache first, then the database, and drop slow jobs
+00:04:23,766 --> 00:04:24,137
+profile.
 
 62
-00:03:58,740 --> 00:04:01,966
-on the queue for a worker, which writes to object storage.
+00:04:24,637 --> 00:04:29,706
+Arrow three. The server reads it, sees you're user forty-two, and asks the database
 
 63
-00:04:02,316 --> 00:04:06,707
-Instagram's early stack looked almost exactly like this. Add a box only when you
+00:04:29,706 --> 00:04:30,792
+for your record.
 
 64
-00:04:06,707 --> 00:04:11,097
-can name its problem: we add a cache because reads outnumber writes a hundred
+00:04:31,292 --> 00:04:35,973
+Arrow four. The database replies with your name, photo and bio.
 
 65
-00:04:11,097 --> 00:04:15,487
-to one. A small internal tool may need just one server and one database.
+00:04:36,473 --> 00:04:41,617
+Arrow five. The server replies two hundred, O-K, with the page, and the browser
 
 66
-00:04:16,137 --> 00:04:20,549
-Don't store images in the database. Put files in object storage and keep only
+00:04:41,617 --> 00:04:46,762
+draws it. Notice that in arrow three the server was itself a client. Inside
 
 67
-00:04:20,549 --> 00:04:21,179
-the key.
+00:04:46,762 --> 00:04:50,804
+big systems, servers are clients of other servers all the time.
 
 68
-00:04:21,529 --> 00:04:26,373
-Don't do slow work, like video encoding, inside the web request. Queue it.
+00:04:51,704 --> 00:04:56,343
+A thin client relies on the server: a basic web page that fetches everything.
 
 69
-00:04:26,723 --> 00:04:31,388
-Interview question: why not one server? Because it's a single point of failure with
+00:04:56,343 --> 00:05:00,981
+A thick client does a lot locally: a mobile game that only calls home
 
 70
-00:04:31,388 --> 00:04:36,053
-a hard capacity limit. Stateless app servers behind a load balancer let you add
+00:05:00,981 --> 00:05:02,306
+to save your score.
 
 71
-00:04:36,053 --> 00:04:37,386
-machines and survive crashes.
+00:05:02,806 --> 00:05:08,390
+Normally the client pulls. A chat app needs the server to push a new
 
 72
-00:04:37,736 --> 00:04:42,305
-And add a queue when work is slow, can wait, or arrives in bursts.
+00:05:08,390 --> 00:05:13,177
+message to you unasked, using WebSockets or server-sent events. That's episode two.
 
 73
-00:04:42,305 --> 00:04:44,263
-Recap: each box solves one problem.
+00:05:13,677 --> 00:05:18,717
+A server is a role, not a box. One name, like api dot example
 
 74
-00:04:44,913 --> 00:04:50,117
-Three kinds of speed. Latency is how long one request takes, in milliseconds or
+00:05:18,717 --> 00:05:22,676
+dot com, is often hundreds of machines behind a load balancer.
 
 75
-00:04:50,117 --> 00:04:50,489
-microseconds.
+00:05:23,176 --> 00:05:28,216
+And the network between them is slow and unreliable compared with work inside one
 
 76
-00:04:50,839 --> 00:04:53,289
-Throughput is how many requests finish per second.
+00:05:28,216 --> 00:05:33,255
+machine. Recap: almost everything on the web is a chain of request and response,
 
 77
-00:04:53,639 --> 00:04:57,427
-Bandwidth is the most a link can carry per second, in bits. The width
+00:05:33,255 --> 00:05:34,695
+often server to server.
 
 78
-00:04:57,427 --> 00:04:58,239
-of the pipe.
+00:05:35,595 --> 00:05:40,450
+Nearly every web app uses the same eight parts. Here's each one's job in
 
 79
-00:04:58,589 --> 00:05:03,225
-On a motorway, latency is one car's journey time, bandwidth is the number of
+00:05:40,450 --> 00:05:45,304
+our photo app. The client renders the interface: the phone app showing your feed.
 
 80
-00:05:03,225 --> 00:05:06,205
-lanes, and throughput is cars actually arriving per hour.
+00:05:45,804 --> 00:05:51,148
+The load balancer spreads requests over app servers and skips dead ones. Fifteen thousand
 
 81
-00:05:06,555 --> 00:05:12,176
-Strictly, response time is what the client feels: network both ways, plus queueing, plus
+00:05:51,148 --> 00:05:54,583
+feed requests a second get shared across the fleet.
 
 82
-00:05:12,176 --> 00:05:16,995
-service time, the actual work. In interviews latency usually means response time.
+00:05:55,083 --> 00:06:00,265
+App servers apply business rules, like only followers may see a private photo. You
 
 83
-00:05:17,345 --> 00:05:22,501
-Why care? Under about a hundred milliseconds feels instant; over a second breaks concentration.
+00:06:00,265 --> 00:06:03,967
+run identical copies so one crash doesn't stop the site.
 
 84
-00:05:22,501 --> 00:05:27,658
-And throughput sets fleet size: fifty thousand requests a second at a thousand per
+00:06:04,467 --> 00:06:10,541
+The database stores data durably: who posted which photo, captions, likes. It's usually the
 
 85
-00:05:27,658 --> 00:05:32,814
-server needs at least fifty servers. Also, latency and bandwidth are independent. A satellite
+00:06:10,541 --> 00:06:14,012
+hardest part to scale, because it holds state.
 
 86
-00:05:32,814 --> 00:05:37,970
-link has huge bandwidth and six hundred millisecond round trips. More bandwidth won't speed
+00:06:14,512 --> 00:06:19,707
+A cache keeps hot data in RAM. Today's popular feed comes back in well
 
 87
-00:05:37,970 --> 00:05:39,812
-up a small A-P-I call.
+00:06:19,707 --> 00:06:23,790
+under a millisecond, versus several milliseconds or more from the database.
 
 88
-00:05:40,462 --> 00:05:45,232
-Four delays. Propagation: light in fibre covers about two hundred kilometres per millisecond, so
+00:06:24,290 --> 00:06:29,050
+A queue plus workers runs slow jobs later. Making three thumbnail sizes of an
 
 89
-00:05:45,232 --> 00:05:50,003
-London to New York is at least twenty-eight milliseconds one way, about seventy for
+00:06:29,050 --> 00:06:32,790
+upload goes on the queue, so the upload returns at once.
 
 90
-00:05:50,003 --> 00:05:51,366
-a real round trip.
+00:06:33,290 --> 00:06:39,408
+Object storage holds big files by key, like photos slash forty-two slash beach. Databases
 
 91
-00:05:51,716 --> 00:05:56,896
-Transmission: one megabyte is eight megabits, so eighty milliseconds at a hundred megabits per
+00:06:39,408 --> 00:06:41,593
+are bad at large files.
 
 92
-00:05:56,896 --> 00:06:02,076
-second, eight at one gigabit. Then queueing behind other requests, and processing, the real
+00:06:42,093 --> 00:06:47,597
+A C-D-N, content delivery network, keeps copies of the images near users, so someone
 
 93
-00:06:02,076 --> 00:06:02,446
-work.
+00:06:47,597 --> 00:06:50,742
+in Sydney doesn't fetch every photo from Virginia.
 
 94
-00:06:02,796 --> 00:06:07,430
-Load links them. At low load latency is flat. Near full use, requests wait
+00:06:51,642 --> 00:06:56,483
+Now trace one upload. The phone sends the photo through the load balancer to
 
 95
-00:06:07,430 --> 00:06:12,063
-for each other and latency explodes while throughput levels off. That's why teams run
+00:06:56,483 --> 00:07:01,324
+an app server. The server saves the caption in the database, stores the file
 
 96
-00:06:12,063 --> 00:06:14,379
-at fifty to seventy percent at peak.
+00:07:01,324 --> 00:07:06,164
+in object storage, and drops a make-thumbnails job on the queue. It replies at
 
 97
-00:06:15,029 --> 00:06:19,559
-Start with a latency budget. For a p ninety-nine of two hundred milliseconds, give
+00:07:06,164 --> 00:07:11,005
+once. A worker picks up the job later and writes the thumbnails to object
 
 98
-00:06:19,559 --> 00:06:24,088
-sixty to the network, twenty to the gateway, eighty to the service and database,
+00:07:11,005 --> 00:07:11,351
+storage.
 
 99
-00:06:24,088 --> 00:06:26,029
-forty as slack. Fix whoever overspends.
+00:07:11,851 --> 00:07:17,197
+Now trace one feed view. The app server asks the cache first. On a
 
 100
-00:06:26,379 --> 00:06:31,482
-Biggest payoff first: remove round trips by batching and running independent calls in parallel.
+00:07:17,197 --> 00:07:22,544
+hit, done in under a millisecond. On a miss, it reads the database and
 
 101
-00:06:31,482 --> 00:06:34,033
-Reuse connections so you don't repeat handshakes.
+00:07:22,544 --> 00:07:27,508
+fills the cache. The images themselves come from the C-D-N, not your servers.
 
 102
-00:06:34,383 --> 00:06:39,962
-Move bytes closer with C-D-Ns and regional replicas. Serve hot reads from memory. Push
+00:07:28,008 --> 00:07:33,130
+Instagram's early stack looked almost exactly like this. Add a box only when you
 
 103
-00:06:39,962 --> 00:06:42,353
-emails and thumbnails onto a queue.
+00:07:33,130 --> 00:07:38,251
+can name its problem. A small internal tool may need just one server and
 
 104
-00:06:42,703 --> 00:06:48,000
-Then shrink payloads, index queries, keep headroom, and cut the tail with deadlines and
+00:07:38,251 --> 00:07:38,983
+one database.
 
 105
-00:06:48,000 --> 00:06:49,892
-hedged requests. Measure every hop.
+00:07:39,883 --> 00:07:45,086
+Don't store images in the database. Put files in object storage and keep only
 
 106
-00:06:50,242 --> 00:06:55,148
-Fix the biggest term first: a seventy millisecond ocean crossing dwarfs a two millisecond
+00:07:45,086 --> 00:07:45,829
+the key.
 
 107
-00:06:55,148 --> 00:06:58,302
-parse. And name each lever's price, like stale caches.
+00:07:46,329 --> 00:07:51,520
+Don't do slow work, like video encoding, inside the web request. Queue it.
 
 108
-00:06:58,652 --> 00:07:03,234
-Pause and think: a user in Australia is slow against servers in Virginia. Will
+00:07:52,020 --> 00:07:57,417
+Interview question: why not one server? It's a single point of failure with a
 
 109
-00:07:03,234 --> 00:07:04,216
-more bandwidth help?
+00:07:57,417 --> 00:08:02,814
+hard capacity limit. Stateless app servers behind a load balancer let you add machines
 
 110
-00:07:04,866 --> 00:07:10,713
-Barely. The round trip is about two hundred milliseconds. Cut round trips: a nearby
+00:08:02,814 --> 00:08:03,970
+and survive crashes.
 
 111
-00:07:10,713 --> 00:07:14,055
-C-D-N, fewer sequential calls, maybe a regional deployment.
+00:08:04,470 --> 00:08:09,656
+And add a queue when work is slow, can wait, or arrives in bursts.
 
 112
-00:07:14,405 --> 00:07:18,673
-Don't mix bits and bytes. A hundred megabits per second moves at most twelve
+00:08:09,656 --> 00:08:11,879
+Recap: each box solves one problem.
 
 113
-00:07:18,673 --> 00:07:20,502
-and a half megabytes per second.
+00:08:12,779 --> 00:08:18,383
+Three kinds of speed. Latency is how long one request takes, in milliseconds or
 
 114
-00:07:20,852 --> 00:07:25,554
-Batching raises throughput but adds latency: the first write waits for the other ninety-nine.
+00:08:18,383 --> 00:08:18,783
+microseconds.
 
 115
-00:07:25,904 --> 00:07:30,792
-Recap: a cargo ship has high throughput and high latency; a motorbike courier, the
+00:08:19,283 --> 00:08:21,907
+Throughput is how many requests finish per second.
 
 116
-00:07:30,792 --> 00:07:31,141
-reverse.
+00:08:22,407 --> 00:08:26,902
+Bandwidth is the most a link can carry per second, in bits. The width
 
 117
-00:07:31,791 --> 00:07:36,584
-A percentile is the value below which that percentage of measurements fall. A p
+00:08:26,902 --> 00:08:27,865
+of the pipe.
 
 118
-00:07:36,584 --> 00:07:41,378
-ninety-five of three hundred milliseconds means ninety-five percent finished within three hundred. p fifty
+00:08:28,365 --> 00:08:33,425
+On a motorway, latency is one car's journey time, throughput is cars actually arriving
 
 119
-00:07:41,378 --> 00:07:42,405
-is the median.
+00:08:33,425 --> 00:08:36,678
+per hour, and bandwidth is the number of lanes.
 
 120
-00:07:42,755 --> 00:07:45,530
-p ninety: one in ten requests is slower.
+00:08:37,178 --> 00:08:43,631
+Strictly, response time is what the client feels: network both ways, plus queueing, plus
 
 121
-00:07:45,880 --> 00:07:47,911
-p ninety-five: one in twenty.
+00:08:43,631 --> 00:08:47,780
+service time. In interviews latency usually means response time.
 
 122
-00:07:48,261 --> 00:07:50,096
-p ninety-nine: one in a hundred.
+00:08:48,280 --> 00:08:53,687
+Latency and bandwidth are independent. A satellite link has huge bandwidth and six hundred
 
 123
-00:07:50,446 --> 00:07:55,081
-p ninety-nine point nine: one in a thousand. This slow end is tail latency.
+00:08:53,687 --> 00:08:59,095
+millisecond round trips. More bandwidth won't speed up a small A-P-I call. And throughput
 
 124
-00:07:55,731 --> 00:08:00,700
-Ten requests: nine take ten milliseconds, one takes a thousand. The mean is a
+00:08:59,095 --> 00:09:04,503
+sets fleet size: fifty thousand requests a second at a thousand per server needs
 
 125
-00:08:00,700 --> 00:08:03,895
-hundred and nine milliseconds, which matches no real request.
+00:09:04,503 --> 00:09:06,048
+at least fifty servers.
 
 126
-00:08:04,245 --> 00:08:09,358
-The median is ten. But p ninety-five and p ninety-nine are a full second:
+00:09:06,948 --> 00:09:12,853
+Every request picks up four kinds of delay. Propagation: the time for the signal
 
 127
-00:08:09,358 --> 00:08:14,471
-one user in ten waits. Real latency is skewed by garbage collection, cache misses
+00:09:12,853 --> 00:09:18,758
+to travel. Transmission: the time to push the bytes onto the wire. Queueing: waiting
 
 128
-00:08:14,471 --> 00:08:17,758
-and retries. Percentiles show that shape. Averages flatten it.
+00:09:18,758 --> 00:09:21,711
+behind other requests. Processing: the real work.
 
 129
-00:08:18,408 --> 00:08:22,560
-The tail matters more than it looks. A user loading a hundred pages a
+00:09:22,211 --> 00:09:27,550
+Load links them. At low load latency is flat. Near full use, requests wait
 
 130
-00:08:22,560 --> 00:08:26,712
-day hits your p ninety-nine daily, and heavy users are often your best customers.
+00:09:27,550 --> 00:09:32,889
+for each other and latency explodes while throughput levels off. That's why teams run
 
 131
-00:08:27,062 --> 00:08:31,379
-Worse, fan-out. One request calls a hundred servers and waits for all. Each is
+00:09:32,889 --> 00:09:38,228
+at fifty to seventy percent at peak. Let's put real numbers on all four.
 
 132
-00:08:31,379 --> 00:08:35,696
-slow just one percent of the time. The chance at least one is slow
+00:09:39,128 --> 00:09:43,646
+Imagine a user in London opening a photo page served from New York. The
 
 133
-00:08:35,696 --> 00:08:40,013
-is one minus point nine nine to the hundredth, about sixty-three percent. That's from
+00:09:43,646 --> 00:09:48,164
+page carries a one megabyte photo, and the user is on a hundred megabit
 
 134
-00:08:40,013 --> 00:08:41,863
-Google's paper, The Tail at Scale.
+00:09:48,164 --> 00:09:48,487
+connection.
 
 135
-00:08:42,513 --> 00:08:47,274
-Monitoring uses histograms, counts per latency bucket, to estimate percentiles.
+00:09:48,987 --> 00:09:54,661
+Propagation. Light in fibre covers about two hundred kilometres per millisecond. London to New
 
 136
-00:08:47,624 --> 00:08:51,922
-Never average percentiles across servers. Merge the histograms instead.
+00:09:54,661 --> 00:10:00,336
+York is fifty-six hundred kilometres, so at least twenty-eight milliseconds one way. Real cables
 
 137
-00:08:52,272 --> 00:08:56,764
-Cut the tail with hedged requests: no reply by the p ninety-five time, ask
+00:10:00,336 --> 00:10:05,200
+wiggle and routers add delay, so a round trip is about seventy.
 
 138
-00:08:56,764 --> 00:09:00,936
-a second replica and take the first answer. Add timeouts and limit fan-out.
+00:10:05,700 --> 00:10:11,566
+Transmission. One megabyte is eight megabits. At a hundred megabits a second that takes
 
 139
-00:09:01,286 --> 00:09:06,359
-Beware coordinated omission: a load tester that waits on slow responses sends less traffic
+00:10:11,566 --> 00:10:17,432
+eighty milliseconds. At one gigabit, just eight. This is the only term bandwidth helps.
 
 140
-00:09:06,359 --> 00:09:08,170
-exactly then, hiding the tail.
+00:10:17,932 --> 00:10:23,795
+Queueing. Say the server is ninety percent busy at peak. Our request waits behind
 
 141
-00:09:08,520 --> 00:09:13,826
-Interview question: your service's p ninety-nine is fine but users still complain. Why? Each
+00:10:23,795 --> 00:10:25,471
+others, say thirty milliseconds.
 
 142
-00:09:13,826 --> 00:09:19,131
-page calls many services, so the chance of at least one slow call per
+00:10:25,971 --> 00:10:31,661
+Processing. The database query and building the page, say fifteen milliseconds.
 
 143
-00:09:19,131 --> 00:09:24,437
-page is far above one percent. Look at end-to-end latency. Recap: percentiles, not averages.
+00:10:32,161 --> 00:10:37,857
+Total: about a hundred and ninety-five milliseconds. Each delay has its own fix. A
 
 144
-00:09:25,087 --> 00:09:30,419
-Little's law holds for any stable system. L equals lambda times W. L is
+00:10:37,857 --> 00:10:43,552
+C-D-N copy in London cuts seventy to about ten. Compressing the photo to two
 
 145
-00:09:30,419 --> 00:09:35,752
-items inside at once, like requests in flight. Lambda is the arrival rate, which
+00:10:43,552 --> 00:10:49,247
+hundred kilobytes cuts eighty to sixteen. Headroom shrinks the queue. An index speeds the
 
 146
-00:09:35,752 --> 00:09:39,180
-equals throughput. W is time spent inside, the latency.
+00:10:49,247 --> 00:10:49,654
+query.
 
 147
-00:09:39,530 --> 00:09:43,756
-Two customers arrive at a café per minute and each stays ten minutes, so
+00:10:50,554 --> 00:10:55,497
+Start with a latency budget. For a p ninety-nine target of two hundred milliseconds
 
 148
-00:09:43,756 --> 00:09:46,473
-twenty are inside on average, whatever the barista does.
+00:10:55,497 --> 00:11:00,439
+on the feed, give sixty to the network, twenty to the gateway, eighty to
 
 149
-00:09:47,123 --> 00:09:51,456
-A thousand requests per second at point two seconds each is two hundred in
+00:11:00,439 --> 00:11:04,675
+the service and database, forty as slack. Whoever overspends gets fixed first.
 
 150
-00:09:51,456 --> 00:09:55,171
-flight. You need at least two hundred threads or connections, plus headroom.
+00:11:05,175 --> 00:11:10,454
+Remove round trips. Say the feed screen makes five calls one after another from
 
 151
-00:09:55,521 --> 00:10:00,427
-Twenty database connections with five millisecond queries serve at most twenty divided by point
+00:11:10,454 --> 00:11:15,732
+London to Virginia, at seventy milliseconds each: three hundred and fifty milliseconds. Batch them
 
 152
-00:10:00,427 --> 00:10:03,230
-zero zero five: four thousand queries per second.
+00:11:15,732 --> 00:11:20,633
+into one call and it's seventy. Reuse connections so you don't repeat handshakes.
 
 153
-00:10:03,580 --> 00:10:09,149
-With a fixed concurrency limit, if latency doubles, max throughput halves. That's why slow
+00:11:21,133 --> 00:11:27,198
+Move bytes closer with C-D-Ns. Serve hot reads from memory. Defer work like thumbnails
 
 154
-00:10:09,149 --> 00:10:09,945
-dependencies hurt.
+00:11:27,198 --> 00:11:28,497
+onto the queue.
 
 155
-00:10:10,295 --> 00:10:15,374
-It needs a stable system, and convert milliseconds to seconds first. Interview example: five
+00:11:28,997 --> 00:11:35,184
+Then shrink payloads, index queries, keep headroom, and cut the tail with deadlines and
 
 156
-00:10:15,374 --> 00:10:20,454
-thousand requests a second at forty milliseconds is two hundred in flight, about four
+00:11:35,184 --> 00:11:37,393
+hedged requests. Measure every hop.
 
 157
-00:10:20,454 --> 00:10:22,268
-per instance across fifty instances.
+00:11:37,893 --> 00:11:43,853
+Name each lever's price: caches go stale, replicas cost money, async work shows results
 
 158
-00:10:22,618 --> 00:10:27,978
-Pause: a hundred threads, each held two hundred and fifty milliseconds. Max throughput? A
+00:11:43,853 --> 00:11:44,278
+later.
 
 159
-00:10:27,978 --> 00:10:32,189
-hundred divided by point two five: four hundred requests per second.
+00:11:44,778 --> 00:11:50,278
+Pause and think: a user in Australia is slow against servers in Virginia. Will
 
 160
-00:10:32,839 --> 00:10:38,190
-From Jeff Dean and Peter Norvig. Learn orders of magnitude, not digits. An L
+00:11:50,278 --> 00:11:51,456
+more bandwidth help?
 
 161
-00:10:38,190 --> 00:10:40,101
-one cache read: one nanosecond.
+00:11:52,356 --> 00:11:59,144
+Barely. The round trip is about two hundred milliseconds. Cut round trips: a nearby
 
 162
-00:10:40,451 --> 00:10:42,994
-A RAM read: a hundred nanoseconds.
+00:11:59,144 --> 00:12:03,992
+C-D-N, fewer sequential calls, reused connections, maybe a regional deployment.
 
 163
-00:10:43,344 --> 00:10:48,533
-A random four kilobyte read from an N-V-M-e S-S-D: twenty to a hundred microseconds.
+00:12:04,492 --> 00:12:09,410
+Don't mix bits and bytes. A hundred megabits per second moves at most twelve
 
 164
-00:10:48,883 --> 00:10:52,262
-A round trip inside one data centre: half a millisecond.
+00:12:09,410 --> 00:12:11,518
+and a half megabytes per second.
 
 165
-00:10:52,612 --> 00:10:56,745
-One megabyte read sequentially from S-S-D: point two to one millisecond.
+00:12:12,018 --> 00:12:17,405
+Batching raises throughput but adds latency: the first write waits for the other ninety-nine.
 
 166
-00:10:57,095 --> 00:11:01,054
-A hard disk seek: ten milliseconds, because an arm physically moves.
+00:12:17,905 --> 00:12:23,656
+Recap: a cargo ship has high throughput and high latency. A motorbike courier is
 
 167
-00:11:01,404 --> 00:11:04,585
-London to New York round trip: seventy milliseconds.
+00:12:23,656 --> 00:12:24,478
+the reverse.
 
 168
-00:11:04,935 --> 00:11:07,362
-California to Europe: a hundred and fifty.
+00:12:25,378 --> 00:12:30,522
+A percentile is the value below which that percentage of measurements fall. A p
 
 169
-00:11:08,012 --> 00:11:11,972
-Scale it up. If an L one read took a second, RAM would take
+00:12:30,522 --> 00:12:35,667
+ninety-five of three hundred milliseconds means ninety-five percent finished within three hundred. p fifty
 
 170
-00:11:11,972 --> 00:11:15,933
-about two minutes, a data-centre round trip about six days, a disk seek four
+00:12:35,667 --> 00:12:36,769
+is the median.
 
 171
-00:11:15,933 --> 00:11:18,196
-months, and London to New York two years.
+00:12:37,269 --> 00:12:39,789
+p ninety: one request in ten is slower.
 
 172
-00:11:18,846 --> 00:11:23,149
-RAM is a hundred to a thousand times faster than S-S-D for random reads,
+00:12:40,289 --> 00:12:42,587
+p ninety-five: one in twenty.
 
 173
-00:11:23,149 --> 00:11:24,686
-so caches live in RAM.
+00:12:43,087 --> 00:12:44,864
+p ninety-nine: one in a hundred.
 
 174
-00:11:25,036 --> 00:11:29,475
-A thousand sequential database calls cost at least half a second in round trips
+00:12:45,364 --> 00:12:49,907
+p ninety-nine point nine: one in a thousand. This slow end of the graph
 
 175
-00:11:29,475 --> 00:11:30,426
-alone. Batch them.
+00:12:49,907 --> 00:12:51,205
+is called tail latency.
 
 176
-00:11:30,776 --> 00:11:35,828
-Ocean crossings cost seventy to a hundred and fifty milliseconds. Only moving data closer
+00:12:52,105 --> 00:12:57,877
+Here's a real-looking request log. Ten feed requests: nine take ten milliseconds, and one
 
 177
-00:11:35,828 --> 00:11:36,189
-helps.
+00:12:57,877 --> 00:13:03,649
+hits a garbage-collection pause and takes a thousand. To read percentiles, sort them and
 
 178
-00:11:36,539 --> 00:11:40,428
-Sequential beats random, so storage engines write append-only logs.
+00:13:03,649 --> 00:13:04,473
+count positions.
 
 179
-00:11:40,778 --> 00:11:45,325
-A remote Redis isn't free: the read is nanoseconds, but the trip is half
+00:13:04,973 --> 00:13:10,350
+The mean adds them up, one thousand and ninety, and divides by ten: a
 
 180
-00:11:45,325 --> 00:11:49,872
-a millisecond. Interview question: why is a service making fifty calls per request slow,
+00:13:10,350 --> 00:13:15,726
+hundred and nine milliseconds. No request took a hundred and nine. The average describes
 
 181
-00:11:49,872 --> 00:11:54,419
-when each call is fast? Fifty sequential calls at about a millisecond each is
+00:13:15,726 --> 00:13:16,110
+nobody.
 
 182
-00:11:54,419 --> 00:11:57,342
-fifty milliseconds before any real work. Batch or parallelise.
+00:13:16,610 --> 00:13:22,211
+p fifty, the median, sits in the middle, the fifth and sixth values: ten
 
 183
-00:11:57,992 --> 00:12:01,933
-A byte is eight bits. Each unit is about a thousand times the last.
+00:13:22,211 --> 00:13:24,611
+milliseconds. The typical user is happy.
 
 184
-00:12:01,933 --> 00:12:05,874
-Two to the ten is ten twenty-four, but estimates round it to a thousand.
+00:13:25,111 --> 00:13:29,152
+p ninety is the ninth value out of ten: still ten milliseconds.
 
 185
-00:12:05,874 --> 00:12:07,845
-A kilobyte: a short post with metadata.
+00:13:29,652 --> 00:13:34,714
+p ninety-five lands past the ninth value, on the tenth: a thousand milliseconds.
 
 186
-00:12:08,195 --> 00:12:11,039
-A megabyte: a photo, or a minute of M-P-three.
+00:13:35,214 --> 00:13:40,661
+p ninety-nine is the tenth value too: a full second. So one user in
 
 187
-00:12:11,389 --> 00:12:15,174
-A gigabyte: an hour of streamed H-D video is a few of these.
+00:13:40,661 --> 00:13:46,108
+ten waited a second, and only the high percentiles show it. Real latency is
 
 188
-00:12:15,524 --> 00:12:17,777
-A terabyte: a laptop drive.
+00:13:46,108 --> 00:13:51,555
+skewed like this, by pauses, cache misses and retries. Percentiles show the shape. Averages
 
 189
-00:12:18,127 --> 00:12:20,437
-A petabyte: a large data warehouse.
+00:13:51,555 --> 00:13:52,333
+flatten it.
 
 190
-00:12:21,087 --> 00:12:25,256
-Two to the thirty-two is about four point three billion: the I-P version four
+00:13:53,233 --> 00:13:57,683
+The tail matters more than it looks. A heavy user who loads a hundred
 
 191
-00:12:25,256 --> 00:12:27,937
-address space, and where thirty-two bit IDs run out.
+00:13:57,683 --> 00:14:02,132
+pages a day hits your p ninety-nine about once a day. And heavy users
 
 192
-00:12:28,287 --> 00:12:33,623
-A timestamp is eight bytes, a U-U-I-D sixteen. A compressed photo is two hundred
+00:14:02,132 --> 00:14:03,721
+are often your best customers.
 
 193
-00:12:33,623 --> 00:12:38,579
-kilobytes to two megabytes. A minute of H-D video, twenty-five to sixty megabytes.
+00:14:04,221 --> 00:14:09,205
+Worse is fan-out. Imagine photo search: one user request asks a hundred search servers
 
 194
-00:12:38,929 --> 00:12:42,854
-A day is eighty-six thousand four hundred seconds. Round it to ten to the
+00:14:09,205 --> 00:14:14,189
+in parallel and waits for all of them. Each server is slow just one
 
 195
-00:12:42,854 --> 00:12:43,134
-five.
+00:14:14,189 --> 00:14:15,613
+percent of the time.
 
 196
-00:12:43,484 --> 00:12:46,050
-So one million per day is about twelve per second.
+00:14:16,113 --> 00:14:20,565
+The chance all hundred are fast is point nine nine to the power of
 
 197
-00:12:46,400 --> 00:12:50,572
-And a one gigabit card moves a hundred and twenty-five megabytes per second at
+00:14:20,565 --> 00:14:25,017
+a hundred, about thirty-seven percent. So about sixty-three percent of searches hit a slow
 
 198
-00:12:50,572 --> 00:12:50,870
-best.
+00:14:25,017 --> 00:14:29,469
+server. One in a hundred per server becomes two in three for the user.
 
 199
-00:12:51,520 --> 00:12:56,898
-A back-of-the-envelope estimate finds the order of magnitude, and that decides the architecture. A
+00:14:29,469 --> 00:14:32,012
+That's from Google's paper, The Tail at Scale.
 
 200
-00:12:56,898 --> 00:13:02,276
-hundred requests per second fits one server. A hundred thousand needs caching and sharding.
+00:14:32,912 --> 00:14:39,786
+Monitoring uses histograms, counts per latency bucket, to estimate percentiles without storing every value.
 
 201
-00:13:02,626 --> 00:13:07,792
-D-A-U is daily active users. Q-P-S is queries per second. Requests per day divided
+00:14:40,286 --> 00:14:45,361
+Never average percentiles across servers. Merge the histograms instead.
 
 202
-00:13:07,792 --> 00:13:12,958
-by ten to the five gives average Q-P-S. Peak is usually two to three
+00:14:45,861 --> 00:14:51,614
+Cut the tail with hedged requests. Say the search server's p ninety-five is fifty
 
 203
-00:13:12,958 --> 00:13:15,172
-times that, more for spiky products.
+00:14:51,614 --> 00:14:57,367
+milliseconds. If no reply after fifty, ask a second replica and take whichever answers
 
 204
-00:13:15,522 --> 00:13:21,335
-Storage per day is items times size, times days kept, times replicas. Bandwidth is
+00:14:57,367 --> 00:15:03,120
+first. That costs only about five percent extra requests, and rescues the slow ones.
 
 205
-00:13:21,335 --> 00:13:25,071
-Q-P-S times response size. State every assumption out loud.
+00:15:03,120 --> 00:15:05,175
+Add timeouts and limit fan-out.
 
 206
-00:13:25,721 --> 00:13:31,215
-A photo app: ten million daily users, each viewing fifty photos and uploading point
+00:15:05,675 --> 00:15:11,071
+Beware coordinated omission: a load tester that waits on each slow response sends less
 
 207
-00:13:31,215 --> 00:13:36,709
-two a day. Photos average five hundred kilobytes, metadata one kilobyte, kept five years.
+00:15:11,071 --> 00:15:13,384
+traffic exactly then, hiding the tail.
 
 208
-00:13:36,709 --> 00:13:42,203
-Reads: five hundred million a day, so about five thousand Q-P-S, fifteen thousand at
+00:15:13,884 --> 00:15:19,858
+Interview question: your service's p ninety-nine is fine but users still complain. Why? Each
 
 209
-00:13:42,203 --> 00:13:42,596
-peak.
+00:15:19,858 --> 00:15:25,831
+page calls many services, so the chance of at least one slow call per
 
 210
-00:13:42,946 --> 00:13:47,683
-Writes: two million a day, about twenty per second, sixty at peak. Two hundred
+00:15:25,831 --> 00:15:31,805
+page is far above one percent. Look at end-to-end latency. Recap: percentiles, not averages.
 
 211
-00:13:47,683 --> 00:13:50,390
-and fifty reads per write, so caching matters.
+00:15:32,705 --> 00:15:38,687
+Little's law holds for any stable system, where items arrive, spend some time, and
 
 212
-00:13:50,740 --> 00:13:55,368
-Storage: two million times five hundred kilobytes is one terabyte of photos a day,
+00:15:38,687 --> 00:15:41,251
+leave. L equals lambda times W.
 
 213
-00:13:55,368 --> 00:13:57,021
-plus two gigabytes of metadata.
+00:15:41,751 --> 00:15:46,720
+L is the number of items inside at once, like requests in flight. Lambda
 
 214
-00:13:57,371 --> 00:14:02,747
-Over five years, about one point eight petabytes, times three with replicas. Photos go
+00:15:46,720 --> 00:15:51,689
+is the arrival rate, which in a stable system equals throughput. W is the
 
 215
-00:14:02,747 --> 00:14:03,899
-in object storage.
+00:15:51,689 --> 00:15:56,657
+time each item spends inside: the latency. Know any two and you get the
 
 216
-00:14:04,249 --> 00:14:08,916
-Bandwidth: five thousand views a second times five hundred kilobytes is two and a
+00:15:56,657 --> 00:15:57,012
+third.
 
 217
-00:14:08,916 --> 00:14:13,249
-half gigabytes per second, about twenty gigabits. A strong case for a C-D-N.
+00:15:57,912 --> 00:16:01,768
+Picture a coffee shop. Let's find each of the three letters.
 
 218
-00:14:13,899 --> 00:14:19,306
-Now server count. Thirty thousand requests per second at peak. Each uses four milliseconds
+00:16:02,268 --> 00:16:05,890
+Lambda, the arrival rate: two customers walk in every minute.
 
 219
-00:14:19,306 --> 00:14:24,713
-of C-P-U and takes fifty milliseconds end to end. Sixteen-core machines, three availability zones,
+00:16:06,390 --> 00:16:11,429
+W, the time inside: each customer queues, gets a drink and sits for ten
 
 220
-00:14:24,713 --> 00:14:30,120
-must survive losing one. One core: a thousand divided by four, two hundred and
+00:16:11,429 --> 00:16:11,789
+minutes.
 
 221
-00:14:30,120 --> 00:14:31,278
-fifty per second.
+00:16:12,289 --> 00:16:18,261
+So L, the number inside on average, is two times ten: twenty people. That's
 
 222
-00:14:31,628 --> 00:14:34,972
-Times sixteen cores: four thousand per server at full load.
+00:16:18,261 --> 00:16:21,673
+true whatever the barista does. It's just counting.
 
 223
-00:14:35,322 --> 00:14:39,304
-Keep C-P-U at sixty percent so queues stay short: twenty-four hundred.
+00:16:22,173 --> 00:16:27,473
+Now the barista slows down and each visit stretches to fifteen minutes. Same arrivals,
 
 224
-00:14:39,654 --> 00:14:44,229
-Thirty thousand divided by twenty-four hundred is twelve and a half. Round up to
+00:16:27,473 --> 00:16:32,773
+so thirty people inside. With twenty seats, ten are standing. Slower service means more
 
 225
-00:14:44,229 --> 00:14:44,556
-thirteen.
+00:16:32,773 --> 00:16:34,288
+people in the building.
 
 226
-00:14:44,906 --> 00:14:49,629
-Little's law check: thirty thousand times point zero five is fifteen hundred in flight,
+00:16:34,788 --> 00:16:39,712
+Run it backwards. The shop has twenty seats and visits last ten minutes, so
 
 227
-00:14:49,629 --> 00:14:52,328
-about a hundred and fifteen per server. Fine.
+00:16:39,712 --> 00:16:44,636
+it can serve at most twenty divided by ten: two customers a minute. That's
 
 228
-00:14:52,678 --> 00:14:58,115
-Zone loss: thirteen must survive with two zones left, so seven per zone. Times
+00:16:44,636 --> 00:16:47,098
+the same sum we'll do for servers.
 
 229
-00:14:58,115 --> 00:14:58,892
-three: twenty-one.
+00:16:47,998 --> 00:16:53,204
+Now swap customers for requests. Our feed service gets a thousand requests a second,
 
 230
-00:14:59,242 --> 00:15:03,468
-Rolling deploys take about ten percent out: roughly twenty-three servers.
+00:16:53,204 --> 00:16:58,410
+and each takes point two seconds. A thousand times point two is two hundred
 
 231
-00:15:03,818 --> 00:15:09,240
-Network: twenty kilobyte responses give about four point eight gigabits total, a quarter gigabit
+00:16:58,410 --> 00:17:03,617
+in flight. So you need at least two hundred threads or connections, plus headroom,
 
 232
-00:15:09,240 --> 00:15:11,564
-per server. C-P-U is the limit.
+00:17:03,617 --> 00:17:04,733
+or requests queue.
 
 233
-00:15:12,214 --> 00:15:16,508
-The naive answer, thirty thousand over four thousand, was eight. The ceiling and zone-loss
+00:17:05,233 --> 00:17:10,756
+Run it backwards for a database pool. Twenty connections, each query takes five milliseconds,
 
 234
-00:15:16,508 --> 00:15:18,962
-rule explain the gap of about three times.
+00:17:10,756 --> 00:17:16,279
+which is point zero zero five seconds. Twenty divided by point zero zero five:
 
 235
-00:15:19,312 --> 00:15:23,274
-C-P-U per request set the number. Halve it and you halve the fleet.
+00:17:16,279 --> 00:17:19,040
+at most four thousand queries a second.
 
 236
-00:15:23,624 --> 00:15:29,351
-Repeat per tier: caches are limited by memory, databases by disk operations and writes,
+00:17:19,540 --> 00:17:25,139
+And here's why slow dependencies hurt. Keep the twenty connections, but the database slows
 
 237
-00:15:29,351 --> 00:15:30,578
-streams by bandwidth.
+00:17:25,139 --> 00:17:30,738
+to ten milliseconds a query. Max throughput halves, to two thousand. Same hardware, half
 
 238
-00:15:30,928 --> 00:15:36,400
-Common mistakes: forgetting peak, replicas, and index overhead of twenty to fifty percent, and
+00:17:30,738 --> 00:17:31,538
+the capacity.
 
 239
-00:15:36,400 --> 00:15:39,917
-false precision. Spend three to five minutes, out loud.
+00:17:32,038 --> 00:17:38,292
+Two rules: the system must be stable, and convert milliseconds to seconds first. Pause:
 
 240
-00:15:40,267 --> 00:15:45,206
-Say it in one breath: four milliseconds of C-P-U means four thousand a second
+00:17:38,292 --> 00:17:43,652
+a hundred threads, each held two hundred and fifty milliseconds. Max throughput?
 
 241
-00:15:45,206 --> 00:15:50,146
-per box; at sixty percent, twenty-four hundred; thirteen for peak; seven per zone across
+00:17:44,152 --> 00:17:49,731
+A hundred divided by point two five: four hundred requests a second. Beyond that,
 
 242
-00:15:50,146 --> 00:15:52,968
-three zones, twenty-one, plus a little for deploys.
+00:17:49,731 --> 00:17:51,723
+requests queue and latency climbs.
 
 243
-00:15:53,318 --> 00:15:57,948
-Pause: a hundred million daily users, twenty requests each. Plan for what Q-P-S? Two
+00:17:52,623 --> 00:17:58,779
+From Jeff Dean and Peter Norvig. Learn orders of magnitude, not digits. An L
 
 244
-00:15:57,948 --> 00:16:02,577
-billion a day over ten to the five is twenty thousand average, about sixty
+00:17:58,779 --> 00:18:02,297
+one cache read, inside the processor: one nanosecond.
 
 245
-00:16:02,577 --> 00:16:07,207
-thousand at peak. For scale, WhatsApp's hundred billion messages a day is about a
+00:18:02,797 --> 00:18:05,514
+A RAM read: a hundred nanoseconds.
 
 246
-00:16:07,207 --> 00:16:08,199
-million per second.
+00:18:06,014 --> 00:18:11,746
+A random four kilobyte read from a fast N-V-M-e S-S-D: twenty to a hundred
 
 247
-00:16:08,849 --> 00:16:13,580
-Availability is the share of time a system works correctly: uptime over total time,
+00:18:11,746 --> 00:18:12,156
+microseconds.
 
 248
-00:16:13,580 --> 00:16:18,312
-or successful requests over valid ones. Using a three sixty-five day year and thirty
+00:18:12,656 --> 00:18:16,185
+A round trip inside one data centre: half a millisecond.
 
 249
-00:16:18,312 --> 00:16:23,044
-day month: ninety-nine percent allows three point six five days down a year, seven
+00:18:16,685 --> 00:18:21,225
+One megabyte read sequentially from S-S-D: point two to one millisecond.
 
 250
-00:16:23,044 --> 00:16:24,734
-point two hours a month.
+00:18:21,725 --> 00:18:25,974
+A hard disk seek: ten milliseconds, because an arm physically moves.
 
 251
-00:16:25,084 --> 00:16:29,391
-Three nines, ninety-nine point nine: eight point seven six hours a year, forty-three minutes
+00:18:26,474 --> 00:18:29,853
+London to New York round trip: seventy milliseconds.
 
 252
-00:16:29,391 --> 00:16:32,468
-a month, about a minute and a half a day.
+00:18:30,353 --> 00:18:32,988
+California to Europe: a hundred and fifty.
 
 253
-00:16:32,818 --> 00:16:37,338
-Ninety-nine point nine five: four point three eight hours a year, about twenty-two minutes
+00:18:33,888 --> 00:18:38,269
+Scale it up to human time. If an L one read took a second,
 
 254
-00:16:37,338 --> 00:16:37,984
-a month.
+00:18:38,269 --> 00:18:42,650
+a RAM read would take about two minutes, a data-centre round trip about six
 
 255
-00:16:38,334 --> 00:16:42,640
-Four nines: fifty-three minutes a year, four point three minutes a month. Less than
+00:18:42,650 --> 00:18:46,719
+days, a disk seek four months, and London to New York two years.
 
 256
-00:16:42,640 --> 00:16:46,638
-a human needs to wake and log in, so recovery must be automatic.
+00:18:47,619 --> 00:18:51,552
+Let's use the table to price parts of one feed request in our photo
 
 257
-00:16:46,988 --> 00:16:51,727
-Five nines: about five minutes a year, twenty-six seconds a month. Each nine cuts
+00:18:51,552 --> 00:18:51,833
+app.
 
 258
-00:16:51,727 --> 00:16:56,128
-downtime ten times, and usually costs far more than ten times the effort.
+00:18:52,333 --> 00:18:57,695
+The feed needs twenty pieces of data from Redis. Fetched one after another, each
 
 259
-00:16:56,778 --> 00:17:01,578
-Parts in series must all work, so multiply. A load balancer at four nines,
+00:18:57,695 --> 00:19:03,056
+costs a data-centre round trip of half a millisecond: ten milliseconds. The RAM read
 
 260
-00:17:01,578 --> 00:17:06,377
-app at three, database at three: about ninety-nine point seven nine percent. Lower than
+00:19:03,056 --> 00:19:07,269
+inside Redis is nanoseconds. The trip is what you pay for.
 
 261
-00:17:06,377 --> 00:17:07,406
-the weakest link.
+00:19:07,769 --> 00:19:12,791
+Batch them into one multi-get call and it's one round trip: half a millisecond.
 
 262
-00:17:07,756 --> 00:17:12,288
-Parts in parallel need only one. Two independent servers at ninety-nine percent are both
+00:19:12,791 --> 00:19:14,585
+Twenty times faster, same data.
 
 263
-00:17:12,288 --> 00:17:16,820
-down one percent of one percent of the time: ninety-nine point nine nine. But
+00:19:15,085 --> 00:19:20,380
+Now a cache miss sends ten random reads to a database. On S-S-D, at
 
 264
-00:17:16,820 --> 00:17:20,381
-only if failures are independent; one rack's power cut takes both.
+00:19:20,380 --> 00:19:23,783
+about a hundred microseconds each, that's about one millisecond.
 
 265
-00:17:21,031 --> 00:17:25,953
-Three nines to four can mean multiple data centres and roughly double infrastructure. Many
+00:19:24,283 --> 00:19:29,686
+If that database sat on spinning disks, ten seeks at ten milliseconds is a
 
 266
-00:17:25,953 --> 00:17:28,766
-internal tools are fine at ninety-nine point five.
+00:19:29,686 --> 00:19:35,090
+hundred milliseconds. Half our whole budget gone on disk arms. That's why databases moved
 
 267
-00:17:29,116 --> 00:17:33,950
-Cloud S-L-As for single services are usually three or four nines. S-three is designed
+00:19:35,090 --> 00:19:35,861
+to S-S-Ds.
 
 268
-00:17:33,950 --> 00:17:36,712
-for four nines but its contract promises three.
+00:19:36,361 --> 00:19:42,009
+And a call to another continent adds seventy to a hundred and fifty milliseconds.
 
 269
-00:17:37,062 --> 00:17:39,546
-Planned maintenance still counts as downtime.
+00:19:42,009 --> 00:19:47,657
+Only moving data closer fixes that. Interview version: fifty sequential calls of a millisecond
 
 270
-00:17:39,896 --> 00:17:45,128
-Interview question: how do you beat any single machine's availability? Redundant copies in parallel
+00:19:47,657 --> 00:19:51,692
+is fifty milliseconds before any real work. Batch or parallelise.
 
 271
-00:17:45,128 --> 00:17:50,359
-across racks, zones or regions, with automatic failover and no single points of failure.
+00:19:52,592 --> 00:19:57,297
+RAM is a hundred to a thousand times faster than S-S-D for random reads,
 
 272
-00:17:50,359 --> 00:17:54,844
-Recap: three nines is forty-three minutes a month, four nines about four.
+00:19:57,297 --> 00:19:58,977
+so caches live in RAM.
 
 273
-00:17:55,494 --> 00:18:00,857
-An S-L-I, service level indicator, is a measurement: say, the percentage of requests succeeding
+00:19:59,477 --> 00:20:04,292
+A data-centre round trip costs as much as thousands of memory reads. A thousand
 
 274
-00:18:00,857 --> 00:18:03,539
-under three hundred milliseconds over thirty days.
+00:20:04,292 --> 00:20:08,418
+sequential database calls cost at least half a second in trips alone.
 
 275
-00:18:03,889 --> 00:18:09,242
-An S-L-O, service level objective, is an internal target for it: ninety-nine point nine
+00:20:08,918 --> 00:20:14,152
+Ocean crossings cost seventy to a hundred and fifty milliseconds, and light isn't getting
 
 276
-00:18:09,242 --> 00:18:09,625
-percent.
+00:20:14,152 --> 00:20:14,526
+faster.
 
 277
-00:18:09,975 --> 00:18:15,954
-An S-L-A, service level agreement, is a customer contract with penalties, usually service credits.
+00:20:15,026 --> 00:20:23,043
+Sequential beats random, so storage engines write append-only logs. Recap: memory is nanoseconds, S-S-D
 
 278
-00:18:16,304 --> 00:18:21,561
-Pizza shop: actual delivery times, the manager's ninety-five percent in thirty minutes, and the
+00:20:23,043 --> 00:20:25,906
+microseconds, network and disk milliseconds.
 
 279
-00:18:21,561 --> 00:18:26,817
-printed free-if-over-forty-five promise. The S-L-A is looser, so missing the S-L-O warns you before
+00:20:26,806 --> 00:20:31,461
+A byte is eight bits, enough for one letter. Each unit is about a
 
 280
-00:18:26,817 --> 00:18:27,568
-you pay.
+00:20:31,461 --> 00:20:36,115
+thousand times the last. Two to the ten is ten twenty-four, but estimates round
 
 281
-00:18:28,218 --> 00:18:33,038
-The error budget is one minus the S-L-O. At ninety-nine point nine, that's point
+00:20:36,115 --> 00:20:40,105
+it to a thousand. A kilobyte: a short post with its metadata.
 
 282
-00:18:33,038 --> 00:18:37,858
-one percent: of a hundred million monthly requests, a hundred thousand may fail, or
+00:20:40,605 --> 00:20:44,436
+A megabyte: a high-quality photo, or a minute of M-P-three.
 
 283
-00:18:37,858 --> 00:18:39,924
-about forty-three minutes of full outage.
+00:20:44,936 --> 00:20:49,127
+A gigabyte: an hour of streamed H-D video is a few of these.
 
 284
-00:18:40,274 --> 00:18:45,454
-While budget remains, ship fast. When it's spent, freeze risky changes and fix reliability.
+00:20:49,627 --> 00:20:55,025
+A terabyte: a laptop drive. Our photo app takes in one of these every
 
 285
-00:18:45,454 --> 00:18:50,634
-This comes from Google's site reliability engineering. Pick indicators users feel, like failed checkouts,
+00:20:55,025 --> 00:20:55,411
+day.
 
 286
-00:18:50,634 --> 00:18:55,815
-not C-P-U. And never set an S-L-O of a hundred percent: any change would
+00:20:55,911 --> 00:21:01,266
+A petabyte: a large company's data warehouse. Our app reaches nearly two of these
 
 287
-00:18:55,815 --> 00:19:00,995
-violate it. Measure over a rolling twenty-eight or thirty days, and alert when the
+00:21:01,266 --> 00:21:02,414
+in five years.
 
 288
-00:19:00,995 --> 00:19:06,176
-budget burns too fast. In the interview: the S-L-O is the internal target, the
+00:21:03,314 --> 00:21:08,173
+Two to the thirty-two is about four point three billion. That's every I-P version
 
 289
-00:19:06,176 --> 00:19:08,026
-S-L-A the looser external contract.
+00:21:08,173 --> 00:21:13,032
+four address, and where a thirty-two bit I-D column runs out. A signed one
 
 290
-00:19:08,676 --> 00:19:15,252
-M-T-B-F, mean time between failures, should be high. M-T-T-R, mean time to repair or
+00:21:13,032 --> 00:21:15,461
+runs out at about two billion rows.
 
 291
-00:19:15,252 --> 00:19:20,419
-recover, should be low. Availability is M-T-B-F over M-T-B-F plus M-T-T-R.
+00:21:15,961 --> 00:21:21,712
+A timestamp is eight bytes, a U-U-I-D sixteen. A compressed photo is two hundred
 
 292
-00:19:20,769 --> 00:19:25,297
-Fail every thousand hours, recover in one: about ninety-nine point nine percent.
+00:21:21,712 --> 00:21:27,052
+kilobytes to two megabytes. A minute of H-D video, twenty-five to sixty megabytes.
 
 293
-00:19:25,946 --> 00:19:31,833
-At scale something always fails, so cutting M-T-T-R is usually cheaper than raising M-T-B-F.
+00:21:27,552 --> 00:21:31,942
+A day is eighty-six thousand four hundred seconds. Round it to ten to the
 
 294
-00:19:32,183 --> 00:19:37,825
-Same server, but automatic ten-second recovery: about ninety-nine point nine nine nine seven percent.
+00:21:31,942 --> 00:21:33,196
+five, a hundred thousand.
 
 295
-00:19:38,175 --> 00:19:43,378
-Detection counts. M-T-T-D, mean time to detect: an outage nobody notices for thirty minutes
+00:21:33,696 --> 00:21:38,242
+So one million per day is about twelve per second. For example, a shop
 
 296
-00:19:43,378 --> 00:19:46,351
-has at least thirty minutes of repair time.
+00:21:38,242 --> 00:21:42,464
+taking three million orders a day handles about thirty-six a second on average.
 
 297
-00:19:46,701 --> 00:19:51,508
-Recap: you can't prevent every failure, so recover fast with monitoring and automation.
+00:21:42,964 --> 00:21:47,129
+And a one gigabit network card moves a hundred and twenty-five megabytes per second
 
 298
-00:19:52,158 --> 00:19:54,515
-Availability: can I use it right now?
+00:21:47,129 --> 00:21:50,104
+at best, because there are eight bits in a byte.
 
 299
-00:19:54,865 --> 00:19:59,882
-Reliability: does it do the right thing over time? A system can be available
+00:21:51,004 --> 00:21:56,985
+A back-of-the-envelope estimate finds the order of magnitude, and that decides the architecture. A
 
 300
-00:19:59,882 --> 00:20:02,391
-but unreliable, answering fast with wrong data.
+00:21:56,985 --> 00:22:02,965
+hundred requests a second fits one server. A hundred thousand needs caching and sharding.
 
 301
-00:20:02,741 --> 00:20:08,639
-Durability: will saved data survive crashes and dead disks? A system can be down
+00:22:03,465 --> 00:22:09,699
+Start from assumptions. D-A-U means daily active users. Multiply by actions per user to
 
 302
-00:20:08,639 --> 00:20:14,538
-but durable. S-three promises eleven nines durability but only four nines availability: separate promises,
+00:22:09,699 --> 00:22:11,480
+get requests per day.
 
 303
-00:20:14,538 --> 00:20:19,595
-separate techniques. And replication isn't backup: a deleting bug is copied everywhere.
+00:22:11,980 --> 00:22:16,693
+Divide by ten to the five to get average Q-P-S, queries per second.
 
 304
-00:20:20,245 --> 00:20:24,345
-Think of a bank. The cash machine works when you walk up: availability.
+00:22:17,193 --> 00:22:22,336
+Multiply by two or three for the peak, because traffic bunches up in the
 
 305
-00:20:24,696 --> 00:20:28,434
-It gives the right amount and debits the right account: reliability.
+00:22:22,336 --> 00:22:25,275
+evening. More for spiky products like ticket sales.
 
 306
-00:20:28,784 --> 00:20:34,897
-Your balance survives a flood: durability. Availability comes from redundancy and failover; durability from
+00:22:25,775 --> 00:22:31,521
+Storage per day is new items times their size. Total storage is that times
 
 307
-00:20:34,897 --> 00:20:39,700
-copies in separate places, writing to disk before confirming, and backups.
+00:22:31,521 --> 00:22:37,266
+days kept, times replicas. And bandwidth is Q-P-S times response size. Say every assumption
 
 308
-00:20:40,050 --> 00:20:45,195
-Pause: can a system be durable but not available? Yes. A database down for
+00:22:37,266 --> 00:22:41,781
+out loud. Now the photo app, one line at a time.
 
 309
-00:20:45,195 --> 00:20:50,341
-maintenance can't be read, but its data is safe on disk. Recap: usable now,
+00:22:42,681 --> 00:22:48,761
+Assumptions, said out loud: ten million daily users, each viewing fifty photos and uploading
 
 310
-00:20:50,341 --> 00:20:52,179
-correct over time, data survives.
+00:22:48,761 --> 00:22:54,842
+point two a day. Photos average five hundred kilobytes, metadata one kilobyte, and we
 
 311
-00:20:52,829 --> 00:20:57,792
-A fault is one part going wrong. A failure is the whole system not
+00:22:54,842 --> 00:22:56,580
+keep everything five years.
 
 312
-00:20:57,792 --> 00:21:02,755
-serving users. Fault tolerance stops faults becoming failures, like a twin-engine plane landing on
+00:22:57,080 --> 00:23:02,272
+Reads. Ten million times fifty is five hundred million views a day. Divide by
 
 313
-00:21:02,755 --> 00:21:05,236
-one engine. Hardware faults: defend with redundancy.
+00:23:02,272 --> 00:23:07,464
+ten to the five: about five thousand Q-P-S average, fifteen thousand at a three
 
 314
-00:21:05,586 --> 00:21:08,372
-Software bugs: tests and gradual rollouts.
+00:23:07,464 --> 00:23:08,205
+times peak.
 
 315
-00:21:08,722 --> 00:21:12,031
-Network faults: timeouts, retries, other zones.
+00:23:08,705 --> 00:23:13,560
+Writes. Ten million times point two is two million uploads a day: about twenty
 
 316
-00:21:12,381 --> 00:21:16,433
-Human error, like a bad config: reviews, backups, rollback.
+00:23:13,560 --> 00:23:18,414
+per second, sixty at peak. That's two hundred and fifty reads per write, so
 
 317
-00:21:16,783 --> 00:21:20,347
-Slow dependencies: timeouts, fallbacks, circuit breakers.
+00:23:18,414 --> 00:23:20,841
+caching and a C-D-N matter a lot.
 
 318
-00:21:20,997 --> 00:21:26,851
-Failure models describe how a broken part behaves; each row allows more misbehaviour. Fail-stop
+00:23:21,341 --> 00:23:26,605
+Storage per day. Two million times five hundred kilobytes is one terabyte of photos
 
 319
-00:21:26,851 --> 00:21:29,777
-halts and everyone is told: an idealisation.
+00:23:26,605 --> 00:23:29,238
+a day, plus two gigabytes of metadata.
 
 320
-00:21:30,127 --> 00:21:34,800
-Crash-stop halts silently, so it looks just like a slow node. Majority quorums need
+00:23:29,738 --> 00:23:35,969
+Five years. One terabyte times three sixty-five times five is about one point eight
 
 321
-00:21:34,800 --> 00:21:37,804
-two f plus one nodes to survive f crashes.
+00:23:35,969 --> 00:23:42,200
+petabytes, times three with replicas. Photos go in object storage. Metadata, about three point
 
 322
-00:21:38,154 --> 00:21:42,705
-Crash-recovery restarts with only what it saved, so write durably before acknowledging.
+00:23:42,200 --> 00:23:44,870
+six terabytes, fits a sharded database.
 
 323
-00:21:43,055 --> 00:21:46,666
-Omission drops some messages: use acknowledgements and retries.
+00:23:45,370 --> 00:23:50,880
+Bandwidth. Five thousand views a second times five hundred kilobytes is two and a
 
 324
-00:21:47,016 --> 00:21:51,990
-Timing gives right answers too late, like a long G-C pause: use timeouts and
+00:23:50,880 --> 00:23:55,997
+half gigabytes per second, about twenty gigabits. A strong case for a C-D-N.
 
 325
-00:21:51,990 --> 00:21:52,345
-deadlines.
+00:23:56,897 --> 00:24:02,670
+Now server count, the step interviewers love. Assume thirty thousand requests a second at
 
 326
-00:21:52,695 --> 00:21:58,206
-Byzantine does anything, even lies, and needs three f plus one replicas. Most data
+00:24:02,670 --> 00:24:08,444
+peak. Each uses four milliseconds of C-P-U and takes fifty milliseconds end to end.
 
 327
-00:21:58,206 --> 00:22:03,717
-centres assume crash-recovery, omission and timing, plus checksums for corrupted data. So Raft survives
+00:24:08,444 --> 00:24:14,217
+Sixteen-core machines, three availability zones, and we must survive losing one. Step one: one
 
 328
-00:22:03,717 --> 00:22:07,654
-one crash with three nodes; a Byzantine protocol needs four.
+00:24:14,217 --> 00:24:19,578
+core does a thousand divided by four, two hundred and fifty per second.
 
 329
-00:22:08,304 --> 00:22:10,266
-Detect with health checks and heartbeats.
+00:24:20,078 --> 00:24:24,501
+Step two: times sixteen cores, four thousand per server at full load.
 
 330
-00:22:10,616 --> 00:22:15,150
-Isolate with timeouts, so one fault doesn't spread. A dependency that takes thirty seconds
+00:24:25,001 --> 00:24:30,811
+Step three: keep C-P-U at sixty percent so queues stay short. Twenty-four hundred per
 
 331
-00:22:15,150 --> 00:22:19,036
-to fail can tie up every thread; a fast error is better.
+00:24:30,811 --> 00:24:31,226
+server.
 
 332
-00:22:19,386 --> 00:22:25,248
-Recover by routing around, restarting or failing over. And remember correlated failure: one bad
+00:24:31,726 --> 00:24:37,349
+Step four: thirty thousand divided by twenty-four hundred is twelve and a half. Round
 
 333
-00:22:25,248 --> 00:22:26,923
-deploy breaks every copy.
+00:24:37,349 --> 00:24:38,554
+up to thirteen.
 
 334
-00:22:27,573 --> 00:22:29,919
-Redundancy means a spare for each critical part.
+00:24:39,054 --> 00:24:44,419
+Step five, a Little's law check: thirty thousand times point zero five is fifteen
 
 335
-00:22:30,269 --> 00:22:35,686
-A single point of failure, a SPOF, is any part whose loss stops everything:
+00:24:44,419 --> 00:24:48,634
+hundred in flight, about a hundred and fifteen per server. Fine.
 
 336
-00:22:35,686 --> 00:22:41,103
-one database, one load balancer, one D-N-S provider. Ask of every box: if this
+00:24:49,134 --> 00:24:55,303
+Step six, zone loss: thirteen must survive with two zones left, so seven per
 
 337
-00:22:41,103 --> 00:22:42,264
-disappears, what happens?
+00:24:55,303 --> 00:24:57,507
+zone. Times three zones: twenty-one.
 
 338
-00:22:42,614 --> 00:22:46,271
-Failover moves work to the spare, like a hospital's backup generator.
+00:24:58,007 --> 00:25:03,665
+Step seven: rolling deploys take about ten percent out at a time, so roughly
 
 339
-00:22:46,621 --> 00:22:51,482
-Run two or more copies in separate failure domains, such as availability zones, with
+00:25:03,665 --> 00:25:04,473
+twenty-three servers.
 
 340
-00:22:51,482 --> 00:22:53,913
-health checks and automatic failover in seconds.
+00:25:04,973 --> 00:25:10,501
+Step eight, network: twenty kilobyte responses give about four point eight gigabits total, about
 
 341
-00:22:54,563 --> 00:23:00,431
-Active-passive: a primary serves everything and replicates to an idle standby. Simple, but failover
+00:25:10,501 --> 00:25:15,238
+a quarter gigabit per server. C-P-U is the limit, not the network.
 
 342
-00:23:00,431 --> 00:23:06,299
-takes seconds to minutes. Active-active: all nodes serve, and survivors absorb a failure. Better,
+00:25:16,138 --> 00:25:20,934
+The naive answer, thirty thousand over four thousand, was eight. The ceiling and zone-loss
 
 343
-00:23:06,299 --> 00:23:09,652
-but hard for databases, where two writers conflict.
+00:25:20,934 --> 00:25:23,675
+rule explain the gap of about three times.
 
 344
-00:23:10,002 --> 00:23:15,392
-Standbys are cold, warm or hot: ready in hours, minutes, or seconds. Run N
+00:25:24,175 --> 00:25:28,646
+C-P-U per request set the number. Halve it and you halve the fleet.
 
 345
-00:23:15,392 --> 00:23:20,782
-plus one to survive a failure, N plus two to survive one during maintenance.
+00:25:29,146 --> 00:25:34,301
+Repeat per tier: caches are limited by memory, databases by disk and writes.
 
 346
-00:23:20,782 --> 00:23:26,172
-Beware split brain: two primaries both accepting writes. And test failover, or it fails
+00:25:34,801 --> 00:25:41,196
+Common mistakes: forgetting peak, replicas and index overhead, and false precision. Spend three to
 
 347
-00:23:26,172 --> 00:23:31,562
-when needed. Real example: Amazon R-D-S Multi-A-Z keeps a synchronous standby in another zone
+00:25:41,196 --> 00:25:43,023
+five minutes, out loud.
 
 348
-00:23:31,562 --> 00:23:36,952
-and fails over in a minute or two. In the interview: active-passive suits single-writer
+00:25:43,523 --> 00:25:49,654
+Pause: a hundred million daily users, twenty requests each. Plan for what Q-P-S?
 
 349
-00:23:36,952 --> 00:23:38,877
-databases; active-active suits stateless services.
+00:25:50,154 --> 00:25:54,488
+Two billion a day over ten to the five is twenty thousand average, about
 
 350
-00:23:39,527 --> 00:23:44,833
-Scalability is handling more load by adding resources, without a redesign and without collapsing.
+00:25:54,488 --> 00:25:58,821
+sixty thousand at peak. For scale, WhatsApp's hundred billion messages a day is about
 
 351
-00:23:45,183 --> 00:23:50,755
-Always name the load parameter: requests per second, data size, users. Say: we scale
+00:25:58,821 --> 00:26:00,059
+a million per second.
 
 352
-00:23:50,755 --> 00:23:53,940
-to ten times the requests by adding servers.
+00:26:00,959 --> 00:26:06,616
+Availability is the share of time a system works correctly: uptime over total time,
 
 353
-00:23:54,290 --> 00:23:59,386
-Dimensions: load, data, geography, and organisation, meaning more engineers.
+00:26:06,616 --> 00:26:12,272
+or successful requests over valid ones. Two nines, ninety-nine percent, allows three point six
 
 354
-00:23:59,737 --> 00:24:05,038
-Techniques: stateless servers, caches, read replicas, sharding, queues and C-D-Ns. More app servers don't
+00:26:12,272 --> 00:26:16,716
+five days down a year, seven point two hours a month.
 
 355
-00:24:05,038 --> 00:24:10,339
-help if the database is the bottleneck. Make the next ten times easy, not
+00:26:17,216 --> 00:26:21,841
+Three nines, ninety-nine point nine: eight point seven six hours a year, forty-three minutes
 
 356
-00:24:10,339 --> 00:24:11,096
-a thousand.
+00:26:21,841 --> 00:26:25,145
+a month, about a minute and a half a day.
 
 357
-00:24:11,746 --> 00:24:18,207
-Vertical scaling, scaling up, makes one machine bigger: a bigger bus. Horizontal scaling, scaling
+00:26:25,645 --> 00:26:30,430
+Ninety-nine point nine five: four point three eight hours a year, about twenty-two minutes
 
 358
-00:24:18,207 --> 00:24:20,514
-out, adds machines: more buses.
+00:26:30,430 --> 00:26:31,114
+a month.
 
 359
-00:24:20,864 --> 00:24:26,086
-Scaling up is often just a config change. Scaling out needs divisible work. Stateless
+00:26:31,614 --> 00:26:36,340
+Four nines: fifty-three minutes a year, four point three minutes a month. Less than
 
 360
-00:24:26,086 --> 00:24:29,069
-app servers are easy. Database writes need sharding.
+00:26:36,340 --> 00:26:41,066
+a human needs to wake up and log in, so recovery must be automatic.
 
 361
-00:24:29,719 --> 00:24:31,809
-Up is simple, with no code change.
+00:26:41,566 --> 00:26:47,044
+Five nines: about five minutes a year. Each nine cuts downtime ten times, and
 
 362
-00:24:32,159 --> 00:24:34,353
-But it has a ceiling, the biggest machine.
+00:26:47,044 --> 00:26:50,565
+usually costs far more than ten times the effort.
 
 363
-00:24:34,703 --> 00:24:38,767
-And it's still a SPOF, with big boxes costing disproportionately more.
+00:26:51,465 --> 00:26:56,557
+Let's measure a real outage with this table. In February twenty seventeen, Amazon S-three
 
 364
-00:24:39,117 --> 00:24:41,009
-Out is practically unlimited.
+00:26:56,557 --> 00:27:00,558
+in its biggest U-S region went down for about four hours.
 
 365
-00:24:41,359 --> 00:24:44,714
-Losing a node loses only a fraction, and nodes add live.
+00:27:01,058 --> 00:27:05,930
+The cause was human. An engineer ran a routine command to remove a few
 
 366
-00:24:45,064 --> 00:24:50,214
-But it needs statelessness or sharding, and consistency gets harder. Stack Overflow in twenty
+00:27:05,930 --> 00:27:10,803
+servers, mistyped one input, and removed far more than intended. Thousands of websites that
 
 367
-00:24:50,214 --> 00:24:55,363
-sixteen ran on eleven web servers and four database servers, so don't dismiss scaling
+00:27:10,803 --> 00:27:12,892
+stored files there broke with it.
 
 368
-00:24:55,363 --> 00:24:57,202
-up. Most systems do both.
+00:27:13,392 --> 00:27:17,642
+Against a three nines yearly budget of eight point seven six hours, that one
 
 369
-00:24:57,852 --> 00:25:02,712
-Elasticity is scaling up and down automatically as load changes, so you pay for
+00:27:17,642 --> 00:27:19,464
+afternoon used about half the year.
 
 370
-00:25:02,712 --> 00:25:07,572
-what you use. Scalability says we can grow; elasticity says we do it ourselves.
+00:27:19,964 --> 00:27:25,207
+Against a monthly target of ninety-nine point nine, which allows forty-three minutes, four hours
 
 371
-00:25:07,922 --> 00:25:13,694
-Autoscaling watches a metric: above seventy percent C-P-U for five minutes, add servers; below
+00:27:25,207 --> 00:27:28,578
+drops that month to about ninety-nine point four percent.
 
 372
-00:25:13,694 --> 00:25:16,992
-thirty, remove some. Serverless can scale to zero.
+00:27:29,078 --> 00:27:34,340
+Against four nines, fifty-three minutes a year, the budget was blown more than four
 
 373
-00:25:17,342 --> 00:25:23,372
-Limits: containers take seconds and V-Ms minutes to start, so spikes can outrun you.
+00:27:34,340 --> 00:27:37,346
+times over. One bad afternoon decides your nines.
 
 374
-00:25:23,372 --> 00:25:29,402
-Mostly stateless parts are elastic. Over-eager scale-down causes flapping. In the interview: scalability is
+00:27:38,246 --> 00:27:43,381
+Now, how parts combine. Parts in series must all work, so you multiply. A
 
 375
-00:25:29,402 --> 00:25:33,709
-the capability; elasticity is doing it automatically, in both directions.
+00:27:43,381 --> 00:27:48,516
+feed request goes through a load balancer at four nines, an app tier at
 
 376
-00:25:34,359 --> 00:25:38,760
-State is data remembered between requests, like logins or carts. A stateless service keeps
+00:27:48,516 --> 00:27:53,652
+three, and a database at three. Point nine nine nine nine times point nine
 
 377
-00:25:38,760 --> 00:25:43,162
-none in memory, so any copy serves any request, like a call centre. A
+00:27:53,652 --> 00:27:58,787
+nine nine times point nine nine nine: about ninety-nine point seven nine percent. Lower
 
 378
-00:25:43,162 --> 00:25:47,564
-stateful one ties you to a server, like a family doctor who's away on
+00:27:58,787 --> 00:28:00,254
+than the weakest link.
 
 379
-00:25:47,564 --> 00:25:47,878
-holiday.
+00:28:00,754 --> 00:28:05,610
+Parts in parallel need only one to work. Two independent servers at ninety-nine percent
 
 380
-00:25:48,228 --> 00:25:52,613
-To go stateless, keep sessions in Redis or a signed token, files in object
+00:28:05,610 --> 00:28:10,466
+are both down only one percent of one percent of the time: ninety-nine point
 
 381
-00:25:52,613 --> 00:25:56,998
-storage, and carts in a database. If you must stay stateful, like a game
+00:28:10,466 --> 00:28:13,934
+nine nine. Two cheap two-nines machines make a four-nines pair.
 
 382
-00:25:56,998 --> 00:26:00,131
-server, use sticky sessions and plan for that server dying.
+00:28:14,434 --> 00:28:19,169
+But only if failures are independent. Put both in one rack, and one power
 
 383
-00:26:00,481 --> 00:26:06,049
-Cost: one extra hop, usually under a millisecond. Classic bug: local sessions, a second
+00:28:19,169 --> 00:28:20,183
+cut takes both.
 
 384
-00:26:06,049 --> 00:26:10,424
-server, random logouts. And the state store itself still needs scaling.
+00:28:21,083 --> 00:28:25,994
+Going from three nines to four can mean several data centres and double the
 
 385
-00:26:11,074 --> 00:26:12,851
-Any copy handles any request.
+00:28:25,994 --> 00:28:29,502
+infrastructure. Many internal tools are fine at ninety-nine point five.
 
 386
-00:26:13,201 --> 00:26:16,417
-Add, remove or kill copies freely without losing data.
+00:28:30,002 --> 00:28:35,249
+Cloud S-L-As for single services are usually three or four nines. S-three is designed
 
 387
-00:26:16,767 --> 00:26:21,750
-State lives in stores built for replication. Recap: keep app servers stateless.
+00:28:35,249 --> 00:28:38,247
+for four nines but its contract promises three.
 
 388
-00:26:22,400 --> 00:26:25,256
-Performance is speed for one request at current load.
+00:28:38,747 --> 00:28:43,590
+Planned maintenance still counts as downtime. Users don't care why it's down.
 
 389
-00:26:25,606 --> 00:26:27,498
-It's about latency and efficiency.
+00:28:44,090 --> 00:28:49,938
+Interview question: how do you beat any single machine's availability? Redundant copies in parallel
 
 390
-00:26:27,848 --> 00:26:32,260
-Diagnostic: if one request to an idle system is slow, it's performance.
+00:28:49,938 --> 00:28:55,787
+across racks, zones or regions, with automatic failover and no single points of failure.
 
 391
-00:26:32,610 --> 00:26:35,687
-Scalability is whether that speed holds as load grows.
+00:28:55,787 --> 00:29:00,800
+Recap: three nines is forty-three minutes a month, four nines about four.
 
 392
-00:26:36,037 --> 00:26:38,974
-Fast alone but slow under traffic means scalability.
+00:29:01,700 --> 00:29:07,116
+Three terms, from most technical to most legal. An S-L-I, service level indicator, is
 
 393
-00:26:39,324 --> 00:26:45,246
-Pause: slow at three a.m. with no traffic? Performance. Profile the request, maybe an
+00:29:07,116 --> 00:29:07,890
+a measurement.
 
 394
-00:26:45,246 --> 00:26:47,784
-unindexed query. More servers won't help.
+00:29:08,390 --> 00:29:13,301
+An S-L-O, service level objective, is an internal target for that measurement.
 
 395
-00:26:48,434 --> 00:26:52,103
-Concurrency is many tasks in progress, interleaved while each waits.
+00:29:13,801 --> 00:29:20,237
+An S-L-A, service level agreement, is a contract with customers, with penalties, usually service
 
 396
-00:26:52,453 --> 00:26:55,286
-It's about organisation, and one core is enough.
+00:29:20,237 --> 00:29:20,697
+credits.
 
 397
-00:26:55,636 --> 00:26:59,072
-Rob Pike: concurrency is dealing with lots of things at once.
+00:29:21,197 --> 00:29:26,303
+Think of a pizza shop. The S-L-I is how long deliveries actually take. The
 
 398
-00:26:59,422 --> 00:27:02,011
-Parallelism is tasks running at the same instant.
+00:29:26,303 --> 00:29:31,408
+S-L-O is the manager's ninety-five percent within thirty minutes. The S-L-A is the printed
 
 399
-00:27:02,361 --> 00:27:05,241
-It's about execution, and needs multiple cores.
+00:29:31,408 --> 00:29:36,514
+promise: over forty-five minutes and it's free. The S-L-A is looser, so missing the
 
 400
-00:27:05,591 --> 00:27:11,008
-Parallelism is doing lots at once. One barista juggling orders is concurrent; three baristas
+00:29:36,514 --> 00:29:39,431
+S-L-O warns you before you have to pay.
 
 401
-00:27:11,008 --> 00:27:11,781
-is parallel.
+00:29:40,331 --> 00:29:45,726
+Now one real service: our photo app's feed A-P-I, serving a hundred million requests
 
 402
-00:27:12,431 --> 00:27:18,110
-Web servers mostly wait on I-O. An event loop sends query A, doesn't wait,
+00:29:45,726 --> 00:29:46,496
+a month.
 
 403
-00:27:18,110 --> 00:27:23,789
-starts request B, then finishes each as results arrive. Threads, processes and goroutines are
+00:29:46,996 --> 00:29:52,712
+The S-L-I: the percentage of feed requests that succeed in under three hundred milliseconds,
 
 404
-00:27:23,789 --> 00:27:27,439
-other routes to concurrency. Parallelism speeds up C-P-U-heavy work.
+00:29:52,712 --> 00:29:54,345
+measured over thirty days.
 
 405
-00:27:27,789 --> 00:27:32,316
-Hazards: a race condition, where two withdrawals both read a hundred and write ninety,
+00:29:54,845 --> 00:29:58,201
+The S-L-O: ninety-nine point nine percent of them.
 
 406
-00:27:32,316 --> 00:27:36,842
-losing one. Deadlock, where two tasks wait on each other's locks. And Amdahl's law:
+00:29:58,701 --> 00:30:04,151
+The S-L-A: ninety-nine point five percent, or business customers get ten percent of their
 
 407
-00:27:36,842 --> 00:27:41,368
-if ten percent of a job is serial, infinite cores give at most ten
+00:30:04,151 --> 00:30:06,098
+bill back. Looser on purpose.
 
 408
-00:27:41,368 --> 00:27:41,692
-times.
+00:30:06,598 --> 00:30:11,631
+The error budget is one minus the S-L-O: point one percent. Of a hundred
 
 409
-00:27:42,342 --> 00:27:45,442
-Use concurrency for I-O-bound work that mostly waits.
+00:30:11,631 --> 00:30:14,866
+million requests, a hundred thousand may fail this month.
 
 410
-00:27:45,792 --> 00:27:50,713
-Use parallelism for C-P-U-bound work, but no more C-P-U threads than cores, or you
+00:30:15,366 --> 00:30:20,691
+Incident one. A bad deploy fails two percent of requests for an hour. An
 
 411
-00:27:50,713 --> 00:27:52,119
-only add switching overhead.
+00:30:20,691 --> 00:30:26,017
+hour is about a hundred and thirty-nine thousand requests, so about twenty-eight hundred failed.
 
 412
-00:27:52,469 --> 00:27:58,599
-Interview question: is single-threaded Node concurrent? Yes, via its event loop. But not parallel
+00:30:26,017 --> 00:30:30,582
+That's under three percent of the budget. Roll back and keep shipping.
 
 413
-00:27:58,599 --> 00:28:04,729
-for JavaScript; run several processes for more cores. Recap: concurrency juggles, parallelism does at
+00:30:31,082 --> 00:30:36,885
+Incident two. The database dies and the feed is down for thirty minutes: about
 
 414
-00:28:04,729 --> 00:28:05,167
-once.
+00:30:36,885 --> 00:30:42,688
+seventy thousand failures, seventy percent of the budget. The team freezes risky launches and
 
 415
-00:28:05,817 --> 00:28:11,198
-A bottleneck is the part that limits capacity; fixing anything else won't help. C-P-U:
+00:30:42,688 --> 00:30:48,492
+works on failover. Still inside the S-L-A, so no refunds. The warning came first.
 
 416
-00:28:11,198 --> 00:28:14,657
-near a hundred percent. Optimise, cache, or add cores.
+00:30:49,392 --> 00:30:55,990
+So the budget turns reliability into a shared decision. While budget remains, ship fast.
 
 417
-00:28:15,007 --> 00:28:19,723
-Memory: swapping or out-of-memory crashes. Add RAM or evict wisely.
+00:30:55,990 --> 00:31:02,588
+When it's spent, freeze risky changes and fix reliability. The idea comes from Google's
 
 418
-00:28:20,073 --> 00:28:24,534
-Disk: high wait times. Use S-S-Ds, caching, sharding.
+00:31:02,588 --> 00:31:04,002
+site reliability engineering.
 
 419
-00:28:24,884 --> 00:28:29,856
-Network: saturated links. Compress, use C-D-Ns, make fewer calls.
+00:31:04,502 --> 00:31:10,034
+Rules of thumb: pick indicators users feel, like failed checkouts, not C-P-U. Never set
 
 420
-00:28:30,506 --> 00:28:35,873
-Disks have two limits. I-O-P-S counts small random operations, like lookups. Throughput counts megabytes
+00:31:10,034 --> 00:31:15,565
+an S-L-O of a hundred percent, because any change would violate it. Measure over
 
 421
-00:28:35,873 --> 00:28:41,240
-per second for big sequential transfers. A hard disk does about seventy-five to a
+00:31:15,565 --> 00:31:20,307
+a rolling thirty days, and alert when the budget burns too fast.
 
 422
-00:28:41,240 --> 00:28:44,690
-hundred and fifty I-O-P-S, since the arm must move.
+00:31:21,207 --> 00:31:27,302
+Two measures of failure. M-T-B-F, mean time between failures, is how long a system
 
 423
-00:28:45,040 --> 00:28:49,579
-A SATA S-S-D: tens of thousands, at about five hundred megabytes a second.
+00:31:27,302 --> 00:31:33,398
+runs before it breaks. Higher is better. M-T-T-R, mean time to repair or recover,
 
 424
-00:28:49,929 --> 00:28:52,867
-N-V-M-e: hundreds of thousands to about a million.
+00:31:33,398 --> 00:31:37,316
+is how long it stays broken. Lower is better.
 
 425
-00:28:53,217 --> 00:28:57,862
-A cloud gp3 disk starts at three thousand I-O-P-S and a hundred and twenty-five
+00:31:37,816 --> 00:31:45,029
+Availability is M-T-B-F divided by M-T-B-F plus M-T-T-R. There's also M-T-T-D, mean time to
 
 426
-00:28:57,862 --> 00:29:02,508
-megabytes per second. Twenty thousand random reads a second needs over a hundred hard
+00:31:45,029 --> 00:31:50,695
+detect: how long before anyone notices. Detection is part of repair.
 
 427
-00:29:02,508 --> 00:29:04,167
-disks, or one N-V-M-e drive.
+00:31:51,595 --> 00:31:56,960
+Take our photo app's database server. On average it fails once every thousand hours,
 
 428
-00:29:04,817 --> 00:29:07,525
-Measure each resource under load. Don't guess.
+00:31:56,960 --> 00:31:58,493
+about every six weeks.
 
 429
-00:29:07,875 --> 00:29:13,340
-Look for limits and queues: full thread pools, exhausted connections, lock waits. Also hot
+00:31:58,993 --> 00:32:06,148
+Version one, manual recovery. Nobody notices for thirty minutes, until users complain. That's the
 
 430
-00:29:13,340 --> 00:29:14,902
-rows and rate limits.
+00:32:06,148 --> 00:32:07,170
+detection time.
 
 431
-00:29:15,252 --> 00:29:18,145
-Fix, then re-measure. The bottleneck moves.
+00:32:07,670 --> 00:32:13,548
+Then an engineer logs in, diagnoses, and promotes the replica: another thirty minutes. So
 
 432
-00:29:18,495 --> 00:29:24,336
-Pause: latency rises but C-P-U is at thirty percent? Look elsewhere: disk, network, a
+00:32:13,548 --> 00:32:15,648
+M-T-T-R is about an hour.
 
 433
-00:29:24,336 --> 00:29:28,091
-pool, a lock. Most web services are I-O bound.
+00:32:16,148 --> 00:32:21,686
+Availability: a thousand over a thousand and one, about ninety-nine point nine percent.
 
 434
-00:29:28,740 --> 00:29:35,527
-The interview is forty-five to sixty open-ended minutes. Seven steps: requirements, five minutes. Estimates,
+00:32:22,186 --> 00:32:27,886
+Version two, same failure rate. A health check spots it and automatic failover finishes
 
 435
-00:29:35,527 --> 00:29:42,313
-three to five. A-P-I, five. Data model, five. High-level design, ten. Deep dives, ten
+00:32:27,886 --> 00:32:29,107
+in ten seconds.
 
 436
-00:29:42,313 --> 00:29:45,222
-to fifteen. Trade-offs, three to five.
+00:32:29,607 --> 00:32:35,529
+Availability: about ninety-nine point nine nine nine seven percent. Three nines to five, without
 
 437
-00:29:45,872 --> 00:29:51,239
-One: requirements. Functional is what it does: create short links, redirect. Non-functional is how
+00:32:35,529 --> 00:32:41,451
+the machine failing any less. At scale something is always failing, so cutting M-T-T-R
 
 438
-00:29:51,239 --> 00:29:56,606
-well: a hundred million links a month, redirects under fifty milliseconds at p ninety-nine.
+00:32:41,451 --> 00:32:43,566
+is usually the cheaper lever.
 
 439
-00:29:56,606 --> 00:29:58,523
-Agree what's out of scope.
+00:32:44,466 --> 00:32:49,216
+Three words people mix up. Availability: can I use it right now?
 
 440
-00:29:58,873 --> 00:30:03,787
-Two: estimates, and what they imply. A hundred reads per write means caching matters.
+00:32:49,716 --> 00:32:55,382
+Reliability: does it do the right thing over time? A system can be available
 
 441
-00:30:04,137 --> 00:30:09,246
-Three: the A-P-I. POST slash links returns a short code; GET slash code returns
+00:32:55,382 --> 00:32:58,216
+but unreliable, answering fast with wrong data.
 
 442
-00:30:09,246 --> 00:30:11,070
-a three oh one redirect.
+00:32:58,716 --> 00:33:04,354
+Durability: will saved data survive crashes and dead disks? A system can be down
 
 443
-00:30:11,420 --> 00:30:16,592
-Four: data model. A links table keyed by short code, with long U-R-L and
+00:33:04,354 --> 00:33:07,576
+but durable: offline for an hour, nothing lost.
 
 444
-00:30:16,592 --> 00:30:16,961
-expiry.
+00:33:08,476 --> 00:33:13,389
+Think of a bank. The cash machine works when you walk up: availability.
 
 445
-00:30:17,311 --> 00:30:21,052
-Five: high-level design. Walk one write and one read.
+00:33:13,889 --> 00:33:17,476
+It gives the right amount and debits the right account: reliability.
 
 446
-00:30:21,402 --> 00:30:26,629
-Six: deep dives, like collision-free codes and caching hot links. Seven: weaknesses, SPOFs, monitoring,
+00:33:17,976 --> 00:33:21,529
+Your balance survives a flood at the branch: durability.
 
 447
-00:30:26,629 --> 00:30:31,856
-and what changes at ten times. Get a complete simple design before going deep.
+00:33:22,029 --> 00:33:28,326
+A real number: S-three is designed for eleven nines of durability. Store ten million
 
 448
-00:30:31,856 --> 00:30:37,082
-If they say design Twitter, your first move is clarifying questions: which features, how
+00:33:28,326 --> 00:33:34,624
+objects and you'd lose one about once in ten thousand years. But availability is
 
 449
-00:30:37,082 --> 00:30:39,696
-many users, what read and write mix.
+00:33:34,624 --> 00:33:40,921
+only four nines. Separate promises, separate techniques: availability from redundancy and failover, durability from
 
 450
-00:30:40,346 --> 00:30:47,157
-Make each requirement measurable and name its lever. Availability: percent successful requests. Lever: redundancy
+00:33:40,921 --> 00:33:45,869
+copies in separate places, writing to disk before confirming, and backups.
 
 451
-00:30:47,157 --> 00:30:48,130
-and failover.
+00:33:46,369 --> 00:33:51,979
+And replication isn't backup. A bug that deletes your photos is faithfully copied to
 
 452
-00:30:48,480 --> 00:30:54,148
-Latency: p ninety-nine per endpoint. Lever: caches, C-D-Ns, fewer trips.
+00:33:51,979 --> 00:33:55,184
+every replica. Only a backup brings them back.
 
 453
-00:30:54,498 --> 00:30:59,864
-Scalability: peak Q-P-S. Lever: stateless services, sharding, queues.
+00:33:55,684 --> 00:34:01,499
+Pause: can a system be durable but not available? Yes. A database down for
 
 454
-00:31:00,215 --> 00:31:05,709
-Consistency: who sees a write, and how soon. Lever: leaders, quorums, consensus.
+00:34:01,499 --> 00:34:07,313
+maintenance can't be read, but its data is safe on disk. Recap: usable now,
 
 455
-00:31:06,059 --> 00:31:11,843
-Durability: never lose an acknowledged write. Lever: logs, replication, backups.
+00:34:07,313 --> 00:34:09,389
+correct over time, data survives.
 
 456
-00:31:12,193 --> 00:31:19,208
-Reliability: error rate and M-T-T-R, via timeouts and retries. Security: auth and encryption.
+00:34:10,289 --> 00:34:15,478
+A fault is one part going wrong. A failure is the whole system not
 
 457
-00:31:19,558 --> 00:31:26,474
-Maintainability means operable, simple, and evolvable: dashboards per S-L-O, versioned schemas, canary deploys. And
+00:34:15,478 --> 00:34:20,667
+serving users. Fault tolerance stops faults becoming failures, like a twin-engine plane landing on
 
 458
-00:31:26,474 --> 00:31:33,389
-cost per request. Common mistakes: drawing before requirements, naming tech without reasons, and over-engineering
+00:34:20,667 --> 00:34:25,855
+one engine. Here are five kinds of fault, each in our photo app. Hardware:
 
 459
-00:31:33,389 --> 00:31:35,365
-a hundred Q-P-S system.
+00:34:25,855 --> 00:34:30,673
+a disk in the database server dies. Defence: a replica on another machine.
 
 460
-00:31:36,015 --> 00:31:39,602
-Design is parts plus trade-offs, built from eight standard boxes.
+00:34:31,173 --> 00:34:36,732
+Software: a release leaks memory and app servers crash every few hours. Defence: tests,
 
 461
-00:31:39,952 --> 00:31:44,343
-Use percentiles, not averages. Latency explodes near full load.
+00:34:36,732 --> 00:34:39,511
+and rolling out to five percent first.
 
 462
-00:31:44,693 --> 00:31:49,788
-Little's law sizes pools. RAM is nanoseconds, a data-centre trip half a millisecond, an
+00:34:40,011 --> 00:34:46,697
+Network: a link between two zones drops packets. Defence: timeouts, retries, and replicas in
 
 463
-00:31:49,788 --> 00:31:52,335
-ocean seventy to a hundred and fifty.
+00:34:46,697 --> 00:34:47,652
+other zones.
 
 464
-00:31:52,685 --> 00:31:57,182
-Divide per-day counts by ten to the five, then apply peak, utilisation and zone
+00:34:48,152 --> 00:34:54,519
+Human: someone pushes a config pointing every server at the wrong database. Defence: reviews,
 
 465
-00:31:57,182 --> 00:31:57,503
-loss.
+00:34:54,519 --> 00:34:59,521
+backups, and fast rollback. Big cloud outages are often this kind.
 
 466
-00:31:57,854 --> 00:32:02,105
-Three nines is forty-three minutes a month. Cut M-T-T-R and remove SPOFs.
+00:35:00,021 --> 00:35:06,173
+Dependency: the third-party face-tagging A-P-I is slow. Defence: timeouts, a fallback that skips tagging,
 
 467
-00:32:02,455 --> 00:32:08,569
-Keep servers stateless, measure bottlenecks, and follow the seven steps. Next episode: networking, from
+00:35:06,173 --> 00:35:11,006
+and a circuit breaker that stops calling it for a while.
 
 468
-00:32:08,569 --> 00:32:11,189
+00:35:11,906 --> 00:35:16,967
+Faults also differ by how the broken part behaves. These are failure models. Each
+
+469
+00:35:16,967 --> 00:35:22,029
+row allows more misbehaviour than the last, so it's harder to tolerate. Here's a
+
+470
+00:35:22,029 --> 00:35:23,475
+real case for each.
+
+471
+00:35:23,975 --> 00:35:29,140
+Fail-stop: the part halts, and everyone is reliably told. It's an idealisation, approximated by
+
+472
+00:35:29,140 --> 00:35:34,305
+fencing: a power switch cuts a suspect node off, so the rest know for
+
+473
+00:35:34,305 --> 00:35:35,412
+sure it's down.
+
+474
+00:35:35,912 --> 00:35:40,982
+Crash-stop: the process halts silently, say killed by the operating system for using too
+
+475
+00:35:40,982 --> 00:35:46,051
+much memory. Nobody is told, and a dead node looks exactly like a slow
+
+476
+00:35:46,051 --> 00:35:51,120
+one. Majority quorums need two f plus one nodes to survive f crashes: three
+
+477
+00:35:51,120 --> 00:35:51,844
+survive one.
+
+478
+00:35:52,344 --> 00:35:57,926
+Crash-recovery: the node crashes and restarts with only what it saved to disk. A
+
+479
+00:35:57,926 --> 00:36:03,508
+server loses power, reboots, and replays its write-ahead log. Anything it acknowledged but held
+
+480
+00:36:03,508 --> 00:36:07,894
+only in memory is gone, so write durably before you acknowledge.
+
+481
+00:36:08,394 --> 00:36:14,018
+Omission: the node keeps running but drops some messages. A full network buffer silently
+
+482
+00:36:14,018 --> 00:36:19,642
+loses a payment-done message. The sender retries, so the handler must be idempotent, or
+
+483
+00:36:19,642 --> 00:36:21,249
+the customer pays twice.
+
+484
+00:36:21,749 --> 00:36:27,752
+Timing: right answers, too late. A database node freezes for ten seconds in a
+
+485
+00:36:27,752 --> 00:36:33,756
+garbage-collection pause. Its leader lease expires, another node takes over, and the old one
+
+486
+00:36:33,756 --> 00:36:38,473
+wakes up still thinking it leads. Defences: timeouts, deadlines, careful leases.
+
+487
+00:36:38,973 --> 00:36:44,438
+Byzantine: anything at all, even lies. In twenty oh eight, an Amazon S-three outage
+
+488
+00:36:44,438 --> 00:36:49,903
+of several hours was traced to a single flipped bit in the servers' internal
+
+489
+00:36:49,903 --> 00:36:55,368
+status messages. Defences are checksums and signatures, and full Byzantine tolerance needs three f
+
+490
+00:36:55,368 --> 00:37:00,833
+plus one replicas. That's why Raft survives one crash with three nodes, but a
+
+491
+00:37:00,833 --> 00:37:02,395
+Byzantine protocol needs four.
+
+492
+00:37:03,295 --> 00:37:08,649
+Most data centres assume crash-recovery, omission and timing faults, and add checksums for corrupted
+
+493
+00:37:08,649 --> 00:37:14,003
+data. Then you handle a fault in three moves. Say the thumbnail service starts
+
+494
+00:37:14,003 --> 00:37:19,357
+hanging. Detect: a health check every five seconds fails three times in a row.
+
+495
+00:37:19,857 --> 00:37:24,571
+Isolate: app servers call it with a two-second timeout. Without that, a dependency taking
+
+496
+00:37:24,571 --> 00:37:29,286
+thirty seconds to fail ties up every thread, and the whole app hangs. A
+
+497
+00:37:29,286 --> 00:37:31,981
+fast error is better than a slow one.
+
+498
+00:37:32,481 --> 00:37:38,569
+Recover: route around the bad copies and restart them. Uploads still work. Thumbnails are
+
+499
+00:37:38,569 --> 00:37:39,438
+just late.
+
+500
+00:37:39,938 --> 00:37:45,425
+And watch for correlated failure: one bad deploy breaks every copy at once. Netflix's
+
+501
+00:37:45,425 --> 00:37:50,912
+Chaos Monkey randomly kills production servers so teams have to build for this. Recap:
+
+502
+00:37:50,912 --> 00:37:54,048
+faults happen to parts, failures to the system.
+
+503
+00:37:54,948 --> 00:37:57,862
+Redundancy means a spare for each critical part.
+
+504
+00:37:58,362 --> 00:38:03,937
+A single point of failure, a spof, is any part whose loss alone stops
+
+505
+00:38:03,937 --> 00:38:09,512
+everything: one database, one load balancer, one D-N-S provider, even one engineer who knows
+
+506
+00:38:09,512 --> 00:38:10,309
+the password.
+
+507
+00:38:10,809 --> 00:38:15,622
+Failover moves work to the spare, like a hospital switching to backup generators within
+
+508
+00:38:15,622 --> 00:38:16,997
+seconds of a blackout.
+
+509
+00:38:17,497 --> 00:38:22,605
+To find spofs, ask of every box: if this disappears, what happens? Let's do
+
+510
+00:38:22,605 --> 00:38:24,430
+that to the photo app.
+
+511
+00:38:25,330 --> 00:38:31,227
+D-N-S. If our one D-N-S provider goes down, nobody can find the app at
+
+512
+00:38:31,227 --> 00:38:36,281
+all. Fix: a second provider, or a managed service that's redundant inside.
+
+513
+00:38:36,781 --> 00:38:41,996
+Load balancer. A single one is a spof. Run a pair, or use a
+
+514
+00:38:41,996 --> 00:38:42,740
+managed one.
+
+515
+00:38:43,240 --> 00:38:48,943
+App servers. We run three across zones. Lose one and the others carry on.
+
+516
+00:38:48,943 --> 00:38:50,165
+Not a spof.
+
+517
+00:38:50,665 --> 00:38:57,252
+Database. One primary. If it dies, every upload and every cache miss fails. That's
+
+518
+00:38:57,252 --> 00:39:02,897
+our biggest spof. Fix: a standby in another zone with automatic failover.
+
+519
+00:39:03,397 --> 00:39:08,300
+Cache. If it dies, nothing is lost, but all fifteen thousand peak reads hit
+
+520
+00:39:08,300 --> 00:39:12,503
+the database at once and swamp it. So run cache replicas too.
+
+521
+00:39:13,003 --> 00:39:19,041
+Object storage. A managed service that already copies data across zones. Fine. Common mistake:
+
+522
+00:39:19,041 --> 00:39:25,079
+making app servers redundant but leaving one database, or putting all the copies in
+
+523
+00:39:25,079 --> 00:39:25,941
+one rack.
+
+524
+00:39:26,841 --> 00:39:33,330
+Two ways to run the copies. Active-passive: a primary serves everything and replicates to
+
+525
+00:39:33,330 --> 00:39:39,818
+an idle standby. Simple, but failover takes seconds to minutes. It suits single-writer databases,
+
+526
+00:39:39,818 --> 00:39:41,672
+like our photo database.
+
+527
+00:39:42,172 --> 00:39:48,330
+Active-active: all nodes serve, and survivors absorb a failure. Better use of hardware and
+
+528
+00:39:48,330 --> 00:39:54,489
+faster recovery, but hard for databases, where two writers can conflict. It suits stateless
+
+529
+00:39:54,489 --> 00:39:56,688
+services, like our app servers.
+
+530
+00:39:57,588 --> 00:40:03,146
+Standbys come in three temperatures. Let's apply each to the photo database dying at
+
+531
+00:40:03,146 --> 00:40:03,940
+eight p.m.
+
+532
+00:40:04,440 --> 00:40:09,993
+Cold standby: the spare is only last night's backup. Someone restores it onto a
+
+533
+00:40:09,993 --> 00:40:15,545
+fresh machine. That takes hours, and every photo since the backup is lost. Cheap,
+
+534
+00:40:15,545 --> 00:40:17,925
+and fine for an internal tool.
+
+535
+00:40:18,425 --> 00:40:23,482
+Warm standby: a replica is already running, but copying a few minutes behind. Promote
+
+536
+00:40:23,482 --> 00:40:28,539
+it and you're back in minutes, maybe losing the last few seconds of writes.
+
+537
+00:40:29,039 --> 00:40:34,850
+Hot standby: a replica fully in sync, confirming every write before the primary acknowledges
+
+538
+00:40:34,850 --> 00:40:40,662
+it. Failover is automatic, in seconds, losing nothing. A real managed example: Amazon R-D-S
+
+539
+00:40:40,662 --> 00:40:46,474
+Multi-A-Z keeps a synchronous standby in another zone and fails over on its own,
+
+540
+00:40:46,474 --> 00:40:48,965
+typically within a minute or two.
+
+541
+00:40:49,465 --> 00:40:55,192
+How many spares? If N servers handle peak, run N plus one to survive
+
+542
+00:40:55,192 --> 00:41:00,919
+a failure: if thirteen handle peak, run fourteen. N plus two, fifteen, survives a
+
+543
+00:41:00,919 --> 00:41:02,146
+failure during maintenance.
+
+544
+00:41:02,646 --> 00:41:08,169
+Two warnings. Split brain: if a slow primary is wrongly declared dead, two primaries
+
+545
+00:41:08,169 --> 00:41:13,691
+accept writes and the data forks. And test failover, because untested failover fails when
+
+546
+00:41:13,691 --> 00:41:14,875
+you need it.
+
+547
+00:41:15,775 --> 00:41:20,934
+Scalability is handling more load by adding resources, without a redesign and without collapsing.
+
+548
+00:41:20,934 --> 00:41:26,094
+A restaurant that serves more diners by adding tables and cooks scales. One whose
+
+549
+00:41:26,094 --> 00:41:29,780
+tiny kitchen tops out at fifty meals an hour doesn't.
+
+550
+00:41:30,280 --> 00:41:35,392
+Always name the load parameter and the factor. Not, it's scalable. Say: we can
+
+551
+00:41:35,392 --> 00:41:39,408
+go to ten times the requests per second by adding servers.
+
+552
+00:41:39,908 --> 00:41:44,704
+Four dimensions, shown on the photo app. Load: peak reads grow from fifteen thousand
+
+553
+00:41:44,704 --> 00:41:47,445
+to a hundred and fifty thousand a second.
+
+554
+00:41:47,945 --> 00:41:52,531
+Data: one terabyte a day becomes nearly two petabytes in five years.
+
+555
+00:41:53,031 --> 00:41:57,454
+Geography: users in Sydney want the feed as fast as users in Virginia.
+
+556
+00:41:57,954 --> 00:42:04,295
+Organisation: the team grows from five engineers to fifty, who must ship without stepping
+
+557
+00:42:04,295 --> 00:42:10,635
+on each other. Techniques: stateless servers, caches, replicas, sharding, queues and C-D-Ns. Scale the
+
+558
+00:42:10,635 --> 00:42:16,069
+real bottleneck, and make the next ten times easy, not a thousand.
+
+559
+00:42:16,969 --> 00:42:24,208
+Vertical scaling, scaling up, makes one machine bigger: a bigger bus. Horizontal scaling, scaling
+
+560
+00:42:24,208 --> 00:42:26,793
+out, adds machines: more buses.
+
+561
+00:42:27,293 --> 00:42:32,353
+Scaling up is often just a config change in the cloud. Scaling out needs
+
+562
+00:42:32,353 --> 00:42:37,413
+work you can divide. Stateless app servers are easy. Database writes need sharding: each
+
+563
+00:42:37,413 --> 00:42:39,581
+machine holds part of the data.
+
+564
+00:42:40,481 --> 00:42:46,308
+Let's grow the photo app. At launch, a thousand users: one machine with four
+
+565
+00:42:46,308 --> 00:42:50,469
+cores and sixteen gigabytes runs everything. That's correct, not lazy.
+
+566
+00:42:50,969 --> 00:42:56,733
+At a hundred thousand users, it's busy. Scale up: stop it, pick a sixty-four
+
+567
+00:42:56,733 --> 00:43:02,496
+core, five hundred gigabyte machine, start it. A few minutes of downtime, zero code
+
+568
+00:43:02,496 --> 00:43:02,908
+changes.
+
+569
+00:43:03,408 --> 00:43:08,657
+At a million users, one machine is a spof. Scale out the app tier:
+
+570
+00:43:08,657 --> 00:43:13,907
+three stateless servers behind a load balancer. Keep one big database, plus a standby.
+
+571
+00:43:14,407 --> 00:43:19,519
+At ten million users, the database is the limit. Send reads to replicas and
+
+572
+00:43:19,519 --> 00:43:24,267
+a cache. That's out for reads, but writes still go to one primary.
+
+573
+00:43:24,767 --> 00:43:31,056
+Beyond that, writes outgrow the biggest machine. Now shard: split users across several databases.
+
+574
+00:43:31,056 --> 00:43:34,650
+That's real redesign work, so you delay it.
+
+575
+00:43:35,550 --> 00:43:38,116
+Up is simple, with no code change.
+
+576
+00:43:38,616 --> 00:43:42,180
+But it has a hard ceiling: the biggest machine you can buy.
+
+577
+00:43:42,680 --> 00:43:46,999
+And it's still a spof, with big boxes costing disproportionately more.
+
+578
+00:43:47,499 --> 00:43:49,392
+Out is practically unlimited.
+
+579
+00:43:49,892 --> 00:43:53,665
+Losing a node loses only a fraction, and you add nodes live.
+
+580
+00:43:54,165 --> 00:43:59,666
+But it needs statelessness or sharding, and consistency gets harder. Don't dismiss scaling up:
+
+581
+00:43:59,666 --> 00:44:05,167
+Stack Overflow in twenty sixteen ran a huge site on eleven web servers and
+
+582
+00:44:05,167 --> 00:44:06,345
+four database servers.
+
+583
+00:44:07,245 --> 00:44:12,842
+Elasticity is scaling up and down automatically as load changes, so you pay for
+
+584
+00:44:12,842 --> 00:44:18,439
+roughly what you use. Scalability says we can grow. Elasticity says we grow and
+
+585
+00:44:18,439 --> 00:44:23,236
+shrink by ourselves, like a supermarket opening checkouts when queues get long.
+
+586
+00:44:23,736 --> 00:44:30,228
+Autoscaling watches a metric, like C-P-U, requests per second or queue length. Above a
+
+587
+00:44:30,228 --> 00:44:36,721
+threshold, add servers. Below another, remove some. Serverless platforms can even scale to zero.
+
+588
+00:44:37,221 --> 00:44:43,435
+The limits: containers start in seconds, virtual machines in minutes, so a sudden spike
+
+589
+00:44:43,435 --> 00:44:49,206
+can outrun you. Mostly stateless parts are elastic. And over-eager scale-down causes flapping.
+
+590
+00:44:50,106 --> 00:44:54,935
+An online shop normally runs ten app servers at about forty percent C-P-U.
+
+591
+00:44:55,435 --> 00:45:00,449
+At eight p.m. the Black Friday sale opens and traffic jumps four times in
+
+592
+00:45:00,449 --> 00:45:05,463
+a few minutes. C-P-U passes seventy percent and stays there for five minutes, so
+
+593
+00:45:05,463 --> 00:45:06,896
+the autoscaler adds servers.
+
+594
+00:45:07,396 --> 00:45:12,446
+Containers start in seconds, and the fleet grows to about thirty, with C-P-U near
+
+595
+00:45:12,446 --> 00:45:17,497
+sixty percent. Virtual machines taking minutes would have left users with a slow first
+
+596
+00:45:17,497 --> 00:45:18,218
+few minutes.
+
+597
+00:45:18,718 --> 00:45:24,512
+After midnight traffic falls and C-P-U drops below thirty percent. The autoscaler removes servers
+
+598
+00:45:24,512 --> 00:45:27,822
+gradually, with a cooldown so it doesn't flap.
+
+599
+00:45:28,322 --> 00:45:34,207
+Next year they pre-scale at seven thirty on a schedule, so the spike never
+
+600
+00:45:34,207 --> 00:45:40,092
+outruns them. In the interview: scalability is the capability, elasticity is doing it automatically,
+
+601
+00:45:40,092 --> 00:45:40,932
+both ways.
+
+602
+00:45:41,832 --> 00:45:46,321
+State is data remembered between requests, like who's logged in, or a cart. A
+
+603
+00:45:46,321 --> 00:45:50,810
+stateless service keeps none of it in its own memory, so any copy can
+
+604
+00:45:50,810 --> 00:45:55,298
+serve any request, like a call centre where any agent can pull up your
+
+605
+00:45:55,298 --> 00:45:59,787
+file. A stateful one ties you to one server, like a family doctor who
+
+606
+00:45:59,787 --> 00:46:03,314
+keeps your history in their head: great until they're on holiday.
+
+607
+00:46:03,814 --> 00:46:08,877
+On the left, user A's session lives inside server one. On the right, any
+
+608
+00:46:08,877 --> 00:46:13,941
+server can take the request, because the session lives in a shared Redis. Let's
+
+609
+00:46:13,941 --> 00:46:16,472
+watch why that matters with one login.
+
+610
+00:46:17,372 --> 00:46:22,140
+Step one. Priya logs in to the photo app. The load balancer sends her
+
+611
+00:46:22,140 --> 00:46:25,886
+to server one, which stores her session in its own memory.
+
+612
+00:46:26,386 --> 00:46:31,460
+Step two. Her next tap goes to server two, which has never heard of
+
+613
+00:46:31,460 --> 00:46:36,534
+her, so she's back at the login page. Local sessions plus a second server
+
+614
+00:46:36,534 --> 00:46:38,709
+means random logouts. A classic bug.
+
+615
+00:46:39,209 --> 00:46:44,412
+Step three, the patch: sticky sessions. The load balancer always sends Priya to server
+
+616
+00:46:44,412 --> 00:46:49,614
+one. It works, until server one crashes or gets redeployed, and every user on
+
+617
+00:46:49,614 --> 00:46:51,844
+it is logged out at once.
+
+618
+00:46:52,344 --> 00:46:56,802
+Step four, the fix. Server one puts the session in Redis and gives Priya
+
+619
+00:46:56,802 --> 00:47:01,260
+a cookie with just a session I-D. Any server looks it up in about
+
+620
+00:47:01,260 --> 00:47:02,216
+half a millisecond.
+
+621
+00:47:02,716 --> 00:47:08,331
+Step five, the other fix: a signed token, a J-W-T, holding her user I-D.
+
+622
+00:47:08,331 --> 00:47:12,342
+Any server checks the signature, with no lookup at all.
+
+623
+00:47:12,842 --> 00:47:17,689
+Now kill any server and Priya doesn't notice. The cost is that small extra
+
+624
+00:47:17,689 --> 00:47:22,536
+hop, and Redis now needs its own spares, because the state moved, it didn't
+
+625
+00:47:22,536 --> 00:47:27,382
+vanish. Game and chat servers stay stateful by nature, so they use sticky sessions
+
+626
+00:47:27,382 --> 00:47:29,459
+and plan for that server dying.
+
+627
+00:47:30,359 --> 00:47:33,378
+Performance is speed for one request at the current load.
+
+628
+00:47:33,878 --> 00:47:35,968
+It's about latency and efficiency.
+
+629
+00:47:36,468 --> 00:47:43,168
+Diagnostic: send one request to an idle system. If even that's slow, it's performance.
+
+630
+00:47:43,668 --> 00:47:46,989
+Scalability is whether that speed holds as load grows.
+
+631
+00:47:47,489 --> 00:47:51,030
+Fast alone but slow under traffic: that's scalability.
+
+632
+00:47:51,530 --> 00:47:56,402
+A sports car is fast for one person but seats two. A train is
+
+633
+00:47:56,402 --> 00:48:00,926
+slower off the mark but carries a thousand. Let's diagnose two real-looking complaints.
+
+634
+00:48:01,826 --> 00:48:07,020
+Complaint one: the feed takes two seconds even at three a.m., with almost no
+
+635
+00:48:07,020 --> 00:48:12,213
+traffic. Even one request is slow, so it's performance. Profiling shows a query scanning
+
+636
+00:48:12,213 --> 00:48:17,407
+all ten million photos because a column has no index. Add the index and
+
+637
+00:48:17,407 --> 00:48:21,488
+it takes about five milliseconds. More servers would have done nothing.
+
+638
+00:48:21,988 --> 00:48:27,212
+Complaint two: the feed takes a hundred milliseconds alone, but three seconds at the
+
+639
+00:48:27,212 --> 00:48:32,436
+evening peak. Fast alone, slow under load, so it's scalability. The database sits at
+
+640
+00:48:32,436 --> 00:48:36,167
+a hundred percent, so add a cache and read replicas.
+
+641
+00:48:36,667 --> 00:48:41,783
+And one change can trade them: a hop to a shared cache costs every
+
+642
+00:48:41,783 --> 00:48:46,898
+request half a millisecond, but lets you scale out. Recap: diagnose which one before
+
+643
+00:48:46,898 --> 00:48:47,629
+you fix.
+
+644
+00:48:48,529 --> 00:48:53,481
+Concurrency is many tasks in progress over the same period, interleaved while each one
+
+645
+00:48:53,481 --> 00:48:53,835
+waits.
+
+646
+00:48:54,335 --> 00:48:57,736
+It's about how work is organised, and one core is enough.
+
+647
+00:48:58,236 --> 00:49:03,138
+Rob Pike, a co-creator of Go, put it this way: concurrency is dealing with
+
+648
+00:49:03,138 --> 00:49:04,889
+lots of things at once.
+
+649
+00:49:05,389 --> 00:49:08,314
+Parallelism is tasks running at the very same instant.
+
+650
+00:49:08,814 --> 00:49:12,669
+It's about execution, and needs multiple cores or machines.
+
+651
+00:49:13,169 --> 00:49:17,379
+Parallelism is doing lots of things at once. Let's see both in a kitchen,
+
+652
+00:49:17,379 --> 00:49:18,883
+then in a web server.
+
+653
+00:49:19,783 --> 00:49:25,055
+The kitchen. One cook puts pasta on to boil for ten minutes, and meanwhile
+
+654
+00:49:25,055 --> 00:49:30,328
+chops the salad and plates a dessert. One person, three dishes in progress: concurrency.
+
+655
+00:49:30,828 --> 00:49:35,857
+Hire three cooks, each making a dish at the same moment. That's parallelism.
+
+656
+00:49:36,357 --> 00:49:41,928
+Now a web server. Each feed request spends fifty milliseconds waiting on the database
+
+657
+00:49:41,928 --> 00:49:47,499
+and about one millisecond computing. One blocking thread handles one request at a time:
+
+658
+00:49:47,499 --> 00:49:52,672
+one divided by point zero five is twenty requests a second, mostly waiting.
+
+659
+00:49:53,172 --> 00:49:58,620
+An event loop sends query A, doesn't wait, starts request B, and finishes each
+
+660
+00:49:58,620 --> 00:50:04,069
+when its result arrives. The same thread now handles roughly a thousand a second,
+
+661
+00:50:04,069 --> 00:50:09,517
+limited only by that millisecond of C-P-U. That's how Node and NGINX work. Threads
+
+662
+00:50:09,517 --> 00:50:12,241
+and goroutines are other routes to concurrency.
+
+663
+00:50:12,741 --> 00:50:17,719
+Parallelism is for C-P-U-heavy work. Resizing a hundred photos at two hundred milliseconds each
+
+664
+00:50:17,719 --> 00:50:22,697
+takes twenty seconds on one core, and about two and a half seconds across
+
+665
+00:50:22,697 --> 00:50:23,052
+eight.
+
+666
+00:50:23,552 --> 00:50:28,474
+But Amdahl's law caps it. If ten percent of a job must run serially,
+
+667
+00:50:28,474 --> 00:50:31,286
+even infinite cores give at most ten times.
+
+668
+00:50:32,186 --> 00:50:37,271
+Shared data brings hazards. A race condition: two withdrawals of ten both read a
+
+669
+00:50:37,271 --> 00:50:41,267
+balance of a hundred, both write ninety, and one withdrawal vanishes.
+
+670
+00:50:41,767 --> 00:50:47,582
+Deadlock: task one holds lock A and waits for B, task two holds B
+
+671
+00:50:47,582 --> 00:50:52,566
+and waits for A, forever. Locks, atomic operations and transactions handle these.
+
+672
+00:50:53,066 --> 00:50:59,592
+Rules: use concurrency for I-O-bound work that mostly waits. Use parallelism for C-P-U-bound work,
+
+673
+00:50:59,592 --> 00:51:06,117
+with no more C-P-U threads than cores. Interview question: is single-threaded Node concurrent? Yes,
+
+674
+00:51:06,117 --> 00:51:12,643
+through its event loop. But not parallel for JavaScript, so run several processes for
+
+675
+00:51:12,643 --> 00:51:13,576
+more cores.
+
+676
+00:51:14,476 --> 00:51:19,954
+A bottleneck is the part that limits capacity, like a bottle's narrow neck. Fixing
+
+677
+00:51:19,954 --> 00:51:25,433
+anything else won't help. Each of the four resources has its own symptom. C-P-U:
+
+678
+00:51:25,433 --> 00:51:28,564
+near a hundred percent, latency rising with load.
+
+679
+00:51:29,064 --> 00:51:34,439
+Memory: swapping to disk, out-of-memory crashes, or a cache whose hit rate falls.
+
+680
+00:51:34,939 --> 00:51:39,792
+Disk: high wait times, with I-O-P-S or megabytes per second at their limit.
+
+681
+00:51:40,292 --> 00:51:43,241
+Network: a saturated link and dropped packets.
+
+682
+00:51:44,141 --> 00:51:50,515
+C-P-U. Someone made app servers resize photos inside the upload request. C-P-U pins at
+
+683
+00:51:50,515 --> 00:51:56,889
+a hundred percent and uploads take four seconds. Fix: move resizing to workers on
+
+684
+00:51:56,889 --> 00:51:57,799
+the queue.
+
+685
+00:51:58,299 --> 00:52:03,499
+Memory. The cache box has sixty-four gigabytes, but the hot set has grown to
+
+686
+00:52:03,499 --> 00:52:08,699
+eighty. The hit rate falls from ninety-five to seventy percent, so misses go from
+
+687
+00:52:08,699 --> 00:52:13,898
+five to thirty percent. That's six times the database load. Fix: more cache memory
+
+688
+00:52:13,898 --> 00:52:15,013
+or more nodes.
+
+689
+00:52:15,513 --> 00:52:21,650
+Disk. The database's cloud disk allows three thousand I-O-P-S, but cache misses now need
+
+690
+00:52:21,650 --> 00:52:27,788
+five thousand random reads a second. Disk wait climbs, and p ninety-nine with it,
+
+691
+00:52:27,788 --> 00:52:33,925
+while C-P-U looks idle. Fix: buy more I-O-P-S, move to N-V-M-e, or fix the
+
+692
+00:52:33,925 --> 00:52:34,802
+cache first.
+
+693
+00:52:35,302 --> 00:52:41,970
+Network. Twenty gigabits a second of photos through ten gigabit cards. Links saturate and
+
+694
+00:52:41,970 --> 00:52:44,351
+packets drop. Fix: a C-D-N.
+
+695
+00:52:45,251 --> 00:52:51,194
+Disks have two separate limits. I-O-P-S counts small random operations per second, like lookups.
+
+696
+00:52:51,194 --> 00:52:57,136
+Throughput counts megabytes per second for big sequential transfers. A hard disk does about
+
+697
+00:52:57,136 --> 00:53:02,230
+seventy-five to a hundred and fifty I-O-P-S, because the arm must move.
+
+698
+00:53:02,730 --> 00:53:07,699
+A SATA S-S-D: tens of thousands, at about five hundred megabytes a second.
+
+699
+00:53:08,199 --> 00:53:11,473
+N-V-M-e: hundreds of thousands to about a million.
+
+700
+00:53:11,973 --> 00:53:16,936
+A cloud g-p-three disk starts at three thousand I-O-P-S and a hundred and twenty-five
+
+701
+00:53:16,936 --> 00:53:21,899
+megabytes per second. So twenty thousand random reads a second needs over a hundred
+
+702
+00:53:21,899 --> 00:53:24,026
+hard disks, or one N-V-M-e drive.
+
+703
+00:53:24,926 --> 00:53:28,840
+Step one, measure each resource under load. Don't guess.
+
+704
+00:53:29,340 --> 00:53:34,430
+Step two, look for the one at its limit, or a queue growing in
+
+705
+00:53:34,430 --> 00:53:39,521
+front of something: a full thread pool, exhausted database connections, lock waits. Also hot
+
+706
+00:53:39,521 --> 00:53:40,975
+rows and rate limits.
+
+707
+00:53:41,475 --> 00:53:46,747
+Step three, fix it and measure again. The bottleneck moves. Fix the cache and
+
+708
+00:53:46,747 --> 00:53:48,630
+the network may be next.
+
+709
+00:53:49,130 --> 00:53:54,712
+Pause: latency rises under load, but C-P-U is at thirty percent. Where do you
+
+710
+00:53:54,712 --> 00:53:55,111
+look?
+
+711
+00:53:55,611 --> 00:54:02,789
+Elsewhere: disk, network, a pool, a lock, a slow dependency. Find where requests queue.
+
+712
+00:54:02,789 --> 00:54:05,866
+Most web services are I-O bound.
+
+713
+00:54:06,766 --> 00:54:13,478
+Last concept: the interview itself. Forty-five to sixty open-ended minutes. A repeatable seven-step structure
+
+714
+00:54:13,478 --> 00:54:15,395
+shows how you think.
+
+715
+00:54:15,895 --> 00:54:23,253
+Requirements, five minutes. Estimates, three to five. A-P-I, five. Data model, five. High-level design,
+
+716
+00:54:23,253 --> 00:54:30,610
+ten. Deep dives, ten to fifteen. Trade-offs and wrap-up, three to five. Let's run
+
+717
+00:54:30,610 --> 00:54:35,865
+all seven on a classic question: design a U-R-L shortener.
+
+718
+00:54:36,765 --> 00:54:43,049
+Step one, requirements. Never start by drawing. Functional, what it does: shorten a long
+
+719
+00:54:43,049 --> 00:54:49,334
+link, redirect, expire after a year. Non-functional, how well: a hundred million new links
+
+720
+00:54:49,334 --> 00:54:55,618
+a month, redirects under fifty milliseconds at p ninety-nine, four nines, never lose a
+
+721
+00:54:55,618 --> 00:54:58,761
+link. Out of scope: analytics and accounts.
+
+722
+00:54:59,261 --> 00:55:04,238
+Step two, estimates. A month is about two point six million seconds, so a
+
+723
+00:55:04,238 --> 00:55:09,215
+hundred million links is about forty writes a second. At a hundred reads per
+
+724
+00:55:09,215 --> 00:55:14,193
+write: four thousand redirects a second, twelve thousand at peak. At five hundred bytes
+
+725
+00:55:14,193 --> 00:55:19,170
+a link, that's six hundred gigabytes a year. One database fits, and a hundred
+
+726
+00:55:19,170 --> 00:55:21,303
+to one reads means caching matters.
+
+727
+00:55:21,803 --> 00:55:27,233
+Step three, the A-P-I. POST slash links with the long U-R-L returns a short
+
+728
+00:55:27,233 --> 00:55:32,662
+code. GET slash code returns a three oh one redirect to the long U-R-L.
+
+729
+00:55:33,162 --> 00:55:38,650
+Step four, the data model. One links table: short code as the primary key,
+
+730
+00:55:38,650 --> 00:55:42,569
+long U-R-L, expiry. Every read is a lookup by key.
+
+731
+00:55:43,069 --> 00:55:48,966
+Step five, the high-level design: load balancer, stateless app servers, cache, database. Walk one
+
+732
+00:55:48,966 --> 00:55:54,863
+write: make a code, insert the row, return it. Walk one read: check the
+
+733
+00:55:54,863 --> 00:55:58,653
+cache, on a miss read the database, then redirect.
+
+734
+00:55:59,153 --> 00:56:04,341
+Step six, deep dives. Codes without collisions: seven characters from sixty-two letters and digits
+
+735
+00:56:04,341 --> 00:56:09,530
+gives about three and a half trillion codes, from a counter or random with
+
+736
+00:56:09,530 --> 00:56:14,718
+a uniqueness check. And a celebrity's viral link stays in the cache, so it
+
+737
+00:56:14,718 --> 00:56:16,200
+never hammers the database.
+
+738
+00:56:16,700 --> 00:56:21,882
+Step seven, trade-offs and wrap-up. The cache can serve a deleted link for a
+
+739
+00:56:21,882 --> 00:56:27,064
+minute. The single database primary is a spof, so add a hot standby. At
+
+740
+00:56:27,064 --> 00:56:32,246
+ten times the load, shard by short code. Then check the design against the
+
+741
+00:56:32,246 --> 00:56:33,727
+requirements you wrote down.
+
+742
+00:56:34,627 --> 00:56:42,716
+Make each requirement measurable and name its lever. Availability: percent successful requests. Lever: redundancy
+
+743
+00:56:42,716 --> 00:56:43,872
+and failover.
+
+744
+00:56:44,372 --> 00:56:50,910
+Latency: p ninety-nine per endpoint. Lever: caches, C-D-Ns, fewer trips.
+
+745
+00:56:51,410 --> 00:56:57,611
+Scalability: peak Q-P-S. Lever: stateless services, sharding, queues.
+
+746
+00:56:58,111 --> 00:57:04,410
+Consistency: after a write, who sees it, and how soon? For the shortener: a
+
+747
+00:57:04,410 --> 00:57:08,459
+new link should work immediately. Lever: leaders, quorums, consensus.
+
+748
+00:57:08,959 --> 00:57:15,474
+Durability: never lose an acknowledged write. Lever: logs, replication, backups.
+
+749
+00:57:15,974 --> 00:57:24,207
+Reliability: error rate and M-T-T-R, via timeouts and retries. Security: authentication and encryption.
+
+750
+00:57:24,707 --> 00:57:32,536
+Maintainability means operable, simple and evolvable: dashboards per S-L-O, versioned schemas, canary deploys. And
+
+751
+00:57:32,536 --> 00:57:40,365
+cost per request. Common mistakes: drawing before requirements, naming tech without reasons, and over-engineering
+
+752
+00:57:40,365 --> 00:57:42,602
+a hundred Q-P-S system.
+
+753
+00:57:43,502 --> 00:57:49,500
+Design is a loop: goal, load, sketch, weak spots, fix. Built from eight standard
+
+754
+00:57:49,500 --> 00:57:52,071
+boxes, each justified by a number.
+
+755
+00:57:52,571 --> 00:57:59,318
+Use percentiles, not averages, and fix the biggest latency term first. Latency explodes near
+
+756
+00:57:59,318 --> 00:58:00,282
+full load.
+
+757
+00:58:00,782 --> 00:58:06,433
+Little's law sizes pools. RAM is nanoseconds, a data-centre trip half a millisecond, an
+
+758
+00:58:06,433 --> 00:58:09,259
+ocean seventy to a hundred and fifty.
+
+759
+00:58:09,759 --> 00:58:14,559
+Divide per-day counts by ten to the five, then apply peak, utilisation and zone
+
+760
+00:58:14,559 --> 00:58:14,902
+loss.
+
+761
+00:58:15,402 --> 00:58:20,673
+Three nines is forty-three minutes a month. One bad afternoon can spend it, so
+
+762
+00:58:20,673 --> 00:58:22,556
+cut M-T-T-R and remove spofs.
+
+763
+00:58:23,056 --> 00:58:29,973
+Keep servers stateless, measure bottlenecks, and follow the seven steps. Next episode: networking, from
+
+764
+00:58:29,973 --> 00:58:32,938
 D-N-S and T-C-P to load balancers.
 
