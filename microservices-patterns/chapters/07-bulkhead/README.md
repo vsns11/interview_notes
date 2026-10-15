@@ -8,277 +8,132 @@
 ## Part 0 — Concepts you need first
 
 ### What is a thread pool?
-A fixed collection of worker **threads** (a thread is one independent line of execution inside a program) a program keeps ready. When work arrives, a free thread picks it
-up; when the work finishes, the thread returns to the pool.
+A fixed collection of worker **threads** kept ready: work arrives, a free thread takes it, then returns to the pool (introduced in [Circuit Breaker Part 0](../06-circuit-breaker/README.md#what-is-a-thread-and-why-do-we-care)). Pools are fixed-size because threads are expensive — each needs ~1 MB of **stack** (memory for its method calls and locals), and with thousands the **operating system** spends more time switching between them than working.
 
-Pools are fixed-size because threads are expensive — each needs memory (typically ~1 MB of **stack** — the memory area a thread uses for its method calls and local variables), and
-having thousands means the **operating system** (the base software, such as Linux, that runs programs and shares out the hardware) spends more time switching between them than doing work.
-
-**The consequence that drives this entire chapter:** the pool is a *shared, finite resource*. If
-something exhausts it, **every** piece of work in that program stops — not just the work that caused
-the problem.
+**The consequence that drives this chapter:** the pool is a *shared, finite resource*. If something exhausts it, **every** piece of work in that program stops — not just the work that caused the problem.
 
 ### What does "resource exhaustion" mean?
-Using up all of a limited resource so nothing else can get any. The resources that matter here:
-
+Using up all of a limited resource so nothing else gets any:
 - **Threads** — all busy, so no new work can start
 - **Memory** — allocated, so new allocations fail
-- **Database connections** — **connection pools** (sets of open database connections that are reused instead of opened fresh for each query) are also fixed-size and also exhaustible
-- **Network bandwidth / file handles / CPU** (bandwidth = how much data the network can carry; a **file handle** is the operating system's ticket for one open file or connection, and there's a limit; **CPU** = processor time)
+- **Database connections** — **connection pools** (reused open connections) are also fixed-size and exhaustible
+- **Network bandwidth / file handles / CPU** — a **file handle** is the OS's ticket for one open file or connection, and there's a limit
 
 ### What is a "noisy neighbour"?
-A component that consumes disproportionate shared resources and degrades everything sharing them.
-The term comes from cloud hosting, where one tenant's heavy usage slows other tenants on the same
-physical machine. In your own application, one slow **dependency** (another service or database your code calls) can be a noisy neighbour to every
-other feature.
+A component consuming disproportionate shared resources and degrading everything sharing them. The term comes from cloud hosting (one tenant's heavy usage slowing others on the same machine); in your app, one slow **dependency** can be a noisy neighbour to every other feature.
 
 ### Why does one slow dependency block unrelated work?
-This is the crux, so it's worth walking through concretely.
+The crux. Your service has **one pool of 200 threads** and calls Inventory (usually busy) and Shipping (usually quiet). Inventory slows to 30 s per call instead of 50 ms:
 
-Your service has **one thread pool of 200 threads**. It calls two dependencies: Inventory (usually
-busy) and Shipping (usually quiet).
+1. Requests needing Inventory each take a thread
+2. Each blocks for 30 s
+3. At any moderate rate, all 200 threads end up blocked on Inventory
+4. A request needing only Shipping arrives — **no thread is available**
 
-Inventory becomes slow — 30 seconds per call instead of 50 milliseconds.
-
-1. Requests needing Inventory arrive and each takes a thread
-2. Each thread blocks for 30 seconds waiting
-3. At any moderate request rate, all 200 threads end up blocked on Inventory
-4. A request arrives needing only Shipping — **there is no thread available to serve it**
-
-**Shipping is perfectly healthy. Its requests still fail.** They fail because Inventory ate all the
-threads. That's the failure this pattern prevents.
+**Shipping is perfectly healthy. Its requests still fail**, because Inventory ate all the threads. That's what this pattern prevents. (It's the same thread-starvation mechanism behind [cascading failure](../06-circuit-breaker/README.md#cascading-failures-step-by-step).)
 
 ---
 
 ## Part 1 — Where the name comes from
 
-A ship's hull is divided into **watertight compartments** called bulkheads. If the hull is breached,
-water floods **one compartment** rather than the whole ship. The ship stays afloat, buying valuable
-time for rescue.
+A ship's hull is divided into **watertight compartments** — bulkheads. A breach floods **one compartment**, the ship stays afloat, and there's time for rescue. Without them one breach floods everything: a **cascading failure in a physical system**.
 
-Without bulkheads, a single breach floods everything and the ship sinks rapidly. The failure — one
-hull breach — propagates across the entire ship and causes total system failure. That's a **cascading
-failure in a physical system** — one failure triggering the next, like falling dominoes.
-
-In **distributed systems** (systems made of many programs on different machines cooperating over a network), a bulkhead is a mechanism that **isolates different parts of the system so
-that if one part fails, it doesn't cause the rest to fail.**
+In **distributed systems**, a bulkhead **isolates parts of the system so that if one part fails, it doesn't cause the rest to fail.**
 
 ---
 
 ## Part 2 — The problem: failure propagation
 
-In an ideal world services would work perfectly all the time. In reality they fail — bugs, resource
-exhaustion, network issues, and more. Each service has its own responsibilities, resources, and
-failure modes.
-
-When a service fails, it causes a **ripple effect**: the failure of one service leads to the failure
-of others that depend on it.
+Services fail — bugs, resource exhaustion, network issues — and a failure **ripples** to everything depending on it.
 
 ### The e-commerce walkthrough
 
-A **microservices**-based e-commerce platform (built as many small, independently deployed services) with separate services for user management, inventory
-management, payment processing, and so on.
+A **microservices** e-commerce platform with user management, inventory, payments:
 
-1. The **inventory service** fails due to a database **outage** (a period when the database is unavailable)
-2. The **user service**, which relies on inventory to display product availability, **also starts
-   failing**
-3. The **payment service**, which checks inventory before processing payments, **likewise fails**
-4. In a short time, **the entire platform is unavailable**
-
-All because of a failure in one service. This is a classic cascading failure.
+1. **Inventory** fails due to a database **outage**
+2. **User service**, which shows product availability, **also starts failing**
+3. **Payment service**, which checks inventory before charging, **likewise fails**
+4. Soon **the entire platform is unavailable** — from one service's failure. A classic cascading failure.
 
 ---
 
 ## Part 3 — The solution: isolation
 
-The essence of the Bulkhead pattern is **isolation**. Like the watertight compartments in a ship, it
-partitions system components into isolated units. Each is designed to operate **independently of the
-others**, so if one fails, the others continue functioning.
+The essence is **isolation**: partition components into units that operate **independently**, so if one fails the others continue. Bulkheads are **failure containment** — they limit the **scope** of a failure, so unaffected parts keep serving and **availability** is preserved as far as possible.
 
-Think of bulkheads as **failure containment**. By isolating parts of the system, you limit the
-**scope** of any potential failure. A failure in one part doesn't automatically mean failure of the
-whole — unaffected parts still provide some level of service, maintaining **availability** (the share of time the system is usable) as much as
-possible.
-
-### Applied to the e-commerce example
-
-If the inventory service were isolated into its own bulkhead, its failure wouldn't directly impact the
-user and payment services. They could continue operating, providing limited functionality — browsing
-products, viewing past orders — despite inventory being down.
+**Applied:** with inventory in its own bulkhead, user and payment services keep offering limited functionality — browsing products, viewing past orders — while inventory is down.
 
 ### The half people miss
 
-There's a second, subtler benefit. By preventing the inventory failure from **consuming system-wide
-resources** like CPU or memory, the pattern ensures those resources **remain available for the
-remaining services**.
+By stopping the inventory failure from **consuming system-wide resources** (CPU, memory), the pattern keeps those resources **available to the remaining services**.
 
-> Isolating *resources* matters as much as isolating *code*. Two services can be perfectly separate in
-> the **source tree** (the folders of source code) and still kill each other if they draw from the same thread pool. The bulkhead is
-> about the resources, not the modules.
+> Isolating *resources* matters as much as isolating *code*. Two services can be perfectly separate in the **source tree** and still kill each other through a shared thread pool. The bulkhead is about the resources, not the modules.
 
 ### Not a magic solution
 
-The course is careful here, and it's worth internalising: bulkheads don't make failures disappear. If
-a ship has a significant hull breach it might eventually sink despite its bulkheads. Likewise, if a
-distributed system experiences a major failure like a total network outage, it may become unavailable
-despite bulkheads.
-
-What they do is **buy time and maintain some level of service**, significantly mitigating the impact.
+A ship with a big enough breach may sink anyway; a total network outage may still take a system down. Bulkheads **buy time and maintain some level of service** — significant mitigation, not prevention.
 
 ---
 
 ## Part 4 — Architecture
 
-The architecture revolves around two concepts: **isolation** and **resources**.
+The architecture revolves around **isolation** and **resources**.
 
 ### What is a bulkhead, concretely?
-
-At a high level, a bulkhead is simply a **partition** within the system. It could be:
-
-- A separate **service**
-- A group of related **processes** (separately running programs, each with its own memory)
-- A set of **threads** — a thread pool, the most common implementation
-- A dedicated **CPU or memory area**
-
-The key requirement is that each operates **independently** of the others.
+A **partition**: a separate **service**, a group of related **processes**, a set of **threads** (a thread pool — the most common implementation), or a dedicated **CPU or memory area**. The requirement: each operates **independently**.
 
 ### What are the resources?
-
-Anything the bulkheads need to function: CPU time, memory, network bandwidth, database connections.
-Each bulkhead gets a **dedicated share**, ensuring a failure in one doesn't consume all the system's
-resources.
+Anything the bulkheads need — CPU time, memory, bandwidth, database connections. Each bulkhead gets a **dedicated share**, so one failure can't consume everything.
 
 ### Step 1 — Divide the system into bulkheads
-
-How you divide depends on your system's specifics and which failures you want to isolate. Common
-approaches:
-
-- Isolate services that are **prone to failure**
-- Isolate services handling **particularly resource-intensive tasks**
-- Group services by **function**, or by the **type of users they serve**
-
-In the e-commerce example, you'd create separate bulkheads for user management, inventory management,
-payment processing, and so on. Each operates independently with its own resources.
-
-The aim: if one service fails **or becomes a resource hog**, the others aren't directly affected.
+Isolate services **prone to failure**, services doing **resource-intensive tasks**, or group by **function** or by **type of users served**. In e-commerce: separate bulkheads for user management, inventory, payments. Aim: if one fails **or becomes a resource hog**, the others aren't directly affected.
 
 ### Step 2 — Allocate resources
-
-Allocation should be **proportional to the needs and importance** of each bulkhead. A resource-intensive
-or critical service gets more than a less demanding or less critical one.
-
-In the e-commerce platform you might allocate more to **payment processing** (which handles financial
-transactions) than to **user management** (which mainly handles profiles). The specific allocation
-depends on:
-
-- Expected load on each service
-- Its performance requirements
-- The consequences of its failure
-
-This is the critical mechanism: if a bulkhead fails and starts consuming resources excessively, the
-allocation **guarantees other bulkheads still have resources available**.
+**Proportional to needs and importance**: more for **payment processing** (financial transactions) than **user management** (profiles), based on expected load, performance requirements, and the consequences of failure. This is the critical mechanism: a failing bulkhead that over-consumes still **can't take the other bulkheads' allocations**.
 
 ### Step 3 — Manage interactions between bulkheads
+- **Keep interactions to a minimum** — the more one bulkhead depends on others, the likelier failure spreads.
+- **When necessary, isolate them** — e.g. via a **message queue** or an **API gateway**, so an inventory failure doesn't directly hit user management.
 
-Since each bulkhead operates independently, interactions between them must be carefully managed or
-failures propagate anyway.
-
-**Keep interactions to a minimum.** The more a bulkhead depends on other bulkheads, the higher the
-chance of a failure spreading.
-
-**When interactions are necessary, isolate them.** If the user management service must interact with
-inventory, it could do so via a **message queue** (a buffer where one component leaves messages for another to pick up later) or an **API gateway** (a single entry point that routes requests to services). That way, if inventory fails,
-the failure doesn't directly impact user management — the interaction stays isolated and manageable.
-
-> Why a message queue helps: with a direct call, the caller waits for a response and its thread is
-> held while the callee struggles. With a queue, the caller drops a message and moves on immediately.
-> The failure becomes "messages accumulate in a queue" instead of "caller's threads are all blocked."
+> Why a queue helps: with a direct call the caller's thread waits while the callee struggles. With a queue the caller drops a message and moves on; the failure becomes "messages accumulate" instead of "caller's threads are all blocked". (See [Event-Driven Architecture](../11-event-driven/README.md).)
 
 ---
 
 ## Part 5 — Inner workings
 
 ### Isolation in practice
+Each bulkhead might run in its **own process or container**, have its **own database and cache**, and use its **own thread pool**. But:
 
-Maintaining independence involves careful design and implementation choices. Each bulkhead might:
+> Isolation is **not just technical** — it needs **organisational commitment**. Changes to one bulkhead shouldn't require changes to others; interdependencies must be minimised and managed.
 
-- Run in its **own process or container** (a **container** packages an application with everything it needs and runs it isolated from others)
-- Have its **own database and cache** (a **cache** is a fast store of recently used data)
-- Use its **own thread pool**
-
-But the course makes a point that's easy to skip past and shouldn't be:
-
-> Achieving isolation is **not just about technical measures**. It also requires an **organisational
-> commitment** to maintaining independence. Changes to one bulkhead should not require changes to
-> others. Interdependencies must be minimised and carefully managed.
-
-In other words, you can build perfect technical isolation and then destroy it over six months by
-letting teams add convenient direct dependencies between compartments. The isolation has to be
-defended, not just built.
+Perfect technical isolation can be destroyed in six months by teams adding convenient direct dependencies. It must be defended, not just built.
 
 ### Resource allocation — fairness and efficiency
-
-The aim is **fairness** (each bulkhead gets the resources it needs) and **efficiency** (resources
-aren't wasted). In practice this involves:
-
-- Setting **resource quotas or limits** (hard caps on how much CPU, memory or connections something may use) per bulkhead
-- Scheduling resources fairly and efficiently
-- **Dynamically adjusting** allocation based on real-time conditions
-
-For instance, if one bulkhead is experiencing a surge while another is idle, the system might
-temporarily reallocate some resources from the idle one to the busy one, improving overall
-performance and responsiveness.
+Aim for **fairness** (each bulkhead gets what it needs) and **efficiency** (nothing wasted): **resource quotas or limits** per bulkhead, fair scheduling, and **dynamic adjustment** — e.g. temporarily lending an idle bulkhead's resources to one under a surge.
 
 ### Failure detection and mitigation
-
-The ultimate test is how the pattern handles failures. When one occurs within a bulkhead, the system
-needs to **detect it, isolate it, and mitigate its impact**. This typically involves monitoring,
-alerting, and automatic recovery:
-
-- The system **continuously monitors** the health and performance of each bulkhead
-- If a problem is detected, it **generates alerts** and starts **automatic recovery**
-- If a bulkhead starts consuming resources excessively, the system might automatically **throttle its
-  resource usage or restart it** (to **throttle** is to deliberately slow something down)
-- If it remains unresponsive, the system might **reroute traffic** to other bulkheads or **bring up new
-  instances** (extra running copies of a service) to handle load
+The system must **detect, isolate and mitigate** a bulkhead failure: **continuous monitoring** of each bulkhead's health; **alerts** plus **automatic recovery**; **throttling** (deliberately slowing) or **restarting** a bulkhead that over-consumes; **rerouting traffic** or **bringing up new instances** if it stays unresponsive.
 
 ### It's not a silver bullet
-
-The pattern can't prevent failures from happening and can't guarantee 100% **uptime** (time the system is running and reachable) or performance.
-It's one tool in the toolbox, to be complemented with **redundancy, replication, load balancing, and
-caching** — spare components, copies of data on several machines, spreading requests across instances, and keeping fast copies of frequently used data. See [System Design Fundamentals](../01-system-design-fundamentals/README.md) for all four.
+It can't prevent failures or guarantee 100% **uptime**. Complement it with **redundancy, replication, load balancing, and caching** ([§ Fault tolerance](../01-system-design-fundamentals/README.md#faults-failures-and-fault-tolerance)).
 
 ---
 
 ## Part 6 — Worked example: thread-pool bulkheads in Java
 
 ### The scenario
-
-An **Order Service** responsible for creating orders. It must communicate with two others:
-
-- **Inventory Service** — often gets high traffic
-- **Shipping Service** — usually has less load
-
-**Without bulkheads:** a spike in requests to Inventory could clog the Order Service, preventing it
-from completing its tasks involving Shipping.
+An **Order Service** calls **Inventory** (often high traffic) and **Shipping** (usually less load). **Without bulkheads**, an Inventory spike can clog Order Service and stop it completing Shipping work.
 
 ### Creating separate thread pools
 
-Java's `ExecutorService` (the standard Java interface for running tasks on a pool of threads) is well suited to creating thread pools:
+Java's `ExecutorService` (the standard interface for running tasks on a thread pool):
 
 ```java
 ExecutorService inventoryExecutor = Executors.newFixedThreadPool(100);
 ExecutorService shippingExecutor  = Executors.newFixedThreadPool(50);
 ```
 
-**Reading it:** `newFixedThreadPool(100)` creates a pool with exactly 100 threads. Submit more than
-100 tasks and the extras queue until a thread frees up.
-
-The pool sizes should be determined by the load each service is expected to handle. Inventory gets the
-larger pool (100) because it typically faces more traffic; Shipping gets 50.
-
-**These two pools are the bulkheads.** They are separate compartments; threads in one cannot be
-consumed by work destined for the other.
+`newFixedThreadPool(100)` = exactly 100 threads; extra tasks queue until one frees. Sizes follow expected load — Inventory gets 100, Shipping 50. **These two pools are the bulkheads**: threads in one can't be consumed by work for the other.
 
 ### Using them
 
@@ -294,145 +149,74 @@ public void createOrder(Order order) {
 }
 ```
 
-`createOrder` initiates tasks that interact with both services. Each task is **submitted to its own
-executor**, ensuring a slowdown in one service doesn't affect the other.
-
 ### The bulkhead in action
 
-Now replay the failure scenario:
+1. Requests start slowing the **Inventory Service**
+2. Threads in `inventoryExecutor` get stuck — potentially all 100
+3. **The 50 threads in `shippingExecutor` are unaffected** — separate pool
+4. `createOrder` **keeps scheduling shipping** while inventory checks are delayed
 
-1. A significant number of requests start slowing down the **Inventory Service**
-2. Threads in `inventoryExecutor` get stuck or slowed — potentially all 100 of them
-3. **The 50 threads in `shippingExecutor` are completely unaffected**, because they're a separate pool
-4. `createOrder` can **continue scheduling shipping** even while inventory checks are delayed
-
-The system uses its resources efficiently and provides a faster response where it can.
-
-Compare this to the single-pool version: all 200 threads blocked on Inventory, and shipping requests
-failing for no reason of their own. **The only change is drawing from two buckets instead of one.**
+Versus the single-pool version: all 200 threads blocked on Inventory and shipping failing for no reason of its own. **The only change is drawing from two buckets instead of one.**
 
 ### What the example deliberately leaves out
-
-The course itself raises these as questions leading into the next section:
-
-- **Error handling** — what if a service doesn't respond at all, or throws an **exception** (Java's mechanism for signalling an error)?
-- **Timeouts** (a maximum wait before giving up) — a stuck thread needs a bound, or it's stuck forever *(pair with [Circuit Breaker](../06-circuit-breaker/README.md))*
-- **Pool sizing** — how do you actually determine those numbers?
-
-Also worth noticing: `submit()` returns a `Future` (an object that will hold the task's result or error once it finishes) that this code ignores, so **failures are silently
-swallowed**. Real code would capture and handle the result.
+- **Error handling** — no response, or an **exception**?
+- **Timeouts** — a stuck thread needs a bound *(pair with [Circuit Breaker](../06-circuit-breaker/README.md))*
+- **Pool sizing** — how to choose the numbers (Part 14D)
+- `submit()` returns a `Future` (holder of the task's result or error) that's ignored here, so **failures are silently swallowed** (pitfall 3).
 
 ---
 
 ## Part 7 — Performance implications
 
 ### Benefits
-
-**Efficient resource utilization.** Even when one service is sluggish or non-responsive, the system
-continues processing other tasks. The risk of the entire system freezing or significantly slowing due
-to one faulty component is mitigated.
-
-**Load balancing.** (Spreading work so no single part is overloaded.) Allocating different thread pools to various tasks or services distributes the
-system's load. The distribution can be fine-tuned based on the nature and expected load of each.
-
-**Response time.** By ensuring a delay in one part doesn't affect others, overall response time
-improves. Even if some requests are delayed by an issue in one component, others are served swiftly.
+- **Efficient resource utilization** — work continues while one service is sluggish; no whole-system freeze from one faulty component.
+- **Load balancing** — separate pools distribute load, tunable per task or service.
+- **Response time** — a delay in one part doesn't hold up others, which are served swiftly.
 
 ### Considerations
 
-**Determining bulkhead sizes.** One of the real challenges. Ideally sizes are decided by expected load
-and the nature of the tasks — but striking the right balance often involves **a degree of trial and
-error**.
+**Determining bulkhead sizes** — a real challenge, often **trial and error**. Starting point: size each pool to the **concurrency** the dependency can actually handle. If Inventory degrades past 100 concurrent requests, a larger pool just queues work inside *it* instead of inside you — worse, because you lose visibility.
 
-> A practical starting point: size each pool to the **concurrency** (number of requests in progress at the same time) that dependency can actually handle.
-> If Inventory can serve 100 concurrent requests before degrading, a pool larger than 100 just queues
-> work inside the dependency instead of inside you — which is worse, because you lose visibility.
+**Monitoring and adjusting** — as load evolves, revisit sizes; tools like **VisualVM** (shows a running JVM's threads, memory, CPU) reveal thread usage and **bottlenecks**.
 
-**Monitoring and adjusting.** Over time, as load and task nature evolve, initial allocations need
-adjustment. Monitor performance and adjust sizes as needed. Tools like Java's **VisualVM** (a free tool that shows a running Java program's threads, memory and CPU) help monitor
-thread usage and identify **bottlenecks** (the points that limit overall speed).
+**Error handling** — requests can still fail or stall when a service is down; handle with a **timeout** or a **[Circuit Breaker](../06-circuit-breaker/README.md)**.
 
-**Error handling.** Even with bulkheads, some requests may fail or be excessively delayed if a service
-goes down or becomes unresponsive. Handle these gracefully — implement a **timeout**, or use another
-resilience pattern like the **[Circuit Breaker](../06-circuit-breaker/README.md)**.
+**Scalability concerns:**
 
-**Scalability concerns.** This one deserves emphasis:
+> The Bulkhead pattern improves **resilience** but **does not directly address scalability**. Under significant load growth, creating more threads causes **excessive context switching** (the CPU repeatedly saving one thread's state and loading another's — pure overhead) and *decreases* performance. For scale, use horizontal scaling or **asynchronous** processing.
 
-> The Bulkhead pattern improves system **resilience** (staying up when parts fail) but **does not directly address scalability** (handling more load by adding resources). If
-> load increases significantly, simply creating more threads leads to **excessive context switching** (the CPU repeatedly saving one thread's state and loading another's, which is pure overhead)
-> and eventually **decreases** performance. For scale, use horizontal scaling (more machines) or
-> **asynchronous** processing (work handed off to run in the background so callers don't wait).
-
-⚠️ **This is the point beginners get wrong most often.** Bulkheads bound damage; they don't add
-capacity. Reaching for bigger thread pools as a solution to load makes things slower, not faster,
-because the CPU spends its time switching between threads rather than running them.
+⚠️ **The point beginners get wrong most often.** Bulkheads bound damage; they don't add capacity. Bigger pools as a load fix make things slower.
 
 ---
 
 ## Part 8 — Use cases
 
-### E-commerce platforms
-Customer actions span searching for products, adding items to carts, and placing orders. These are
-interconnected but can be performed independently.
+- **E-commerce** — search, cart and ordering are interconnected but independent. An overwhelmed **search service** (traffic spike or bug) would otherwise slow the whole platform — **even cart and ordering**.
+- **Online gaming** — each game a separate service; **player load in one game shouldn't affect others**.
+- **Financial systems** — account management, transaction processing and reporting can function independently.
 
-If the **search service** is overwhelmed by a traffic spike or a bug causing excessive load, without
-bulkheading this could slow the entire platform — **affecting even cart and ordering services**.
-Isolating services into separate bulkheads ensures an issue in one doesn't impact the others.
-
-### Online gaming platforms
-A platform offering various games, each running as a separate service. **Player requests to one game
-shouldn't affect the performance of other games.** Isolating game services prevents a faulty or
-overloaded game from affecting the entire platform.
-
-### Financial systems
-Distinct operations: account management, transaction processing, and reporting. These are interrelated
-but can function independently.
-
-> **A delay in generating reports shouldn't affect the speed of transaction processing.** This is the
-> cleanest illustration of the principle — reporting is typically heavy and slow, transactions are
-> **latency**-critical (latency = how long each request takes), and there is no good reason for the former to interfere with the latter.
+> **A delay generating reports shouldn't slow transaction processing** — the cleanest illustration: reporting is heavy and slow, transactions are **latency**-critical, and there's no reason the former should interfere with the latter.
 
 ---
 
 ## Part 9 — System design example: music streaming (Spotify-like)
 
-A large-scale music streaming platform with services for music streaming, user management, playlist
-management, and recommendation generation.
+Services: streaming, user management, playlist management, recommendations.
 
 ### Bulkheading services (coarse-grained)
-
-**User management isolated from music streaming.** Even if user management becomes overloaded due to a
-sudden surge in new users, this doesn't affect streaming performance. **Users can still listen to
-music uninterrupted.**
-
-**Playlist management isolated from recommendations.** Even if the recommendation service becomes slow
-due to the complexity of processing and analysing user data, playlist management is unaffected and
-users can still create and manage their playlists.
+- **User management isolated from streaming** — a surge of new sign-ups doesn't affect playback; **users keep listening**.
+- **Playlist management isolated from recommendations** — slow, analysis-heavy recommendations don't stop users managing playlists.
 
 ### Bulkheading at a lower level (fine-grained)
+**Within one service**: put **fetching a song** (from the song database) and **streaming the song** to the user in **separate thread pools**, so a slow song database **doesn't interrupt streaming of songs already fetched**.
 
-Bulkheading can also be applied **within a single service**. Inside the music streaming service you
-could separate:
-
-- the task of **fetching a song** (from the song database)
-- the task of **streaming the song** to the user
-
-into **separate thread pools**. So if fetching songs becomes slow due to a delay accessing the song
-database, this **won't slow down the streaming of songs already fetched**.
-
-> This two-level view is the most useful takeaway from the chapter. Bulkheads apply *between* services
-> **and** *within* a single service. The fine-grained version is often what actually saves the user
-> experience — a user whose music keeps playing while search is broken barely notices anything is
-> wrong.
-
-In both cases, applying the pattern dramatically increases resilience: while one service or task is
-slow or failing, others continue functioning normally, providing an uninterrupted experience.
+> The most useful takeaway: bulkheads apply *between* services **and** *within* one. The fine-grained version often saves the experience — music that keeps playing while search is broken.
 
 ---
 
 ## Part 10 — Bulkhead vs. Circuit Breaker
 
-These two get confused constantly. They're complementary, not alternatives.
+Complementary, not alternatives:
 
 | | Bulkhead | Circuit Breaker |
 |---|---|---|
@@ -442,27 +226,17 @@ These two get confused constantly. They're complementary, not alternatives.
 | **Analogy** | Watertight compartments | A fuse that trips |
 | **Limits** | *How much* damage one failure can do | *How long* you keep trying |
 
-**Use both.** The bulkhead caps the **blast radius** (how much of the system one failure can damage); the breaker stops you feeding the fire. In the Order
-Service example, the bulkhead means Inventory can only ever consume its own 100 threads — and a
-breaker on Inventory means those 100 threads stop being wasted once it's clearly down.
+**Use both.** The bulkhead caps the **blast radius** (how much of the system one failure can damage); the breaker stops you feeding the fire. Inventory can only ever consume its own 100 threads, and a breaker on Inventory stops those threads being wasted once it's clearly down.
 
 ---
 
 ## Part 11 — Common beginner misconceptions
 
-**"Bulkhead means microservices."** No. You can bulkhead inside a single **monolith** (an application built and deployed as one unit) by giving different
-**workloads** (kinds of work) different thread pools — and that's often the highest-value place to start.
-
-**"Bigger pools are safer."** The opposite past a point. Threads cost memory and context-switching.
-The pool should match what the dependency can handle, not what you wish it could.
-
-**"It's the same as rate limiting."** Related but different. (**Rate limiting** caps requests per caller per time window.) Rate limiting caps how many requests you
-*accept*; bulkheading caps how many resources a category of work can *consume*.
-
-**"Isolation is a one-time build."** It erodes. Teams add convenient cross-dependencies over time. It
-needs ongoing defence — which is why the course calls it an organisational commitment.
-
-**"Bulkheads help with load."** They help with *failure*. For load you scale horizontally.
+- **"Bulkhead means microservices."** You can bulkhead inside a **monolith** by giving different **workloads** different pools — often the highest-value place to start.
+- **"Bigger pools are safer."** Past a point the opposite: threads cost memory and context switches. Match the pool to what the dependency can handle.
+- **"It's the same as rate limiting."** **Rate limiting** caps how many requests you *accept* per time window; bulkheading caps how many resources a category of work can *consume*.
+- **"Isolation is a one-time build."** It erodes as teams add cross-dependencies; it needs ongoing defence — an organisational commitment.
+- **"Bulkheads help with load."** They help with *failure*. For load, scale horizontally.
 
 ---
 
@@ -487,18 +261,16 @@ detected failures.)*
 
 ## Part 13 — Interview soundbite (30 seconds)
 
-> "Bulkhead comes from ship design — watertight compartments so one hull breach doesn't sink the whole
-> ship. In software you partition resources so a failing dependency can't consume everything. The
-> classic case is an Order Service calling Inventory and Shipping from one shared thread pool: if
-> Inventory gets slow, every thread ends up blocked waiting on it, so Shipping calls start failing
-> even though Shipping is perfectly healthy. The fix is separate thread pools sized per dependency,
-> so Inventory's problems are bounded to its own hundred threads. You can apply it between services
-> or inside one service — for example separating song fetching from song streaming, so a slow
-> database doesn't interrupt playback of what's already loaded. It pairs with circuit breakers:
-> bulkhead caps how much damage a failure can do, the breaker caps how long you keep trying. The main
-> gotchas are that sizing the pools is genuinely trial and error and needs monitoring, and that it
-> improves resilience but not scalability — adding threads to handle more load just causes context
-> switching, so capacity has to come from horizontal scaling."
+> "Bulkhead comes from ship design — watertight compartments so one breach doesn't sink the ship. In
+> software you partition resources so a failing dependency can't consume everything. Classic case: an
+> Order Service calls Inventory and Shipping from one shared thread pool; Inventory gets slow, every
+> thread ends up blocked on it, and Shipping calls fail though Shipping is healthy. The fix is separate
+> pools sized per dependency, so Inventory's problems are bounded to its own hundred threads. It applies
+> between services or inside one — e.g. separating song fetching from streaming so a slow database
+> doesn't interrupt playback. It pairs with circuit breakers: bulkhead caps how much damage a failure
+> can do, the breaker caps how long you keep trying. Gotchas: pool sizing is trial and error and needs
+> monitoring — start from Little's Law — and it improves resilience, not scalability: more threads for
+> more load just means context switching, so capacity comes from horizontal scaling."
 
 ---
 
@@ -506,92 +278,25 @@ detected failures.)*
 
 ### A. Runnable demo — see thread starvation, then see it fixed
 
-(**Thread starvation** is when work can't run because every thread is taken. `./gradlew` runs **Gradle**, the Java build tool used for the demos; `AtomicInteger` is a thread-safe counter.)
+(**Thread starvation**: work can't run because every thread is taken.)
 
-This program runs the *same* workload twice: once with a shared pool, once with bulkheads.
 Full source: **[`demos/chapters/07-bulkhead/BulkheadDemo.java`](../../../demos/chapters/07-bulkhead/BulkheadDemo.java)**
 
 ```bash
 cd demos && ./gradlew runCh07
 ```
 
+The program runs the *same* workload twice. Inventory is slow (`Thread.sleep(2000)`), Shipping fast (50 ms) and healthy; 20 inventory tasks are submitted, then 5 shipping tasks, and it counts shipping completions (with a thread-safe `AtomicInteger`) within 3 s. The only difference between the runs is where the tasks go:
+
 ```java
-import java.util.concurrent.*;
-import java.util.concurrent.atomic.AtomicInteger;
+// WITHOUT bulkheads: one shared pool of 10
+ExecutorService shared = Executors.newFixedThreadPool(POOL);        // POOL = 10
+shared.submit(() -> { slowInventory(); return null; });              // x20
+shared.submit(() -> { fastShipping(); shippingDone.incrementAndGet(); return null; });  // x5
 
-public class BulkheadDemo {
-
-    static final int POOL = 10;      // small pool so the effect is visible
-    static final int REQUESTS = 20;
-
-    // Inventory is slow (2s). Shipping is fast (50ms) and perfectly healthy.
-    static String slowInventory() throws InterruptedException {
-        Thread.sleep(2000);
-        return "inventory-ok";
-    }
-
-    static String fastShipping() throws InterruptedException {
-        Thread.sleep(50);
-        return "shipping-ok";
-    }
-
-    // ---------- WITHOUT bulkheads: one shared pool ----------
-    static void withoutBulkheads() throws Exception {
-        ExecutorService shared = Executors.newFixedThreadPool(POOL);
-        AtomicInteger shippingDone = new AtomicInteger();
-        long start = System.currentTimeMillis();
-
-        for (int i = 0; i < REQUESTS; i++) {
-            shared.submit(() -> { slowInventory(); return null; });
-        }
-        // Shipping work arrives after the inventory flood
-        for (int i = 0; i < 5; i++) {
-            shared.submit(() -> {
-                fastShipping();
-                shippingDone.incrementAndGet();
-                return null;
-            });
-        }
-
-        shared.shutdown();
-        boolean finished = shared.awaitTermination(3, TimeUnit.SECONDS);
-        System.out.printf("  shipping completed in 3s: %d/5   (finished=%s, %dms)%n",
-                shippingDone.get(), finished, System.currentTimeMillis() - start);
-    }
-
-    // ---------- WITH bulkheads: separate pools ----------
-    static void withBulkheads() throws Exception {
-        ExecutorService inventoryPool = Executors.newFixedThreadPool(POOL);
-        ExecutorService shippingPool  = Executors.newFixedThreadPool(5);
-        AtomicInteger shippingDone = new AtomicInteger();
-        long start = System.currentTimeMillis();
-
-        for (int i = 0; i < REQUESTS; i++) {
-            inventoryPool.submit(() -> { slowInventory(); return null; });
-        }
-        for (int i = 0; i < 5; i++) {
-            shippingPool.submit(() -> {
-                fastShipping();
-                shippingDone.incrementAndGet();
-                return null;
-            });
-        }
-
-        Thread.sleep(3000);
-        System.out.printf("  shipping completed in 3s: %d/5   (%dms)%n",
-                shippingDone.get(), System.currentTimeMillis() - start);
-        inventoryPool.shutdownNow();
-        shippingPool.shutdownNow();
-    }
-
-    public static void main(String[] args) throws Exception {
-        System.out.println("\n=== WITHOUT bulkheads (shared pool of " + POOL + ") ===");
-        withoutBulkheads();
-
-        System.out.println("\n=== WITH bulkheads (separate pools) ===");
-        withBulkheads();
-    }
-}
+// WITH bulkheads: separate pools
+ExecutorService inventoryPool = Executors.newFixedThreadPool(POOL);
+ExecutorService shippingPool  = Executors.newFixedThreadPool(5);
 ```
 
 ### B. What you should see
@@ -604,23 +309,17 @@ public class BulkheadDemo {
   shipping completed in 3s: 5/5   (3000ms)
 ```
 
-**That's the whole pattern in two lines of output.** Same workload, same total resources. In the first
-run, twenty slow inventory tasks occupy all ten threads, and five trivial 50ms shipping tasks get
-**zero** of them. In the second, shipping has its own pool and finishes immediately — while inventory
-is just as slow as before.
-
-Nothing was made faster. Something was made *isolated*.
+**The whole pattern in two lines.** Same workload, same total resources. In the first run twenty slow inventory tasks occupy all ten threads, and five trivial shipping tasks get **zero**. In the second, shipping has its own pool and finishes immediately — while inventory is just as slow. Nothing was made faster; something was made *isolated*.
 
 ### C. Production — Resilience4j Bulkhead
 
-Two flavours, and choosing correctly matters:
+(Library setup — Maven dependency, Spring AOP — is in [Circuit Breaker 16C](../06-circuit-breaker/README.md#c-production--resilience4j).) Two flavours, and choosing correctly matters:
 
 | Type | Mechanism | Use when |
 |---|---|---|
 | `SemaphoreBulkhead` | Caps **concurrent calls** on the caller's own thread (a **semaphore** is a counter of permits) | Default choice — cheap, no extra threads |
-| `ThreadPoolBulkhead` | Runs calls on a **separate thread pool** | You need true thread isolation, or async (background) execution |
+| `ThreadPoolBulkhead` | Runs calls on a **separate thread pool** | You need true thread isolation, or async execution |
 
-**Configuration:** (for **Resilience4j**, the standard Java resilience library, written in YAML — an indentation-based config format)
 ```yaml
 resilience4j:
   bulkhead:                          # semaphore-based
@@ -640,7 +339,7 @@ resilience4j:
         queueCapacity: 20
 ```
 
-**Usage:** (to **shed load** means to reject excess work quickly instead of queuing it; `sku` is a *stock-keeping unit*, a product's ID)
+**Usage** (to **shed load** = reject excess work quickly instead of queuing it; `sku` = stock-keeping unit, a product ID):
 ```java
 @Bulkhead(name = "inventoryService", fallbackMethod = "inventoryFallback")
 public Inventory check(String sku) {
@@ -653,14 +352,14 @@ private Inventory inventoryFallback(String sku, BulkheadFullException e) {
 }
 ```
 
-**Kubernetes-level bulkheads** — the same idea applied to whole services. (**Kubernetes** runs containers across a cluster of machines; a **pod** is its smallest unit. `requests` is what the pod is guaranteed, `limits` the most it may use; `500m` means half a CPU core, `Mi`/`Gi` are mebibytes/gibibytes.)
+**Kubernetes-level bulkheads** — the same idea for whole services. A **pod**'s `requests` is what it's guaranteed, `limits` the most it may use (`500m` = half a CPU core; `Mi`/`Gi` = mebibytes/gibibytes):
 ```yaml
 resources:
   requests: { cpu: "500m", memory: "512Mi" }
   limits:   { cpu: "1000m", memory: "1Gi" }   # this pod cannot starve its neighbours
 ```
 
-**Database connection pools are bulkheads too** — and often the most valuable one (**HikariCP** is the default Java connection pool in Spring Boot; to **fail fast** is to give up immediately rather than wait):
+**Database connection pools are bulkheads too** — often the most valuable one (**HikariCP** is Spring Boot's default pool):
 ```yaml
 spring.datasource.hikari:
   maximum-pool-size: 20
@@ -669,56 +368,36 @@ spring.datasource.hikari:
 
 ### D. How to size the pools
 
-The most-asked question, and there's a real formula to start from — **Little's Law** (a queueing rule: items in progress = arrival rate × time each spends; **throughput** = requests completed per second):
+Start from **Little's Law** (items in progress = arrival rate × time each spends — [§ Little's law](../01-system-design-fundamentals/README.md#littles-law)):
 
 ```
 concurrency = throughput × latency
 ```
 
-If a dependency serves **50 requests/second** at **200ms** average latency, then
-`50 × 0.2 = 10` concurrent calls are in flight at **steady state** (normal, stable traffic). Size the bulkhead a bit above that —
-say 15 — to absorb bursts.
+A dependency serving **50 requests/second** at **200ms** average latency has `50 × 0.2 = 10` calls in flight at **steady state**. Size the bulkhead a bit above — say 15 — to absorb bursts.
 
-**The key insight:** don't size it larger than the dependency can actually handle. If Inventory
-degrades beyond 100 concurrent requests, a bulkhead of 500 doesn't help you — it just moves the queue
-from your process into theirs, where you can't see it or shed it.
-
-Then measure and adjust. `maxWaitDuration` short (~100ms) means you **shed load** rather than
-accumulate it, which is what you want.
+**Key insight:** never size it larger than the dependency can actually handle. If Inventory degrades beyond 100 concurrent requests, a bulkhead of 500 just moves the queue from your process into theirs, where you can't see or shed it. Then measure and adjust; a short `maxWaitDuration` (~100ms) means you **shed load** rather than accumulate it.
 
 ### E. Implementation pitfalls
 
-**1. Pools sized by guesswork.** Start from Little's Law, then tune with real metrics. "200 because
-that's the default" is how you end up with a pool that can't protect anything.
+**1. Pools sized by guesswork.** Start from Little's Law, then tune with real metrics. "200 because that's the default" protects nothing.
 
-**2. Unbounded queues.** `Executors.newFixedThreadPool` uses an **unbounded** `LinkedBlockingQueue` (a waiting line with no size limit).
-Under sustained overload it accumulates tasks until you get an `OutOfMemoryError` (Java crashing because it has run out of memory) — the bulkhead
-prevented thread exhaustion and gave you memory exhaustion instead. Use a bounded queue with an
-explicit **rejection policy** (the rule for what happens to new tasks when the queue is full):
+**2. Unbounded queues.** `Executors.newFixedThreadPool` uses an **unbounded** `LinkedBlockingQueue`; under sustained overload it accumulates tasks until `OutOfMemoryError` — you traded thread exhaustion for memory exhaustion. Use a bounded queue and an explicit **rejection policy**:
 ```java
 new ThreadPoolExecutor(10, 10, 0L, TimeUnit.MILLISECONDS,
     new ArrayBlockingQueue<>(50),                      // bounded
     new ThreadPoolExecutor.AbortPolicy());             // reject when full
 ```
 
-**3. Ignoring the `Future`.** `submit()` swallows exceptions into a `Future` nobody reads — failures
-vanish silently. Either use `execute()` with an `UncaughtExceptionHandler` (a hook that is called whenever a thread dies from an unhandled error), or actually check the
-result.
+**3. Ignoring the `Future`.** `submit()` swallows exceptions into a `Future` nobody reads. Use `execute()` with an `UncaughtExceptionHandler` (called when a thread dies from an unhandled error), or check the result.
 
-**4. Forgetting the database connection pool.** Teams bulkhead their HTTP calls beautifully and leave
-one shared 20-connection Hikari pool, where one slow query starves every **endpoint** (each URL the service answers). The connection
-pool is usually the *scarcest* resource you own.
+**4. Forgetting the database connection pool.** Teams bulkhead HTTP calls and leave one shared 20-connection Hikari pool where one slow query starves every **endpoint**. The connection pool is usually the *scarcest* resource you own.
 
-**5. Bulkheading without timeouts.** A bounded pool full of threads blocked forever is still a dead
-pool. Bulkhead limits *how many* can be stuck; only a timeout limits *how long*.
+**5. Bulkheading without timeouts.** A bounded pool of threads blocked forever is still dead. The bulkhead limits *how many* can be stuck; only a timeout limits *how long*.
 
-**6. Too many small pools.** Every pool holds idle threads at ~1 MB of stack each. Twenty pools of
-fifty threads is a thousand threads and roughly a gigabyte before you serve a request. Bulkhead by
-*dependency*, not by endpoint.
+**6. Too many small pools.** ~1 MB of stack per idle thread: twenty pools of fifty threads ≈ a thousand threads and ~1 GB before serving a request. Bulkhead by *dependency*, not endpoint.
 
-**7. Treating it as a scaling tool.** Repeated because it's the most common error: bigger pools do not
-mean more capacity. Past the CPU's ability to run them, more threads means more context switching and
-*less* throughput.
+**7. Treating it as a scaling tool.** Repeated because it's the most common error (Part 7): past the CPU's capacity, more threads mean *less* throughput.
 
 ---
 

@@ -3,76 +3,41 @@
 **Category:** Edge / routing
 **One-liner:** Instead of one shared backend serving every kind of client, give each client type its own backend tailored to exactly what that client needs.
 
-**Origin:** Coined by **Sam Newman**, to solve the problem of building backend services for
-structurally different clients — mobile apps, web applications, and other client-side **frameworks** (ready-made code foundations you build an app on top of, such as React or SwiftUI).
+**Origin:** Coined by **Sam Newman**, to solve building backends for structurally different clients — mobile apps, web apps, and other client-side **frameworks** (foundations you build an app on, such as React or SwiftUI).
 
 ---
 
 ## Part 0 — Concepts you need first
 
 ### What is a "frontend" and a "backend"?
-The **frontend** is the part the user sees and interacts with — the mobile app, the website, the
-smart-TV interface. The **backend** is the server-side software the frontend talks to for data and
-operations.
-
-A **client** in this chapter means a frontend application. "Client types" means categories of them:
-mobile, web, TV, watch.
+The **frontend** is what the user sees — mobile app, website, smart-TV interface. The **backend** is the server-side software it calls. A **client** here means a frontend application; "client types" are categories: mobile, web, TV, watch.
 
 ### What is over-fetching?
-**Over-fetching** is when a client downloads more data than it actually needs.
+**Over-fetching** is a client downloading more data than it needs. A mobile product list shows thumbnail, name and price, but the API returns the full product — a 2,000-word description, fifteen high-res image **URLs**, full specs, seller history. Why it hurts:
 
-Concretely: a mobile app shows a product list with a thumbnail, name, and price. But the API returns
-the full product object — a 2,000-word description, fifteen high-resolution image **URLs** (web addresses), full
-specifications, the seller's history. The app downloads all of it and displays three fields.
-
-Why it hurts:
-- **Bandwidth** (how much data a connection can carry, and how much you use) — on a **metered** mobile plan (one that charges per megabyte), this is the user's money
-- **Latency** (the time a request takes from start to finish) — larger **payloads** (the actual data carried in a request or response) take longer over slow connections
-- **Battery and CPU** (the processor that executes code) — the phone must **parse** (read and convert into usable objects) **JSON** (JavaScript Object Notation, a common text format for data) it discards
+- **Bandwidth** — on a **metered** plan (charged per MB), it's the user's money
+- **Latency** — larger **payloads** (the data in a request/response) take longer on slow links
+- **Battery and CPU** — the phone must **parse** **JSON** (the common text data format) it then discards
 - **Memory** — constrained devices hold data they never use
 
 ### What is an API?
-An **API** (Application Programming Interface) is the agreed contract for how one piece of software
-asks another for something: what you can request, what parameters you supply, what shape comes back.
-
-When this chapter says "one uniform set of APIs for all frontends," it means every client — however
-different — gets the same **endpoints** (specific URLs a server answers, like `GET /products/42`) returning the same shapes.
+The contract for how software asks other software for something (defined in [Strangler Fig](../02-strangler-fig/README.md#part-4--architecture)). "One uniform set of APIs for all frontends" means every client gets the same **endpoints** (URLs a server answers, like `GET /products/42`) returning the same shapes.
 
 ### What is aggregation?
-Combining data from several sources into one response. If a screen needs product details, reviews,
-and stock levels from three services, **aggregation** means one component calls all three and returns
-a single merged result, so the client makes one request instead of three.
+One component calls several sources and returns a single merged result — product details, reviews and stock from three services in one response, so the client makes one request instead of three.
 
 ### Why round trips matter so much on mobile
-A **round trip** is one request out and one response back. On a fast office network it might take
-5-20ms. On a mobile network it can be **100-300ms or worse**.
-
-Six round trips on a desktop: barely noticeable. Six round trips on mobile: potentially two seconds
-of nothing happening. This single fact drives most of this chapter.
+A **round trip** is one request out and its response back: **5–20 ms** on an office network, **100–300 ms or worse** on mobile. Six round trips on desktop are barely noticeable; on mobile they can be two seconds of nothing. This one fact drives most of the chapter.
 
 ---
 
 ## Part 1 — The core idea, in plain terms
 
-Imagine a company with three digital platforms:
+A company has three platforms: **a detailed website** (extensive information), **a mobile app** (quick essentials on the go), **a smartwatch app** (core functions only). The website can display a thousand words; the watch about eight.
 
-- **A detailed website** — for users on computers, offering extensive information
-- **A mobile app** — quick, essential services for on-the-go use
-- **A smartwatch app** — core functions only, in a very compact form
+Traditionally one backend serves all three, and the backend complexity appropriate for the website **overwhelms** the simpler needs of mobile and watch. The website wins by default — usually the biggest, oldest client — and everyone else gets its leftovers. BFF gives each its own backend (the course's image: each section of a diverse restaurant gets its own kitchen).
 
-These are genuinely different products with genuinely different needs. The website can display a
-thousand words; the watch can display about eight.
-
-Traditionally, one backend serves all three. The course's analogy: BFF means giving **each section of
-a diverse restaurant its own kitchen**, rather than forcing one kitchen to cook for wildly different
-menus.
-
-The reason this matters: the backend complexity appropriate for the website **overwhelms** the simpler
-needs of mobile and watch. The website's needs win by default, because it's usually the biggest and
-oldest client, and everyone else gets its leftovers.
-
-**Netflix does exactly this** — web browsers, mobile apps, and smart TVs each get their own backend
-service, because each device has different capabilities and interfaces.
+**Netflix does exactly this** — browsers, mobile apps and smart TVs each get their own backend service, because each device has different capabilities and interfaces.
 
 ---
 
@@ -80,10 +45,7 @@ service, because each device has different capabilities and interfaces.
 
 ### One-size-fits-all
 
-In traditional backend models the backend is a **monolithic** entity (one large application built and deployed as a single unit) serving multiple frontends, exposing
-**one uniform set of APIs regardless of each client's unique requirements**.
-
-Consider a desktop app and a mobile app hitting the same API:
+A traditional backend is a single entity serving all frontends, exposing **one uniform set of APIs regardless of each client's requirements**:
 
 | | Desktop | Mobile |
 |---|---|---|
@@ -91,29 +53,15 @@ Consider a desktop app and a mobile app hitting the same API:
 | Display | Large | Small |
 | Network | Usually fast, unmetered | Possibly slow, possibly metered |
 
-The course asks the right questions: should the mobile app receive the same amount of data as the
-desktop app? Is it efficient to process all that data in a mobile environment? **Not quite.**
+Should mobile receive the same data as desktop, and process it all on-device? **Not quite.**
 
 ### Performance inefficiency and over-fetching
 
-This leads directly to over-fetching, which causes performance issues, longer loading times, and
-increased bandwidth usage.
-
-Worth being concrete about the cost. A product list screen:
-
-- **Shared API response:** 250 KB (full descriptions, high-res image URLs, full specs)
-- **What mobile displays:** name, price, thumbnail — about 4 KB of actual information
-
-The user paid for 250 KB and used 4 KB. On a slow connection that's several seconds of waiting for
-data that gets thrown away.
+Over-fetching causes slow loads and bandwidth waste. A product-list screen: **shared API response 250 KB**; **mobile displays ~4 KB** (name, price, thumbnail). The user paid for 250 KB and used 4 — seconds of waiting on a slow connection for data that's thrown away.
 
 ### Complexity in code management
 
-When a single **codebase** (the full body of source code for one application) serves multiple frontends it becomes **bloated and complex** — harder to
-maintain, troubleshoot, and update. The more complex the system, the more time and resources it
-consumes, which could have gone to productive work.
-
-In practice this shows up as endpoints crowded with **conditionals** (`if`/`else` branches):
+One codebase serving many frontends becomes **bloated** — harder to maintain, troubleshoot and update — and endpoints fill with **conditionals**:
 
 ```java
 if (clientType.equals("mobile")) {
@@ -125,28 +73,18 @@ if (clientType.equals("mobile")) {
 }
 ```
 
-Every client's needs tangled into one method that nobody can change safely.
+Every client's needs tangled into one method nobody can change safely.
 
 ### Lack of flexibility and scalability
 
-Traditional backends have a rigid structure that makes it hard to innovate and scale. The course
-gives two symptoms that should feel obviously wrong:
+Two symptoms that signal you need BFF:
 
-1. **Sifting through a monolithic codebase to change one small feature for one specific frontend**
-2. **Scaling the entire backend system because one frontend is experiencing high traffic**
-
-Both are overkill — that's exactly the signal you need BFF.
-
-> *Why symptom 2 matters:* suppose a TV advert drives a spike in mobile traffic. With a shared
-> backend you scale the whole thing — including the capacity serving web and internal tools that
-> aren't busy at all. You pay for capacity you don't need because the parts can't be scaled
-> separately.
+1. **Sifting through a monolithic codebase to change one small feature for one frontend**
+2. **Scaling the entire backend because one frontend has high traffic** — a TV advert spikes mobile traffic, and you pay to scale capacity serving web and internal tools that aren't busy, because the parts can't scale separately.
 
 ---
 
 ## Part 3 — Architecture
-
-Three layers:
 
 ```
   Mobile App ──▶ Mobile BFF ──┐
@@ -156,114 +94,49 @@ Three layers:
   Smart TV   ──▶ TV BFF    ───┘      └──▶ Review Service
 ```
 
-**1. Frontend applications** — the user-facing applications: desktop, mobile, web.
-*The course's analogy: the customers ordering from a menu.*
+Three layers: **(1) Frontend applications** (desktop, mobile, web) → **(2) BFFs**, each paired with one frontend → **(3) Microservices** the BFFs call for data.
 
-**2. BFFs** — each paired with one specific frontend, catering to its unique requirements.
-*The chefs, preparing each dish to a customer's preference.*
-
-**3. Microservices** — the underlying services BFFs call to fetch data. (**Microservices** are small, independently deployable services, each owning one business capability and its data.)
-*The kitchen staff providing the raw materials.*
-
-The important structural point: **the microservices are shared; only the BFF layer is duplicated.**
-There is still exactly one Product Service holding product truth — the **source of truth** (the one place whose copy of the data is authoritative). BFFs don't own data — they reshape
-it.
+The important structural point: **the microservices are shared; only the BFF layer is duplicated.** There is still exactly one Product Service holding product truth — the **source of truth** (the authoritative copy). BFFs don't own data; they reshape it.
 
 ### What a BFF actually does
 
-**Tailored data delivery.** Each BFF ensures its frontend receives *just* the data it needs. It acts
-as a **filter**, ensuring the frontend isn't overwhelmed with unnecessary information.
+- **Tailored data delivery** — acts as a **filter** so its frontend gets *just* what it needs.
+- **Streamlining communication** — calls several microservices, consolidates, and presents one shape (an "interpreter" between many services and one client).
+- **Handling client-specific logic** — absorbs computation the client would otherwise do.
 
-**Streamlining communication.** The BFF talks to multiple microservices, consolidates the data, and
-presents it to the frontend in one streamlined shape. The course calls it an **interpreter**,
-translating many languages into one the frontend understands.
-
-**Handling client-specific logic.** Each BFF absorbs logic specific to its frontend, relieving the
-client of complex computation — a **personal assistant** doing work so the client's job is easier.
-
-> *Why moving logic server-side matters especially for mobile:* you cannot force users to update a
-> mobile app. If display logic lives in the app, fixing it means shipping a release, waiting for app
-> store review, and waiting for users to update — some never will. If it lives in the BFF, you fix
-> it and **deploy** (release the new version to the live servers) in minutes.
+> *Why server-side logic matters especially on mobile:* you can't force app updates. Display logic in the app means a release, app-store review, and waiting for users to update — some never will. In the BFF, you fix and **deploy** it in minutes.
 
 ---
 
 ## Part 4 — The benefits, explained
 
-The course lists seventeen. Grouped by theme, with the reasoning behind each.
+The course lists seventeen, grouped here:
 
-### Fit and user experience
-
-**Diverse frontend needs.** A mobile app, a web app, and a smart TV app have genuinely different
-requirements. BFF acknowledges that diversity instead of pretending it away.
-
-**Enhanced user experience.** By catering to each device's specific needs and capabilities, the user
-gets the best possible experience on whatever they're using.
-
-**Localization and internationalization.** Different frontends may serve users in different regions
-with different languages and cultural contexts. A BFF can serve localized content and
-region-relevant features.
-
-### Performance
-
-**Performance optimization.** Mobile devices may be on slower networks with less processing power than
-a desktop. A BFF lets you optimise the data and interactions per device for fast, responsive apps.
-
-**Reduced bandwidth usage.** Especially important for mobile — the BFF sends only what that specific
-frontend requires.
-
-**Scalability.** (The ability to handle more load by adding resources.) Each frontend has its own backend, so you can scale parts of the system independently
-based on their own demand. A mobile traffic spike scales only the Mobile BFF.
-
-### Simplicity for frontend teams
-
-**Simplified frontend logic.** Frontends no longer deal with the complexity of interacting with
-multiple microservices. They have a single, tailored backend that aggregates and processes data for
-them.
-
-**Consistency.** A BFF can provide a **consistent API even while the underlying microservices are
-constantly changing**. This is a stability layer for frontend developers — the backend team can
-reorganise services without breaking every app.
-
-**Versioning control.** Different frontend applications may be at different versions requiring
-different backend logic. A BFF handles versions gracefully, so each frontend gets logic appropriate
-to its version. *(Again most acute on mobile, where old versions persist in the wild.)*
-
-### Team and delivery
-
-**Agility.** Teams work independently on their own BFF, allowing faster development and deployment
-cycles. The mobile team doesn't queue behind the web team.
-
-**Easier maintenance and upgrades.** You can update the mobile backend without affecting the web
-backend, and vice versa.
-
-**Cross-functional teams.** BFF promotes teams that own **end-to-end functionality for one user
-interface** — frontend and its backend together. Better collaboration, faster delivery.
-
-### Capability
-
-**Security.** Each client type can have its own security considerations. A mobile app may need
-different **authentication** mechanisms (ways of proving who the user is, e.g. cookies vs. tokens) than a web app.
-
-**Error handling and resilience** (the ability to keep working, perhaps in reduced form, when parts fail). You can implement error handling specific to each frontend. A web
-application might handle certain errors gracefully where a mobile app cannot.
-
-**Facilitates A/B testing** (showing two variants to different user groups and comparing the results). You can test new features or changes on one client type — say the mobile
-app — **without affecting the others**.
-
-**Feature flagging.** (A **feature flag** is a configuration switch that turns behaviour on or off without deploying new code.) Enable or disable features for specific frontends at the backend level, without
-affecting others.
-
-**Handling legacy systems.** During a monolith-to-microservices transition, a BFF acts as a **bridge**,
-letting new microservices-based frontends interact with **legacy systems** (old systems still running because the business depends on them).
-*(See [Strangler Fig](../02-strangler-fig/README.md).)*
+| Theme | Benefit | Why |
+|---|---|---|
+| **Fit & UX** | Diverse frontend needs | Acknowledges that mobile, web and TV genuinely differ |
+| | Enhanced user experience | Each device served to its capabilities |
+| | Localization / internationalization | A BFF can serve region-specific language and features |
+| **Performance** | Performance optimization | Tune data and interactions per device (slow networks, weak CPUs) |
+| | Reduced bandwidth | Sends only what that frontend needs |
+| | Independent scalability | A mobile spike scales only the Mobile BFF |
+| **Frontend simplicity** | Simplified frontend logic | One tailored backend instead of many services |
+| | Consistency | A **stable API while underlying microservices change** — backend teams can reorganise without breaking apps |
+| | Versioning control | Each frontend version gets appropriate logic — acute on mobile, where old versions persist |
+| **Team & delivery** | Agility | Teams ship their BFF independently; mobile doesn't queue behind web |
+| | Easier maintenance/upgrades | Change the mobile backend without touching web |
+| | Cross-functional teams | One team owns **a frontend and its backend end to end** |
+| **Capability** | Security | Per-client auth mechanisms (e.g. cookies vs tokens) |
+| | Error handling & resilience | Per-frontend error handling — web may degrade gracefully where mobile can't |
+| | A/B testing | Test on one client type **without affecting others** |
+| | Feature flagging | Toggle features per frontend at the backend |
+| | Handling legacy systems | A **bridge** from new frontends to legacy during migration *([Strangler Fig](../02-strangler-fig/README.md))* |
 
 ---
 
 ## Part 5 — Worked example: e-commerce product details
 
-Three components: one shared **Product Service**, a **Web BFF** (extensive detail), and a **Mobile
-BFF** (concise, to save data and improve load times).
+One shared **Product Service**, a **Web BFF** (extensive detail), a **Mobile BFF** (concise, to save data and load faster).
 
 ### 1. Product Service — the real backend
 
@@ -283,16 +156,13 @@ public class ProductServiceController {
 }
 ```
 
-**Reading it:** (the code uses **Spring**, the dominant Java web framework; words starting with `@` are **annotations** — labels that tell the framework how to treat a class or method)
-- `@RestController` marks this a web-request handler returning data (not **HTML** pages — HTML being the markup language browsers render)
-- `@Autowired` asks Spring to supply ("inject") the `ProductRepository` object automatically; a **repository** is the class that reads and writes this data in the database
-- `@RequestMapping("/products")` — every endpoint here starts with `/products`
-- `@GetMapping("/{productId}")` — handles `GET /products/123`; `{productId}` is a placeholder
-- `@PathVariable` pulls that value out of the URL into the method parameter
-- `orElseThrow` — if no product exists, raise a clear error rather than returning `null` (Java's "no object here" value)
+**Reading it** (Spring; `@` words are **annotations** — labels telling the framework how to treat code):
+- `@RestController` — a web handler returning data, not **HTML** pages
+- `@Autowired` — Spring **injects** the `ProductRepository` (the class that reads/writes this data in the database)
+- `@RequestMapping("/products")` + `@GetMapping("/{productId}")` — handles `GET /products/123`; `@PathVariable` pulls `123` into the parameter
+- `orElseThrow` — no product → a clear error instead of returning `null`
 
-This service owns the **full, detailed `Product`** and does the heavy lifting. It knows nothing about
-mobile or web.
+This service owns the **full `Product`** and knows nothing about mobile or web.
 
 ### 2. Web BFF — the detailed view
 
@@ -317,166 +187,56 @@ public class WebProductController {
 }
 ```
 
-Note the URL prefix `/web/products` — each BFF has its own namespace, so clients can't accidentally
-call the wrong one.
-
-`ProductServiceClient` is a **Feign client** or any **HTTP client** (code that sends web requests using HTTP, the protocol of the web) used to talk to the Product Service.
-
-> *Beginner note — what's a Feign client?* A library that lets you call another service by declaring
-> an interface, and generates the HTTP-calling code for you. You call `getProductById(id)` like a
-> normal method and it makes the network request behind the scenes.
+The prefix `/web/products` gives each BFF its own namespace, so clients can't call the wrong one. `ProductServiceClient` is a **Feign client** (you declare an interface; the library generates the HTTP-calling code, so `getProductById(id)` looks like a normal method call) or any HTTP client.
 
 ### 3. Mobile BFF — the concise view
 
-```java
-@RestController
-@RequestMapping("/mobile/products")
-public class MobileProductController {
-
-    @Autowired
-    private ProductServiceClient productServiceClient;
-
-    @GetMapping("/{productId}")
-    public SimpleProductDetails getProductDetails(@PathVariable String productId) {
-        Product product = productServiceClient.getProductById(productId);
-        return convertToMobileProductDetails(product);
-    }
-
-    private SimpleProductDetails convertToMobileProductDetails(Product product) {
-        // Convert to a concise view suitable for mobile:
-        // stripped-down descriptions, smaller images, etc.
-    }
-}
-```
+Identical, except `@RequestMapping("/mobile/products")`, return type `SimpleProductDetails`, and a `convertToMobileProductDetails` that strips descriptions and shrinks images.
 
 ### The structural point — read this part twice
 
-Compare the two BFFs. They are **nearly identical**:
+The two BFFs are **nearly identical**: both call the **same** `productServiceClient.getProductById(productId)` and receive the **same** full `Product`. They differ **only in the transformation step** and therefore the return type (Web: `ProductDetails`, rich; Mobile: `SimpleProductDetails`, stripped).
 
-1. Both call the **same** `productServiceClient.getProductById(productId)`
-2. Both receive the **same** full `Product` object
-3. They differ **only in the transformation step** and therefore the return type:
-   - Web returns `ProductDetails` — rich descriptions, full images
-   - Mobile returns `SimpleProductDetails` — stripped descriptions, smaller images
-
-**A BFF is a projection layer, not a second source of truth.** (A **projection** is a reshaped view of data that lives elsewhere.) There is one Product Service holding
-one truth about products. The BFFs each project a different view of it. If you ever find a BFF
-*storing* data or deciding business rules about what a product *is*, it has stopped being a BFF.
-
-### How it works in practice
-
-- The **Product Service** handles all the heavy lifting related to product data
-- The **Web BFF** provides a detailed view suitable for web users
-- The **Mobile BFF** provides a concise view suitable for mobile users
-
-Each frontend gets exactly what it needs, and the backend logic is tailored to give the best possible
-experience.
+**A BFF is a projection layer, not a second source of truth.** (A **projection** is a reshaped view of data that lives elsewhere.) One Product Service holds one truth; each BFF projects a different view of it. A BFF *storing* data or deciding what a product *is* has stopped being a BFF.
 
 ---
 
 ## Part 6 — Problems with BFF, and how to handle them
 
-### 1. Code duplication
-**Problem:** Since each frontend has its own BFF, there may be **duplication across BFFs**, especially
-where they share common functionality — authentication handling, error formats, logging.
-**Solution:** Use **shared libraries** (reusable code packages that several projects import) for common functionality, or create **internal microservices**
-that multiple BFFs consume.
+| Problem | Solution |
+|---|---|
+| **1. Code duplication** across BFFs — auth handling, error formats, logging | **Shared libraries**, or **internal microservices** the BFFs consume |
+| **2. Increased maintenance** — three BFFs = three **deployment pipelines**, three sets of **dependencies** to patch | **DevOps** practices (dev + ops working together, heavy automation): automated testing, deployment, monitoring |
+| **3. Coordination overhead** between frontends and their BFFs in large teams | **Clear contracts** and **consumer-driven contract testing** |
 
-### 2. Increased maintenance
-**Problem:** More BFFs mean **more codebases to maintain**, increasing operational overhead. Three
-BFFs means three **deployment pipelines** (automated build-test-release sequences), three sets of **dependencies** (external libraries the code relies on) to patch.
-**Solution:** Adopt good **DevOps** practices (development and operations working together, with heavy automation of releases and monitoring), automate testing and deployment, and ensure proper
-monitoring to keep maintenance manageable.
-
-### 3. Coordination overhead
-**Problem:** Coordinating changes between frontends and their BFFs becomes challenging in large teams.
-**Solution:** Establish **clear contracts** between frontends and BFFs, and use **Consumer-Driven
-Contract Testing** to ensure compatibility.
-
-> *Beginner note — consumer-driven contract testing:* the consumer (the app) writes down what it
-> expects from the BFF as an executable test. The BFF's build runs those tests. If the BFF changes
-> something the app depends on, the BFF's build fails — before it reaches production, rather than
-> after.
+**Consumer-driven contract testing:** the consumer (the app) writes its expectations of the BFF as an executable test that runs in the BFF's build. If the BFF breaks something the app relies on, the BFF's build fails — before production, not after.
 
 ### Performance implications
 
-**Network latency.** BFF adds an additional network **hop** (one more trip between machines), contributing to latency (see [System Design Fundamentals](../01-system-design-fundamentals/README.md)).
-*Solution:* optimise network paths, use efficient **protocols** (agreed rules for how data is exchanged, e.g. HTTP/2 or gRPC), and ensure **BFFs are geographically
-close to the frontends they serve**.
+| Implication | Solution |
+|---|---|
+| **Network latency** — an extra hop | Optimise network paths; efficient **protocols** (e.g. HTTP/2, gRPC); place **BFFs geographically close to their frontends** |
+| **Resource utilization** — each BFF needs its own resources | Optimise; **serverless** (provider runs and scales servers, pay per call) where apt; scale on demand |
+| **Caching challenges** — same data cached in three shapes | Caching at both BFF and frontend; good use of `Cache-Control` **headers** (how long a response may be reused) |
+| **Load on backend services** — three BFFs fetching the same product = three calls | Scalable, monitored backends; **rate limiting** if needed |
 
-**Resource utilization.** Each BFF may require its own set of resources.
-*Solution:* optimise BFFs for performance, use **serverless** (cloud functions where the provider runs and scales the servers for you and you pay per call) where appropriate, and scale on demand.
-
-**Caching challenges.** Caching gets complex when multiple frontends have different requirements —
-the same underlying data cached in three different shapes.
-*Solution:* intelligent **caching** (keeping copies of recent answers to avoid refetching) at both BFF and frontend layers, and effective use of `Cache-Control`
-**headers** (HTTP metadata telling browsers and proxies how long a response may be reused).
-
-**Load on backend services.** Multiple BFFs can increase load on the shared backend services. Three
-BFFs each fetching the same product means three calls where there was one.
-*Solution:* ensure backend services are scalable, monitor their performance, and implement **rate
-limiting** (capping how many requests a caller may make per second) if necessary.
-
-> ⚠️ **The duplication trap is the one that actually bites.** Three BFFs slowly drifting apart on
-> auth handling or error semantics is how "tailored" quietly becomes "inconsistent" — and users hit
-> a bug on mobile that doesn't exist on web. Shared libraries are not optional at scale.
+> ⚠️ **The duplication trap is the one that actually bites.** Three BFFs slowly drifting apart on auth or error semantics is how "tailored" becomes "inconsistent" — users hit a bug on mobile that doesn't exist on web. Shared libraries are not optional at scale.
 
 ---
 
 ## Part 7 — System design example: Netflix
 
-Netflix serves smartphones, tablets, smart TVs, laptops, and gaming consoles. Each has distinct
-characteristics, user interactions, and performance considerations.
+Netflix serves phones, tablets, smart TVs, laptops and consoles. **Scenario: viewing movie details** — title, description, genre, rating, cast, recommendations, reviews.
 
-**Scenario: viewing movie details** — the user selects a movie and sees title, description, genre,
-rating, cast, recommendations, and user reviews.
+| BFF | Device priority | Responsibilities |
+|---|---|---|
+| **Mobile BFF** (phones, tablets) | Quick loading, less data | **Authentication** (logged in, valid subscription) · **routing** to Movie Details and Recommendation services · **aggregation** · **transformation**: smaller images, shorter descriptions, **a subset of recommendations** |
+| **TV BFF** | Rich visuals, detail, high-quality images | **Authentication & authorization** — not just login but **whether the device is authorized to play HD content** · routing & aggregation tuned to TV capabilities and networks · high-res images, full cast, elaborate descriptions, full recommendations |
+| **Web BFF** (browsers) | Balance of performance and richness | Standard login check · routing & aggregation for browsers · content for a wide range of browsers and screen sizes |
 
-Different devices prioritise differently:
+**Benefits realised:** tailored UX per device, streamlined data and faster loads, **maintainability** — frontend teams iterating fast with their own BFF. **Challenges realised:** maintaining every BFF, and keeping behaviour consistent across them.
 
-| Device | Priority |
-|---|---|
-| Smartphones | Quick loading, less data usage |
-| Smart TVs | Rich visuals, detailed information, high-quality images |
-| Web browsers | Balance between performance and rich content |
-
-Three BFFs: **Mobile BFF** (phones and tablets), **TV BFF** (smart TVs), **Web BFF** (browsers).
-
-### Mobile BFF
-Serves concise movie details, smaller images, and **a subset of recommendations** to optimise for
-speed and data usage.
-
-- **Authentication** — ensures the user is logged in and has a valid subscription
-- **Routing** — directs the request to the appropriate microservices (Movie Details Service, Recommendation Service)
-- **Aggregation** — combines data from those services and tailors it for mobile
-- **Transformation** — reduces image sizes, shortens descriptions, formats data for quick mobile rendering
-
-### TV BFF
-Serves rich visuals, detailed movie information, and a comprehensive list of recommendations.
-
-- **Authentication & authorization** — checks not just login status but **whether the device is authorized** (allowed — as opposed to authenticated, which only checks identity) **to play high-definition content**
-- **Routing & aggregation** — similar to Mobile BFF, but optimised for TV capabilities and network conditions
-- **Transformation** — high-resolution images, full cast lists, elaborate descriptions
-
-### Web BFF
-Balances performance and content richness.
-
-- **Authentication** — standard login check
-- **Routing & aggregation** — tailored for web browsers
-- **Transformation** — content optimised for a wide range of browsers and screen sizes
-
-### The benefits realised
-- **User experience** — each device gets an optimised, tailored experience
-- **Performance** — data streamlined per device type, improving load times
-- **Maintainability** — frontend teams work closely with their own BFF, leading to faster iterations
-
-### The challenges realised
-- **Maintenance** — each BFF must be maintained and updated, creating overhead
-- **Consistency** — ensuring consistent behaviour across all BFFs is genuinely challenging
-
-> **The TV BFF's extra HD-entitlement check is the clearest single argument for BFF over one shared
-> gateway.** That rule is meaningless for phones and browsers. In a shared gateway it would sit
-> behind a device-type conditional, polluting a component every team must touch. In the TV BFF it's
-> simply that BFF's business.
+> **The TV BFF's HD-entitlement check is the clearest single argument for BFF over one shared gateway.** The rule is meaningless for phones and browsers. In a shared gateway it would sit behind a device-type conditional, polluting a component every team touches; in the TV BFF it's simply that BFF's business.
 
 ---
 
@@ -490,35 +250,19 @@ Balances performance and content richness.
 | Main risk | Bottleneck / distributed monolith | Duplication and drift |
 | Owned by | Usually a platform team (builds shared infrastructure) | Usually the frontend team |
 
-**They are not mutually exclusive.** A very common production setup is a thin shared gateway handling
-**TLS termination** (decrypting incoming HTTPS traffic at the edge so services behind it receive plain requests), coarse authentication, and rate limiting, with BFFs sitting behind it. The gateway
-does what's identical for everyone; the BFFs do what differs.
+**They are not mutually exclusive.** A very common production setup is a thin shared gateway doing **TLS termination** (decrypting HTTPS at the edge), coarse authentication and rate limiting, with BFFs behind it: the gateway does what's identical for everyone, the BFFs do what differs.
 
-**Think of BFF as API Gateway specialised per client**, and note the ownership difference — a BFF
-being owned by the team that owns the frontend is a large part of why it delivers agility.
+**Think of BFF as API Gateway specialised per client** — and note the ownership difference: being owned by the frontend team is a large part of why BFF delivers agility.
 
 ---
 
 ## Part 9 — Common beginner misconceptions
 
-**"Each BFF needs its own database."** No. BFFs are generally **stateless** (they keep no data of their own between requests). They call shared
-microservices and reshape responses. A BFF with its own database has usually turned into a
-microservice by accident.
-
-**"BFF means one backend per screen."** No — per **client type**. All mobile screens share the Mobile
-BFF.
-
-**"You need BFF as soon as you have a mobile app."** Only when needs genuinely diverge. If mobile and
-web want nearly the same data, a shared gateway is simpler. Adopt BFF when you're adding
-device-conditionals to shared code.
-
-**"GraphQL makes BFF obsolete."** **GraphQL** is a query language for APIs, where a single endpoint accepts queries naming the exact fields wanted. GraphQL lets clients request exactly the fields they want, solving
-over-fetching without separate backends — a genuine alternative for *shaping*. But it doesn't solve
-client-specific *logic* (the HD-entitlement check) or independent scaling and ownership. Some teams
-use both: a GraphQL layer per client type.
-
-**"BFFs make the system faster."** Not inherently — they add a hop. They make it faster *for the
-client* by cutting round trips and payload size, which dominates on mobile networks.
+- **"Each BFF needs its own database."** No. BFFs are generally **stateless** (keep no data between requests); one with a database has usually become a microservice by accident.
+- **"BFF means one backend per screen."** No — per **client type**. All mobile screens share the Mobile BFF.
+- **"You need BFF as soon as you have a mobile app."** Only when needs genuinely diverge. If mobile and web want nearly the same data, a shared gateway is simpler; adopt BFF when you start adding device-conditionals to shared code.
+- **"GraphQL makes BFF obsolete."** **GraphQL** is an API query language where one endpoint accepts queries naming exactly the fields wanted — a genuine alternative for *shaping* (it solves over-fetching). It doesn't solve client-specific *logic* (the HD check), independent scaling, or ownership. Some teams use one GraphQL layer per client type.
+- **"BFFs make the system faster."** Not inherently — they add a hop. They make it faster *for the client* by cutting round trips and payload size, which dominates on mobile.
 
 ---
 
@@ -543,19 +287,17 @@ backends.)*
 
 ## Part 11 — Interview soundbite (30 seconds)
 
-> "BFF, from Sam Newman, means giving each client type its own backend instead of sharing one. The
-> problem it solves is over-fetching and one-size-fits-all APIs — a mobile app on a metered
-> connection shouldn't receive a payload designed for a desktop, and it shouldn't need six round
-> trips on a slow network to build one screen. Each BFF calls the same underlying microservices but
-> aggregates and transforms for its client: mobile gets small images and short descriptions, TV gets
-> high-res and full cast lists. Crucially the BFF is a projection layer, not a source of truth — the
-> microservices still own the data. Netflix does this across phones, TVs, and browsers, and their TV
-> BFF has an extra authorization check for HD entitlement, which is a good example of client-specific
-> logic that would pollute a shared gateway. It also lets frontend teams own their backend and ship
-> independently, and lets you scale per client. The costs are code duplication across BFFs, more
-> codebases to maintain, an extra network hop, and keeping behaviour consistent between them — so
-> shared libraries and consumer-driven contract testing matter. It's essentially API Gateway
-> specialised per client rather than one shared gateway, and the two are often combined."
+> "BFF, from Sam Newman, gives each client type its own backend instead of sharing one. It solves
+> over-fetching and one-size-fits-all APIs — a mobile app on a metered connection shouldn't receive a
+> desktop payload or need six round trips on a slow network for one screen. Each BFF calls the same
+> microservices but aggregates and transforms for its client: small images and short descriptions for
+> mobile, high-res and full cast for TV. Crucially the BFF is a projection layer, not a source of truth
+> — the microservices still own the data. Netflix does this across phones, TVs and browsers, and their
+> TV BFF adds an HD-entitlement check — client-specific logic that would pollute a shared gateway. It
+> also lets frontend teams own and ship their backend independently and scale per client. Costs: code
+> duplication, more codebases, an extra hop, and keeping behaviour consistent — so shared libraries and
+> consumer-driven contract testing matter. It's essentially API Gateway specialised per client, and the
+> two are often combined."
 
 ---
 
@@ -569,7 +311,7 @@ Full source: **[`demos/BffDemo.java`](../../../demos/chapters/04-bff/BffDemo.jav
 cd demos && ./gradlew runCh04
 ```
 
-The essential structure — three BFFs, one **upstream** service (the service a component calls to get its data), three projections:
+Three BFFs, one **upstream** service (the one a component calls for data), three projections:
 
 ```java
 // Mobile: trim the copy, shrink the image
@@ -604,15 +346,11 @@ new WatchProductDetails(truncate(p.name(), 20), p.price());
   uncertified TV:   SD-only payload ...
 ```
 
-**Mobile receives 7% of the shared payload.** Multiply by a 50-item product list and it's the
-difference between a screen that loads instantly and one that visibly stalls on a train.
-
-Section 3 is the conceptual check: every BFF called the *same* `ProductService`. **They add no data
-and own no data.** A BFF that starts storing things has stopped being a BFF.
+**Mobile receives 7% of the shared payload** — across a 50-item list, the difference between instant and visibly stalling on a train. Section 3 is the conceptual check: every BFF called the *same* `ProductService`; **they add and own no data**.
 
 ### C. Production — a BFF is just a small service
 
-There's no special framework; a BFF is an ordinary application whose job is aggregation and shaping. Below, `CompletableFuture.supplyAsync` runs each call on a background thread so the three calls happen in parallel, `.exceptionally(...)` supplies a default if a call fails, and `join()` waits for the results.
+No special framework — an ordinary application whose job is aggregation and shaping. `CompletableFuture.supplyAsync` runs each call on a background thread (parallel), `.exceptionally(...)` supplies a default on failure, `join()` waits:
 
 ```java
 @RestController
@@ -638,8 +376,7 @@ public class MobileBffController {
 }
 ```
 
-**GraphQL as an alternative.** It solves the *shaping* half of the problem — clients request exactly
-the fields they need, so one endpoint serves all clients without over-fetching:
+**GraphQL as an alternative** for the *shaping* half — clients request exactly their fields, so one endpoint serves all without over-fetching:
 
 ```graphql
 query MobileProduct($id: ID!) {
@@ -647,11 +384,9 @@ query MobileProduct($id: ID!) {
 }
 ```
 
-But it does **not** solve client-specific *logic* (the TV HD-entitlement check), independent scaling,
-or team ownership. A common production setup is **one GraphQL BFF per client type** — shaping from
-GraphQL, isolation from BFF.
+It does **not** solve client-specific logic, independent scaling, or ownership; a common setup is **one GraphQL BFF per client type** — shaping from GraphQL, isolation from BFF.
 
-**Shared code across BFFs** — the mitigation for the duplication problem (**tracing** below means recording a request's path across services so it can be followed end to end):
+**Shared code across BFFs** — the duplication mitigation (**tracing** = recording a request's path across services):
 ```
 bff-common/          <- auth, error format, tracing, resilience config
   ├─ mobile-bff/
@@ -661,31 +396,19 @@ bff-common/          <- auth, error format, tracing, resilience config
 
 ### D. Implementation pitfalls
 
-**1. Giving a BFF its own database.** The single most common mistake. BFFs are **stateless projection
-layers**. **Persistent state** (data saved so it survives restarts) means you've accidentally created a microservice with duplicated ownership
-of data.
+**1. Giving a BFF its own database.** The most common mistake. BFFs are **stateless projection layers**; **persistent state** means you've created a microservice with duplicated data ownership.
 
-**2. Sequential upstream calls.** A BFF exists to cut client round trips. Making three sequential
-server-side calls just moves the latency rather than removing it. Fan out with
-`CompletableFuture.allOf`.
+**2. Sequential upstream calls.** Three sequential server-side calls just move the latency instead of removing it. Fan out with `CompletableFuture.allOf`.
 
-**3. No fallback on secondary data.** If reviews are down, a product page should still render. Note the
-`.exceptionally(...)` on the review and inventory futures but *not* on the product itself — the
-primary resource legitimately fails the request; supporting data must not.
+**3. No fallback on secondary data.** If reviews are down the page should still render. Note `.exceptionally(...)` on reviews and inventory but *not* the product — the primary resource legitimately fails the request; supporting data must not.
 
-**4. Copy-pasting auth into every BFF.** This is how three BFFs drift into three subtly different
-security behaviours. Extract to `bff-common` from the start.
+**4. Copy-pasting auth into every BFF.** How three BFFs drift into three subtly different security behaviours. Extract to `bff-common` from the start.
 
-**5. One BFF per screen.** Per **client type**, not per screen. Twenty BFFs is twenty deployment
-pipelines for no benefit.
+**5. One BFF per screen.** Per **client type**. Twenty BFFs is twenty pipelines for no benefit.
 
-**6. Business rules migrating into the BFF.** "Is this order eligible for a refund?" belongs in the
-order service, where every client gets the same answer. Only **presentation** decisions belong in a
-BFF.
+**6. Business rules migrating into the BFF.** "Is this order refundable?" belongs in the order service so every client gets the same answer. Only **presentation** decisions belong in a BFF.
 
-**7. Versioning by breaking changes.** (A **breaking change** is one that makes existing clients stop working, such as removing or renaming a field.) Old mobile app versions live in the wild for years. Version the
-BFF path (`/mobile/v1`, `/mobile/v2`) and keep old versions running — being able to do this is a
-major reason BFF exists.
+**7. Versioning by breaking changes.** (A **breaking change** — e.g. removing or renaming a field — makes existing clients fail.) Old mobile versions live for years: version the path (`/mobile/v1`, `/mobile/v2`) and keep old versions running — a major reason BFF exists.
 
 ---
 

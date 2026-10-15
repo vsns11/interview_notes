@@ -8,22 +8,13 @@
 ## Part 0 — Concepts you need first
 
 ### What is CRUD?
-**Create, Read, Update, Delete** — the four basic operations on stored data. Most applications start
-here: one `User` class, one `users` table, one set of methods that create, read, update, and delete
-users.
-
-CRUD is simple and intuitive, and for most applications it's the right answer. This chapter is about
-what happens when it stops being enough.
+**Create, Read, Update, Delete** — the four basic data operations. Most applications start here: one `User` class, one `users` table, one set of methods. CRUD is simple and usually right; this chapter is about when it stops being enough.
 
 ### What is a "model"?
-In this chapter, a **model** means the code and data structures representing part of your **domain** (the business area the software deals with) — the
-`User` class, its **validation** rules (checks that input is acceptable before it's used), its database table, the code that loads and saves it.
-
-CQRS's central claim is that **one model trying to serve both reads and writes ends up serving
-neither well**, because the two have genuinely opposed requirements.
+The code and data structures representing part of your **domain** (the business area) — the `User` class, its **validation** rules, its table, the code that loads and saves it. CQRS's central claim: **one model serving both reads and writes ends up serving neither well**, because their requirements are opposed.
 
 ### Reads vs. writes — why they differ
-This is the intuition the whole pattern rests on.
+The intuition the pattern rests on:
 
 | | Writes | Reads |
 |---|---|---|
@@ -33,259 +24,138 @@ This is the intuition the whole pattern rests on.
 | **Cost of error** | Severe — corrupt data | Mild — a stale (out-of-date) display |
 | **Optimal storage** | Normalised (no duplication) | Denormalised (pre-joined) |
 
-That last row is the deep conflict. **Normalised** storage stores each fact once — excellent for
-writes, because updating a fact means changing one row. **Denormalised** storage duplicates data into
-ready-made shapes — excellent for reads, because the answer is already assembled with no **joins** (SQL operations that combine rows from several tables at query time).
-
-**You cannot have both in one schema** (the defined structure of tables and columns). Every design is a compromise between them — and CQRS says: stop
-compromising, have two.
+The last row is the deep conflict. **Normalised** storage keeps each fact once — great for writes (update one row). **Denormalised** storage duplicates data into ready-made shapes — great for reads (no **joins** at query time). **One schema can't be both**; every design compromises — and CQRS says stop compromising, have two.
 
 ### What is a DTO?
-A **Data Transfer Object** — a simple object whose only job is to carry data to whoever asked for it.
-It has no **business logic** (code implementing the rules of the domain). In CQRS, the read side returns DTOs shaped for the screen, rather than
-returning domain objects.
+A **Data Transfer Object** — a plain object that just carries data, with no **business logic**. CQRS's read side returns DTOs shaped for the screen rather than domain objects.
 
 ### What does "side effect" mean?
-A change to state that persists after a method returns. Reading data has no side effects; saving data
-does. This distinction is what CQRS formalises.
+A state change that persists after a method returns. Reading has none; saving does. CQRS formalises this distinction.
 
 ---
 
 ## Part 1 — The problem
 
-In a **monolithic** application (one built and deployed as a single unit) we usually use **one database for everything**. That single database
-handles both read and write operations — meaning it's simultaneously serving **complex join queries**
-*and* performing **CUD** (Create, Update, Delete) operations. As the application gets more
-complicated, **handling these read and write tasks becomes really hard to manage.**
+A **monolith** usually has **one database for everything**, simultaneously serving **complex join queries** and **CUD** (Create, Update, Delete) operations; as the application grows, **handling both becomes really hard to manage.**
 
 ### The scale mismatch
-
-In an ideal world, CRUD operations provide a simple and intuitive method for handling data. But
-complex applications demand handling numerous **concurrent** operations (happening at the same time), diverse data requirements, and
-efficient scaling — and traditional CRUD struggles to keep up.
-
-**The e-commerce picture:** thousands of users browsing products (**read** operations) while
-concurrently there are inventory updates, order placements, and product additions (**write**
-operations).
-
-Can a single model efficiently handle these varied requirements? That's where the cracks show.
-
-Note the asymmetry: **read operations are significantly more numerous, while write operations carry
-more complexity.** Can we scale them independently based on their different needs? Not with a single
-data model handling both.
+Complex applications need many **concurrent** operations, diverse data needs and efficient scaling, and plain CRUD struggles. **E-commerce:** thousands of users browsing (**reads**) while inventory updates, orders and new products arrive (**writes**). **Reads are far more numerous; writes carry more complexity** — and with one model you can't scale them independently.
 
 ### The optimisation conflict — the banking example
+- **Transactions** (deposits, withdrawals) — writes that must be **accurate and secure**, since they move money.
+- **Balance inquiries** — reads that must be **quick**, in **real time**.
 
-A banking application handles two main kinds of operation:
-
-- **Transactions** — depositing or withdrawing money
-- **Balance inquiries** — checking the current account balance
-
-Their needs are quite different:
-
-**Writing data (transactions)** involves creating new records or updating existing ones. It needs to be
-**accurate and secure**, as it directly affects a user's finances.
-
-**Reading data (balance inquiries)** is about fetching data **quickly and efficiently**. Users expect
-to see their balance in **real time** (immediately reflecting the latest state), without delay.
-
-> **The trap, stated plainly:** if you focus too much on making transactions fast and secure, you end
-> up making balance inquiries slower. If you optimise for quick balance checks, you compromise the
-> efficiency or security of processing transactions. **One model cannot be tuned for both.**
-
-This is a classic case where the traditional approach falls short. It becomes difficult to maintain,
-scale, and perform well under different types of **load** (the volume and kind of work hitting the system).
+> **The trap:** optimise transactions for speed and security and balance inquiries slow down; optimise for quick balance checks and you compromise transaction efficiency or security. **One model can't be tuned for both** — it becomes hard to maintain, scale, and perform under different kinds of **load**.
 
 ---
 
 ## Part 2 — The solution
 
-Break the term down:
-
-- **Command** — an instruction to *do* something: creating, updating, or deleting data. In the banking
-  example, processing a deposit or a withdrawal.
-- **Query** — a request to *retrieve* data **without changing it**. Checking your account balance.
-- **Responsibility Segregation** — dividing responsibilities: separating the handling of commands
-  (writes) from queries (reads).
+- **Command** — an instruction to *do* something: create, update, delete (a deposit or withdrawal).
+- **Query** — a request to *retrieve* data **without changing it** (checking your balance).
+- **Responsibility Segregation** — handling commands (writes) separately from queries (reads).
 
 ### The two sides
-
-**The Command Side** handles all write operations. It's responsible for updating data — processing
-transactions in the banking app.
-
-**The Query Side** deals with all read operations. It's optimised for fetching data quickly — showing
-your current account balance.
+**The Command Side** handles all writes (processing transactions). **The Query Side** handles all reads, optimised for fast retrieval (showing the balance).
 
 ### The formal rule
 
-This is the definition that gives the pattern its rigour, and it's worth memorising. The **separation of
-concerns** (giving each piece of code one clear job) distinguishes between methods that change state and those that don't. **Each method of an
-object falls into one of these categories, but never both:**
+Worth memorising — it gives the pattern its rigour. As a **separation of concerns**, **every method is either a query or a command, never both:**
 
 | | Returns a value? | Changes state? |
 |---|---|---|
 | **Query** | ✅ Returns a result | ❌ No state change, no side effects |
 | **Command** *(also called modifiers or mutators — methods that change data)* | ❌ Only an indication of success or failure | ✅ Changes system state |
 
-> **Why "never both" matters.** A method that both changes state *and* returns data is impossible to
-> call safely — you can't retry it (it might apply twice), you can't **cache** it (store its result to reuse later), and you can't reason
-> about it. Enforcing the split makes queries freely repeatable and cacheable, and makes commands
-> explicit about being consequential.
+> **Why "never both" matters.** A method that changes state *and* returns data can't be called safely: you can't retry it (it might apply twice), can't **cache** it, can't reason about it. The split makes queries freely repeatable and cacheable, and commands explicitly consequential.
 
 ### Why this is useful
+- **Optimization** — tune each side: command side for security and accuracy, query side for speed.
+- **Simplicity** — each side developed and maintained separately.
+- **Scalability** — scale reads and writes independently by demand.
+- **Flexibility in technology choice** — different **stacks** per side: a **relational database** (tables linked by keys, SQL) with constraints and **transactions** for writes; a **document store** (self-contained JSON-like documents) or **search index** (e.g. Elasticsearch) for reads.
 
-**Optimization** — by separating reads and writes you can optimise each independently. The command side
-focuses on security and accuracy; the query side is optimised for speed.
-
-**Simplicity** — it simplifies the design. Each side is developed and maintained separately, reducing
-complexity.
-
-**Scalability** (handling more load by adding resources) — as the application grows, scale read and write operations independently based on
-their specific demands.
-
-**Flexibility in technology choice** — different **technology stacks** (sets of languages, frameworks and databases) can be used for the read side and
-the write side if that suits their needs better. A **relational database** (one storing data in tables linked by keys, queried with SQL) for writes with its
-constraints and **transactions** (groups of changes that succeed or fail together); a **document store** (a database storing self-contained JSON-like documents) or **search index** (a structure built for fast text search, e.g. Elasticsearch) for reads.
-
-**In essence:** CQRS acknowledges that the needs for reading and writing data are different, and lets
-you treat them separately.
+**In essence:** reading and writing have different needs, and CQRS lets you treat them separately.
 
 ---
 
 ## Part 3 — Architecture: three levels
 
-CQRS is not one thing — it's a spectrum. Knowing which level you mean is important, because the costs
-differ enormously.
+CQRS is a spectrum, and the costs differ enormously by level — always say which you mean.
 
 ### Level 1 — Separate models, one database
 
-**The Command Model** handles all write operations. It is responsible for maintaining the **integrity
-and consistency** of data (keeping it correct and obeying all its rules). It receives commands, performs validations, applies business rules, and
-alters system state.
-*The course's image: a disciplined librarian, ensuring every book is in its proper place.*
+**The Command Model** handles writes and guards the **integrity and consistency** of data: receives commands, validates, applies business rules, changes state. **The Query Model** handles reads, returning current state efficiently. (The course's image: a disciplined librarian shelving every book correctly vs. a friendly one fetching what you need.)
 
-**The Query Model** handles all read operations, providing the current state of the system to users.
-It's optimised for reads, ensuring users get data efficiently and quickly.
-*A friendly librarian, always ready to fetch the book you need.*
-
-This is the simplest useful form — two models, one database. **Most teams should stop here.** You get
-most of the design clarity with almost none of the operational cost.
+The simplest useful form — two models, one database. **Most teams should stop here:** most of the design clarity, almost none of the operational cost.
 
 ### Level 2 — Separate read and write databases
 
-To enhance flexibility and scalability, you can use **separate databases** for reads and writes.
+Separate databases add flexibility and independent scaling, but
 
-> ⚠️ However, this **significantly increases complexity**, as it requires careful consideration of how
-> to propagate changes from the write database to the read database.
+> ⚠️ **significantly increase complexity**: you must propagate changes from the write database to the read database.
 
-The specific problems this creates, all of which the course lists:
-
-- **No atomic transactions across the read and write models** (no single all-or-nothing update covering both) — so you must rely on **asynchronous
-  messaging and events** (messages sent without waiting for a reply) to achieve **eventual consistency** (the read side catches up after a short delay — see [System Design Fundamentals](../01-system-design-fundamentals/README.md))
+The problems it creates:
+- **No atomic transactions across the read and write models** — so you rely on **asynchronous messaging and events** for **eventual consistency** (the read side catches up shortly — [§ Consistency models](../01-system-design-fundamentals/README.md#consistency-models))
 - **Out-of-order event propagation**
 - **Event loss**
 - **Sync discrepancies**
 - **Read Model update failures**
-- **The timing of UI updates after writing** (UI = user interface) — what does the user see immediately after they hit save,
-  if the read model hasn't caught up?
+- **The timing of UI updates after writing** — what does the user see right after hitting save, if the read model hasn't caught up?
 
-Implementing and managing this style **demands a high degree of complexity and a deep understanding of
-distributed transactions** (transactions spanning several databases or services). It's suitable **only if your application's non-functional requirements** (needs about speed, scale and reliability rather than features)
-**genuinely demand such an intricate solution.**
+It demands **a deep understanding of distributed transactions** and suits you **only if your non-functional requirements** (speed, scale, reliability — not features) **genuinely demand it.**
 
 ### Level 3 — Event Sourcing
 
-This exists to solve one specific problem from Level 2: **ordering**.
+Exists to solve one Level 2 problem: **ordering**. With separate databases kept in sync eventually, **the sequence of events from write side to read side is crucial**; rapid successive writes **received out of order leave the read model outdated** — and **many asynchronous message buses prioritise availability and performance and don't guarantee delivery order.**
 
-Using separate databases makes maintaining sync with eventual consistency hard, and **the sequence of
-events from write side to read side is crucial**. If updates on a write model occur quickly one after
-another, **receiving events out of order leaves the read model with outdated information.**
+**Event Sourcing** stores the write model as an **append-only event store** (events only ever added, never edited or deleted) recording every action; a model's state is rebuilt by **replaying its event history**. Each write-model instance is an **independent event stream**, which enables:
 
-The complication: **many asynchronous message buses** (systems that carry messages between components) **prioritise availability** (staying up and answering) **and performance, and often
-don't guarantee the order of message delivery.**
+- **Various data views**, by replaying events differently
+- **Rebuilding read models** from scratch from the write side's events — the direct fix for sync problems
+- **Simplified auditing** — the streams record every change to every model
+- **New read models** built by replaying past events — new views of history that never existed before
 
-**Event Sourcing** addresses this with a different method of storing write models: **append-only event
-stores** (logs where new events are only ever added, never edited or deleted) that record every action on a model. When updating, the model is refreshed by **replaying its
-entire event history**.
-
-In this approach each write model instance exists as an **independent event stream** (its own ordered sequence of events), which enables:
-
-- **Various data views**, by replaying the events differently
-- **Rebuilding read models** from scratch by retrieving all events from the write side — the direct fix
-  for synchronisation problems
-- **Simplified auditing** (proving later who changed what, and when), since the event streams document every change to every model
-- **Creating new read models** by replaying past events — you can add a new view of historical data
-  that never existed before
-
-> **However:** implementing event sourcing **adds complexity and is a significant undertaking**,
-> especially for anyone new to CQRS, event sourcing, or **distributed systems** (systems spread across many machines). Do not adopt Level 3
-> because you adopted Level 1. They are separate decisions with very different costs.
+> **However:** event sourcing **adds complexity and is a significant undertaking**, especially if you're new to CQRS, event sourcing, or distributed systems. Don't adopt Level 3 because you adopted Level 1 — separate decisions with very different costs.
 
 ---
 
 ## Part 4 — Inner workings
 
 ### The journey of a command
+A command expresses an **intention to change state** — e.g. `UpdateUserAddress`:
 
-A command signifies an **intention to change state**. Follow one through: a user wants to update their
-address in an e-commerce application. The command is `UpdateUserAddress`.
-
-**Step 1 — Validation.** Before anything else, the command is validated. This can involve checks for
-**data format, permissions, and other business rules**. Is the new address in a valid format? Does the
-user have permission to change it? Pass, and it proceeds; fail, and it's **rejected**.
-
-**Step 2 — Handling.** Once validated, the command is handled by the **command handler** — the workhorse
-of the command side. It's responsible for updating system state based on the command; here, updating
-the user's address.
-
-**Step 3 — Generating events.** Every command leads to a change in state, represented by an **event** —
-here, `UserAddressUpdated`. This event is stored in the **event store**, serving as a historical record
-of all changes in the system.
+1. **Validation** — **data format, permissions, business rules**: is the address valid, may this user change it? Fail → **rejected**.
+2. **Handling** — the **command handler**, the command side's workhorse, updates state.
+3. **Generating events** — the change is represented as an **event**, `UserAddressUpdated`, stored in the **event store** as a historical record.
 
 ### The query's quest
+`GetUserAddress` is just a data request. **Queries need no validation and generate no events** — the **query handler** fetches and returns data.
 
-A query is simply a request for data. Our user now wants to view their updated address, issuing
-`GetUserAddress`.
-
-**Unlike commands, queries require no validation and generate no events.** They're simply processed by
-the **query handler**, which fetches the required data and returns it.
-
-> That asymmetry is worth noticing — it's a direct consequence of the formal rule. Because a query
-> changes nothing, there's nothing to validate against business rules and nothing to record. This is
-> why the read path can be made so much simpler and faster than the write path.
+> That asymmetry follows directly from the formal rule: a query changes nothing, so there's nothing to validate or record — which is why the read path can be much simpler and faster.
 
 ### Synchronising the two sides
-
-How do the two sides stay in sync? This is where **Event Sourcing** comes in.
-
-The `UserAddressUpdated` event generated when the user updated their address is **replayed on the query
-side** to update its state. The user's updated address is thereby reflected in the query model. Event
-Sourcing ensures that despite working separately, **the command and query sides remain in sync**.
+**Event Sourcing** keeps them in step: the `UserAddressUpdated` event is **replayed on the query side**, updating its state, so the separately-run command and query sides **stay in sync**.
 
 ---
 
 ## Part 5 — Worked example: user profile management
 
-A simple application managing user profiles. You can **create a new user** (command), **update their
-email** (command), and **view user details** (query).
+**Create a user** (command), **update their email** (command), **view user details** (query).
 
 ### The pieces
 
-**Command Model (Write Model):**
-- **Command Class** — defines an action to perform, e.g. `CreateUserCommand` with `userId`, `name`, `email`
-- **Command Handler** — processes commands: takes the command, performs business logic, persists changes
-- **Domain Model** — represents the state of the data (the `User` class)
-- **Repository** — handles data **persistence** (saving to and loading from storage)
-
-**Query Model (Read Model):**
-- **DTO** — represents the data we want to read, e.g. `UserProfileDTO`
-- **Query Class** — defines a query, e.g. `GetUserProfileQuery` with a `userId`
-- **Query Handler** — handles the query and returns the data, often using **read-optimised storage**
-
-**Infrastructure:**
-- **Command Bus** — routes commands to their handlers
-- **Query Bus** — routes queries to their handlers
-- **Event Store** — in a more advanced setup, stores the events resulting from commands
+| Side | Piece | Role |
+|---|---|---|
+| **Command (write) model** | **Command class** | An action to perform, e.g. `CreateUserCommand` (`userId`, `name`, `email`) |
+| | **Command handler** | Takes the command, runs business logic, persists changes |
+| | **Domain model** | The state of the data — the `User` class |
+| | **Repository** | Data **persistence** (saving and loading) |
+| **Query (read) model** | **DTO** | The data to read, e.g. `UserProfileDTO` |
+| | **Query class** | A query, e.g. `GetUserProfileQuery` (`userId`) |
+| | **Query handler** | Returns the data, often from **read-optimised storage** |
+| **Infrastructure** | **Command bus / Query bus** | Route commands / queries to their handlers |
+| | **Event store** | In advanced setups, stores the events resulting from commands |
 
 ### Command classes
 
@@ -302,8 +172,7 @@ public class UpdateUserEmailCommand {
 }
 ```
 
-Note these are **just data** — an intention expressed as an object, with no behaviour. Making the
-intent an explicit object is part of the point: you can log it, queue it, or replay it.
+**Just data** — intent expressed as an object, with no behaviour. Making intent an explicit object is part of the point: you can log it, queue it, or replay it.
 
 ### Command handlers
 
@@ -345,9 +214,7 @@ public class UpdateUserEmailCommandHandler {
 }
 ```
 
-**Two things to notice.** First, `handle` returns **`void`** (Java for "returns nothing") — matching the formal rule that commands
-don't return data. Second, **validation lives here**, in the command handler, before any state change.
-This is the "accuracy and security" focus of the write side made concrete.
+**Notice:** `handle` returns **`void`** — commands don't return data (the formal rule). And **validation lives here**, before any state change — the write side's "accuracy and security" focus made concrete.
 
 ### Domain model and repository
 
@@ -397,13 +264,7 @@ public class ReadUserEmailQueryHandler {
 }
 ```
 
-**Notice the granularity.** `ReadUserEmailQuery` returns just a `String` — not a whole object. Read
-models can be **as narrow as the screen actually needs**, and that's precisely the optimisation
-opportunity CQRS opens up. Each query gets its own purpose-built shape rather than everyone sharing
-one bloated object.
-
-Also note the handlers return **DTOs, not domain objects**. The read side is deliberately not exposing
-the write side's model.
+**Granularity:** `ReadUserEmailQuery` returns just a `String`. Read models can be **as narrow as the screen needs** — each query gets a purpose-built shape instead of one bloated shared object. And handlers return **DTOs, not domain objects**: the read side doesn't expose the write model.
 
 ### Infrastructure
 
@@ -436,136 +297,59 @@ public class SimpleEventStore implements EventStore {
 }
 ```
 
-The buses route to handlers; the event store captures changes as a series of events which, in a full
-application, can be **replayed to rebuild the state of an entity** (one individual business object, such as a specific user).
+The buses route to handlers; the event store captures changes that, in a full application, can be **replayed to rebuild an entity's state** (an entity = one business object, e.g. one user).
 
-> **Where this example actually sits:** it's **Level 1**. Both sides still share the same
-> `UserRepository` and the same database. The event store is present but unused by the read path.
-> That's not a flaw — Level 1 is where most real systems should live, and it already delivers the
-> design clarity that is CQRS's main benefit.
+> **Where this sits:** **Level 1** — both sides share `UserRepository` and one database; the event store is unused by reads. Not a flaw: Level 1 is where most real systems should live and already delivers CQRS's main benefit, design clarity.
 
 ---
 
 ## Part 6 — Issues, considerations, and performance
 
 ### Complexity
-Implementing CQRS introduces **a fair amount of complexity**. Maintaining two separate models — command
-and query — is a complex task. This can be a roadblock for developers unfamiliar with the pattern, and
-**the learning curve is steep**.
-
-> The course's image: like weaving a basket, the more intricate the design, the more complex the
-> weaving process.
+Maintaining two models is genuinely complex, a roadblock for developers new to the pattern, with **a steep learning curve**.
 
 ### Managing data consistency
-One of the significant challenges is maintaining consistency between the command model and the query
-model.
+**The scenario:** the command model changes before the query model is updated; **a query arriving in that interval returns outdated data.**
 
-**The scenario:** the command model changes, but the query model hasn't been updated yet. **What
-happens if a query arrives during that interval? It returns outdated data.**
-
-> This is the central trade-off of CQRS, and the one to raise in an interview. In UI terms: a user
-> saves their profile, the page reloads, and their old name is still showing. Common mitigations
-> include having the UI **optimistically** display (show the expected result before the server confirms it) what the user just submitted, or routing reads
-> immediately after a write to the write model.
+> The central trade-off of CQRS — raise it in interviews. In UI terms: a user saves their profile, the page reloads, and the old name is still there. Mitigations: the UI displays **optimistically** (shows the expected result before the server confirms), or reads right after a write go to the write model (Part 12C).
 
 ### Handling transactions
-In traditional CRUD, handling transactions is relatively straightforward. In CQRS it gets complicated.
-
-**The scenario:** you need to perform multiple commands as part of a single logical transaction. What
-if one command fails? **How do you roll back the changes from previous commands?** Remember, commands
-change system state.
-
-> The course's image: like painting a wall — if you make a mistake with one colour you can't simply
-> erase it; you may need to repaint the entire wall.
-
-*(This is exactly the problem the [Saga](../10-saga/README.md) pattern addresses with compensating
-transactions.)*
+**The scenario:** several commands form one logical transaction and one fails — **how do you roll back the earlier commands' changes?** Commands change state, and there's no simple erase. *(Exactly what [Saga](../10-saga/README.md) addresses with compensating transactions.)*
 
 ### Dealing with asynchronicity
-CQRS often comes with asynchronous operations, making **error handling and debugging more complex**.
-In a system where operations are performed asynchronously, **tracking down the source of an error is
-challenging**.
+CQRS often brings async operations, making **error handling and debugging harder** — **finding an error's source is challenging**.
 
 ### The performance upside
-On the brighter side, a compelling reason to use CQRS is its **potential to improve performance**. By
-segregating commands and queries you optimise each side for its specific purpose.
-
-For instance, if you find queries outnumber commands, you can **allocate more resources to the query
-side** to ensure smooth operation.
-
-> The course's image: putting more trains on your busiest routes while maintaining fewer services
-> where demand is low.
+Segregating commands and queries lets you optimise each side; if queries far outnumber commands, **give the query side more resources** (more trains on the busiest routes).
 
 ---
 
 ## Part 7 — Use cases
 
-### High-performance applications
-The most compelling case: applications where **the number of reads significantly outweighs the number
-of writes**. An e-commerce platform where millions of users browse products (queries) compared to a
-much smaller number of transactions (commands). It makes obvious sense to optimise the system for the
-higher volume of reads.
-
-### Complex business logic
-Where a system has **complex business logic that modifies state**, separating read and write
-responsibilities simplifies that complexity.
-
-> The course's image: division of labour on a factory assembly line — each worker focuses on their
-> specific task, leading to improved efficiency and higher quality output.
-
-The practical benefit: your write model can be rich with rules and **invariants** (conditions that must always hold, e.g. "balance never negative") without that complexity
-slowing down or complicating every read.
-
-### Collaborative domains
-Where **many users can update the same data**, CQRS helps manage conflicts. Picture a shared document
-edited by several people simultaneously. **If updates are treated as commands that can fail or be
-rejected based on rules**, it becomes much easier to handle this collaborative environment.
+- **High-performance applications** — the most compelling case: **reads far outweigh writes**, e.g. millions browsing products vs. far fewer purchases; optimise for the read volume.
+- **Complex business logic** — separating responsibilities simplifies **state-changing logic** (division of labour on an assembly line): the write model can be rich with rules and **invariants** (conditions that must always hold, e.g. "balance never negative") without slowing or complicating reads.
+- **Collaborative domains** — **many users updating the same data** (a shared document). **Treating updates as commands that can fail or be rejected by rules** makes conflicts manageable.
 
 ---
 
 ## Part 8 — System design examples
 
 ### Event-driven microservices
-An e-commerce system handling orders. Each order goes through stages: **placed, paid, shipped,
-delivered**.
-
-Each stage is a **state change driven by commands**. Meanwhile, different **microservices** (small, independently deployed services) need to **query**
-the state of an order — a shipment tracking service, a customer notification service. Using CQRS here
-leads to a cleaner, more efficient system design.
+Orders move through **placed, paid, shipped, delivered** — each a **command-driven state change** — while other microservices **query** order state (shipment tracking, customer notifications). CQRS gives a cleaner, more efficient design.
 
 ### Real-time analytics
-(**Analytics** means computing statistics and reports from raw data.) A social media platform where users are constantly **posting updates (commands)** while the platform
-simultaneously provides **real-time analytics about user engagement (queries)**.
-
-Their performance needs are genuinely opposite:
-
-- **Commands must be fast and reliable** to provide a smooth user experience
-- **Queries require heavy computation** but are **not time-critical**
-
-By segregating these responsibilities, the system can **optimise resource allocation to meet these
-differing needs**. This is a textbook fit — the two **workloads** (streams of work of one kind) would actively harm each other sharing
-one model.
+A social platform where users constantly **post updates (commands)** while the platform serves **real-time engagement analytics (queries)**. Their needs are opposite: **commands must be fast and reliable**; **queries need heavy computation but aren't time-critical**. Segregation **allocates resources to each need** — a textbook fit, since the two **workloads** would harm each other sharing one model.
 
 ---
 
 ## Part 9 — Common beginner misconceptions
 
-**"CQRS requires two databases."** No — that's Level 2. Level 1 is two models over one database, and
-it's where most systems should live.
-
-**"CQRS requires event sourcing."** No. They're frequently discussed together and complement each
-other, but they're independent choices. You can do CQRS with no events at all.
-
-**"CQRS is the same as read replicas."** **Read replicas** are copies of the *same* database, kept in sync, used to spread read **load**. CQRS means a *different model* shaped for reading. You can use both.
-
-**"Commands are just HTTP POSTs."** (A POST is the web request type used to create or submit something.) Commands are a design concept, not a **transport** detail (how the message travels). A command is
-an explicit object representing intent — which is what lets you queue, log, and replay it.
-
-**"It's always faster."** It adds **indirection** (extra layers between caller and data). It's faster when read and write workloads genuinely
-conflict, and pure overhead when they don't.
-
-**"Apply it to the whole application."** Almost always wrong. Apply it to the **specific parts** where
-read and write needs genuinely diverge, and leave simple CRUD as CRUD.
+- **"CQRS requires two databases."** That's Level 2. Level 1 — two models, one database — is where most systems should live.
+- **"CQRS requires event sourcing."** Frequently paired, but independent choices; CQRS can have no events at all.
+- **"CQRS is the same as read replicas."** **Read replicas** are synced copies of the *same* database to spread read **load**; CQRS is a *different model* shaped for reading. You can use both.
+- **"Commands are just HTTP POSTs."** A command is a design concept, not a **transport** detail — an explicit object representing intent, which is what lets you queue, log and replay it.
+- **"It's always faster."** It adds **indirection**. Faster when read and write workloads genuinely conflict; pure overhead when they don't.
+- **"Apply it to the whole application."** Almost always wrong. Apply it where read and write needs genuinely diverge; leave simple CRUD as CRUD.
 
 ---
 
@@ -592,22 +376,19 @@ the two workloads would degrade each other if they shared a model.)*
 
 ## Part 11 — Interview soundbite (30 seconds)
 
-> "CQRS separates the write path from the read path — commands that change state and return nothing,
-> queries that return data and change nothing. The motivation is that reads and writes usually have
-> opposite requirements: in a banking app, transactions need accuracy and security while balance
-> inquiries need raw speed, and at the storage level writes want normalised data while reads want
-> denormalised pre-joined shapes, so you can't tune one model for both. It's a spectrum, and being
-> clear about which level you mean matters. The simplest version is two models over one database,
-> which is where most systems should stop — you get the design clarity with almost no operational
-> cost. The next level is separate read and write databases, which buys independent scaling but costs
-> you atomic transactions, so you're on eventual consistency via async events and dealing with
-> out-of-order delivery and lost messages. The furthest level is event sourcing, where the write side
-> is an append-only event log and you rebuild read models by replaying it. That solves ordering and
-> gives you audit history and the ability to build entirely new read models from past events, but
-> it's a big undertaking and a separate decision from adopting CQRS. The main downside throughout is
-> the consistency window — a user saves their profile and the page still shows the old name — plus
-> genuine complexity and harder debugging. It pairs naturally with event-driven architecture, and
-> with sagas when one logical transaction spans multiple commands."
+> "CQRS separates writes from reads — commands that change state and return nothing, queries that
+> return data and change nothing. Reads and writes usually have opposite needs: in banking,
+> transactions need accuracy and security while balance inquiries need speed, and at the storage level
+> writes want normalised data while reads want denormalised, pre-joined shapes — one model can't be
+> tuned for both. It's a spectrum. Level 1 is two models over one database — where most systems should
+> stop: design clarity, almost no operational cost. Level 2 is separate read and write databases:
+> independent scaling, but no atomic transactions across them, so eventual consistency via async events
+> with out-of-order delivery and lost messages to handle. Level 3 is event sourcing: the write side is an
+> append-only event log and read models are rebuilt by replay — fixing ordering and giving audit history
+> and brand-new read models from past events, but a big undertaking and a separate decision. The main
+> downside throughout is the consistency window — save your profile and still see the old name — plus
+> complexity and harder debugging. It pairs with event-driven architecture, and with sagas when one
+> logical transaction spans several commands."
 
 ---
 
@@ -659,14 +440,11 @@ eventStore.all().forEach(fast::apply);     // replay history
   after replaying the log:      UserProfileView[id=u1, name=Alice, ...]
 ```
 
-**Section 3 is the trade-off you must be able to describe in an interview**, and here it's observable:
-the write store has the new email while the read model still has the old one. That's not a bug — it's
-the deal you accepted. Section 5 shows the compensating power: **read models are disposable**, because
-the event log is the truth.
+**Section 3 is the trade-off to describe in an interview**, made observable: the write store has the new email while the read model still has the old — not a bug, the deal you accepted. Section 5 is the compensating power: **read models are disposable**, because the event log is the truth.
 
 ### C. Production — Axon Framework
 
-(**Axon** is a Java framework for CQRS and event sourcing. An **aggregate** is a cluster of objects treated as one unit for changes — here, one user — and annotations like `@CommandHandler` tell Axon which method handles which message.)
+(**Axon**: a Java framework for CQRS and event sourcing. An **aggregate** is a cluster of objects changed as one unit — here, one user; annotations such as `@CommandHandler` map messages to methods.)
 
 ```java
 @Aggregate
@@ -696,7 +474,7 @@ public class UserAggregate {
 }
 ```
 
-**The projection — the read side:** (a **projection** builds a read model by applying events to it)
+**The projection — the read side** (a **projection** builds a read model by applying events):
 ```java
 @Component
 public class UserProfileProjection {
@@ -720,7 +498,7 @@ public class UserProfileProjection {
 }
 ```
 
-**Plain Spring, no framework** — Level 1, which is where most systems should live. (**Spring** is the main Java application framework; **JPA**, the Java Persistence API, maps Java classes to database tables; a **native query** is raw SQL written by hand.)
+**Plain Spring, no framework** — Level 1, where most systems should live (**JPA**, the Java Persistence API, maps classes to tables; a **native query** is hand-written SQL):
 
 ```java
 // Write side: JPA against a normalised schema
@@ -737,8 +515,7 @@ public interface UserProfileReadRepository extends Repository<UserProfileView, S
 }
 ```
 
-> **You do not need Axon, Kafka, or event sourcing to do CQRS.** Two repositories and two model
-> classes over one database is legitimate CQRS and delivers most of the benefit.
+> **You don't need Axon, Kafka or event sourcing to do CQRS.** Two repositories and two model classes over one database is legitimate CQRS and delivers most of the benefit.
 
 **Handling the consistency window in the UI** — three practical options:
 
@@ -750,35 +527,25 @@ return readModel.find(userId);
 // 2. Return the new state from the command endpoint so the UI can render optimistically
 // 3. Return a version token; the client polls the read model until it catches up
 ```
-(In option 3, a **version token** is a number identifying the write; to **poll** is to ask repeatedly until the answer is ready.)
+(A **version token** is a number identifying the write; to **poll** is to ask repeatedly until ready.)
 
 ### D. Implementation pitfalls
 
-**1. Jumping straight to Level 3.** Event sourcing is a large, hard commitment — schema evolution for
-events, **snapshotting** for long streams (saving the full state every so often so replay can start from there), replay tooling. Adopting it *because* you adopted CQRS is the
-most common way teams get into trouble. Start at Level 1.
+**1. Jumping straight to Level 3.** Event sourcing is a large commitment — event schema evolution, **snapshotting** for long streams, replay tooling. Adopting it *because* you adopted CQRS is the most common way teams get into trouble. Start at Level 1.
 
-**2. Commands that return data.** The moment `handle()` returns the updated entity, the rule collapses
-and you're back to one model. Return void, or at most an ID.
+**2. Commands that return data.** Once `handle()` returns the updated entity the rule collapses and you're back to one model. Return void, or at most an ID.
 
-**3. Business logic in the read model.** Projections should only *shape* data. Any rule that decides
-something belongs on the write side, or the two sides will disagree.
+**3. Business logic in the read model.** Projections only *shape* data; any deciding rule belongs on the write side, or the sides will disagree.
 
-**4. Ignoring the consistency window in the UI.** Users who save and immediately see stale data file
-bugs. Design for it explicitly with one of the three techniques above.
+**4. Ignoring the consistency window in the UI.** Users who save and see stale data file bugs. Design for it with one of the three techniques above.
 
-**5. Not being able to rebuild projections.** The main benefit of event sourcing is disposable read
-models — but only if replay is *tested*. Make rebuilding a routine operation, not a theoretical one.
+**5. Not being able to rebuild projections.** Disposable read models are event sourcing's main benefit — only if replay is *tested*. Make rebuilding routine, not theoretical.
 
-**6. Unbounded event streams.** An aggregate with 100,000 events takes forever to load by replay. Use
-**snapshots** — persist state every N events and replay only from there.
+**6. Unbounded event streams.** An aggregate with 100,000 events takes forever to load by replay. Use **snapshots** — persist state every N events and replay only from there.
 
-**7. Applying CQRS everywhere.** Simple CRUD entities should stay CRUD. Apply it where read and write
-needs genuinely diverge, and be able to say *why* for each place you use it.
+**7. Applying CQRS everywhere.** Simple CRUD entities stay CRUD. Apply it where read/write needs genuinely diverge, and be able to say *why* for each place.
 
-**8. Events named as commands.** `UpdateEmail` is a command; `EmailChanged` is an event. Getting the
-tense wrong signals a design where events are really disguised instructions, which reintroduces
-**coupling** (components depending on each other's internals).
+**8. Events named as commands.** `UpdateEmail` is a command; `EmailChanged` is an event. Wrong tense signals events that are disguised instructions, reintroducing **coupling** ([Event-Driven Part 0](../11-event-driven/README.md#what-is-an-event)).
 
 ---
 
