@@ -1,26 +1,10 @@
 # Chapter 17 — Spring AI and What's New in Boot 4 / Framework 7
 
-This chapter has two halves.
+Two halves. First, **Spring AI**: the Spring project for calling large language models (LLMs) through one API across providers (OpenAI, Anthropic, Google, Amazon Bedrock, Ollama, ...), plus what a real AI feature needs beyond "send text, get text": prompt templates (the **prompt** is the text sent to the model), conversation memory, answers as Java objects, letting the model call your code (tools), searching your documents (RAG, retrieval-augmented generation, §17.9) and the Model Context Protocol (MCP: a standard way to offer tools to AI apps, §17.10). Second, a **migration map**: Boot 3.x → 4.x, Framework 6 → 7, Security 6 → 7, each change pointing to the chapter that teaches it.
 
-The first half is **Spring AI**: the Spring project for calling large language models (LLMs) from a Spring application. It gives you one API for many AI providers (the companies or tools that host the models: OpenAI, Anthropic, Google, Amazon Bedrock, Ollama, ...). It also covers the things a real AI feature needs besides "send text, get text": prompt templates (the **prompt** is the text you send to the model), conversation memory, turning answers into Java objects, letting the model call your code (tools), searching your own documents (RAG, retrieval-augmented generation, §17.9), and the Model Context Protocol (MCP: a standard way to offer tools to AI apps, §17.10).
+How LLMs work is **not** re-taught. Tokens (the word pieces a model reads, writes and bills by), context windows (max text per call), sampling (how each next token is picked), prompting, embeddings (number lists capturing a text's meaning, §17.9), RAG design and agents (a model repeatedly choosing the next tool) are in the AI book: [LLMs](../../../ai/chapters/04-large-language-models/README.md), [prompt engineering](../../../ai/chapters/05-prompt-engineering/README.md), [building LLM apps](../../../ai/chapters/06-building-llm-apps-in-python/README.md), [embeddings, vector databases and RAG](../../../ai/chapters/07-embeddings-vector-databases-and-rag/README.md), [evaluation](../../../ai/chapters/08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md), [agents](../../../ai/chapters/09-ai-agents/README.md). Here: the **Spring way**.
 
-The second half is a **migration map**: what changed from Spring Boot 3.x to 4.x, from Spring Framework 6 to 7, and from Spring Security 6 to 7. Each change points to the chapter of this book that teaches it.
-
-This chapter does **not** re-teach how LLMs work. For tokens (the word pieces a model reads and writes, and is billed by), context windows (the maximum amount of text one call can hold), sampling (how the model picks each next token), prompting, embeddings (lists of numbers that capture a text's meaning, §17.9), RAG design and agents (programs where a model repeatedly decides which tool to call next), read the AI book: [LLMs](../../../ai/chapters/04-large-language-models/README.md), [prompt engineering](../../../ai/chapters/05-prompt-engineering/README.md), [building LLM apps](../../../ai/chapters/06-building-llm-apps-in-python/README.md), [embeddings, vector databases and RAG](../../../ai/chapters/07-embeddings-vector-databases-and-rag/README.md), [evaluation](../../../ai/chapters/08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md) and [agents](../../../ai/chapters/09-ai-agents/README.md). Here we focus on the **Spring way** of doing those things.
-
-**What you'll learn**
-
-1. What Spring AI is, which version fits Boot 4.1, and its building blocks (§17.1).
-2. How to set up a project for a real provider (OpenAI, Anthropic) and how to run everything **offline** with a fake model (§17.2–17.3).
-3. `ChatClient`, messages and prompt templates (§17.3–17.4).
-4. Advisors: logging, a custom redaction advisor, and chat memory (§17.5–17.6).
-5. Structured output into Java records (§17.7).
-6. Tool calling: the model asks, Spring runs your method (§17.8).
-7. RAG with `SimpleVectorStore`, an embedding model and `QuestionAnswerAdvisor` (§17.9).
-8. MCP servers and clients (§17.10), and production concerns (§17.11).
-9. The Boot 3 → 4 migration table (§17.13), Framework 6 → 7 (§17.14), Security 6 → 7 (§17.15) and Boot 4.1 additions (§17.16).
-
-**The code.** [`code/spring-ai-offline/`](code/spring-ai-offline/) is a Spring Boot 4.1.1 project (Framework 7.0, Java 25) using **Spring AI 2.0.1**. It needs **no API key** (the secret string a provider gives you to authenticate and bill your calls) **and no network**: the `ChatModel` bean is a small fake that returns canned (pre-written) answers ([`FakeChatModel`](code/spring-ai-offline/src/main/java/ch17/ai/FakeChatModel.java)), and the `EmbeddingModel` bean is a word-hashing fake ([`FakeEmbeddingModel`](code/spring-ai-offline/src/main/java/ch17/ai/FakeEmbeddingModel.java)). Everything *above* the model — `ChatClient`, advisors, memory, tool calling, structured output, the vector store — is the real Spring AI code. All output shown is real `mvn -q -B -ntp verify` output (14 tests, all passing). Snippets that need a real provider are marked **(needs an API key — not run)**.
+**The code.** [`code/spring-ai-offline/`](code/spring-ai-offline/) is a Spring Boot 4.1.1 project (Framework 7.0, Java 25) on **Spring AI 2.0.1**, needing **no API key** (the provider's authentication/billing secret) **and no network**: the `ChatModel` bean is a fake returning canned answers ([`FakeChatModel`](code/spring-ai-offline/src/main/java/ch17/ai/FakeChatModel.java)), the `EmbeddingModel` a word-hashing fake ([`FakeEmbeddingModel`](code/spring-ai-offline/src/main/java/ch17/ai/FakeEmbeddingModel.java)). Everything *above* the model — `ChatClient`, advisors, memory, tool calling, structured output, the vector store — is real Spring AI. Output is real `mvn -q -B -ntp verify` output (14 tests passing). Snippets needing a real provider are marked **(needs an API key — not run)**.
 
 ---
 
@@ -28,34 +12,23 @@ This chapter does **not** re-teach how LLMs work. For tokens (the word pieces a 
 
 ### What it is
 
-**Spring AI** is a Spring project that connects Spring applications to AI models. It does for AI providers what Spring Data does for databases: it gives you **portable interfaces** (`ChatModel`, `EmbeddingModel`, `VectorStore`, ...), **Boot starters** that auto-configure a provider from properties, and a **fluent client** (`ChatClient`) for everyday use.
-
-Analogy: `RestClient` ([Chapter 6](../06-rest-clients-and-http-interfaces/README.md)) hides the HTTP library under one API. `ChatClient` hides the AI provider under one API. Switching from OpenAI to Anthropic is mostly a change of starter and properties, not of code.
+**Spring AI** does for AI providers what Spring Data does for databases: **portable interfaces** (`ChatModel`, `EmbeddingModel`, `VectorStore`, ...), **Boot starters** auto-configuring a provider from properties, and a **fluent client** (`ChatClient`). As `RestClient` ([Chapter 6](../06-rest-clients-and-http-interfaces/README.md)) hides the HTTP library, `ChatClient` hides the provider: switching OpenAI → Anthropic is mostly a starter and property change.
 
 ### Why it matters
 
-Calling an LLM's HTTP API directly is easy for a demo. A production feature also needs:
-
-- prompt templates kept outside the code;
-- conversation memory (the model itself remembers nothing between calls);
-- answers converted into typed Java objects;
-- tool calling (the model asks your application to run a function);
-- retrieval of your own documents (RAG);
-- logging, metrics, tracing, retries, and tests that do not call a paid API.
-
-Spring AI provides each of these as a Spring building block, so they plug into things you already know: beans, properties, Micrometer observations ([Chapter 15](../15-observability-and-production/README.md)) and Boot tests ([Chapter 12](../12-testing-spring-apps/README.md)).
+Calling an LLM's HTTP API directly is fine for a demo. Production also needs prompt templates outside the code, conversation memory (the model remembers nothing between calls), typed Java answers, tool calling, retrieval of your documents (RAG), and logging/metrics/tracing/retries plus tests that don't call a paid API. Spring AI provides each as a Spring building block — beans, properties, Micrometer observations ([Chapter 15](../15-observability-and-production/README.md)), Boot tests ([Chapter 12](../12-testing-spring-apps/README.md)).
 
 ### Versions (verified September 2026)
 
 | Spring AI | Released | Works with | Notes |
 |---|---|---|---|
-| 1.0 | May 2025 | Boot 3.4 / 3.5 | first GA (general availability: the first production-ready release) |
+| 1.0 | May 2025 | Boot 3.4 / 3.5 | first GA (general availability) |
 | 1.1 | Nov 2025 | Boot 3.4 / 3.5 | MCP annotations, more providers |
-| **2.0** | **Jun 2026** | **Boot 4.0 / 4.1, Framework 7** | Jackson 3, JSpecify null-safety (annotations that mark what may be `null`), tool loop moved into advisors, immutable (unchangeable once built) options, MCP Java SDK 2.0. **Current: 2.0.1** (used here) |
+| **2.0** | **Jun 2026** | **Boot 4.0 / 4.1, Framework 7** | Jackson 3, JSpecify null-safety (annotations marking what may be `null`), tool loop moved into advisors, immutable options, MCP Java SDK 2.0. **Current: 2.0.1** (used here) |
 
-Spring AI 2.0 **requires** Boot 4. A Boot 3.5 application stays on Spring AI 1.1.x until it migrates. Note that 2.0.0's starters were built against Boot 4.1 dependency versions (spring-ai issue #6465), so Boot 4.1.x is the smoothest choice.
+Spring AI 2.0 **requires** Boot 4; a Boot 3.5 app stays on 1.1.x until it migrates. 2.0.0's starters were built against Boot 4.1 dependency versions (spring-ai issue #6465), so Boot 4.1.x is smoothest.
 
-Spring AI is a separate project with its own version number. Boot does not manage its version, so you import the **Spring AI BOM** (bill of materials — a POM that pins the versions of a family of artifacts):
+Boot doesn't manage Spring AI's version, so import the **Spring AI BOM** (bill of materials), which keeps all `spring-ai-*` artifacts aligned:
 
 ```xml
 <dependencyManagement>
@@ -75,14 +48,14 @@ Spring AI is a separate project with its own version number. Boot does not manag
 
 | Building block | What it does | Real implementations |
 |---|---|---|
-| `ChatModel` | low-level: sends a `Prompt` (list of messages + options), returns a `ChatResponse` | `OpenAiChatModel`, `AnthropicChatModel`, `OllamaChatModel`, ... (our `FakeChatModel`) |
+| `ChatModel` | low-level, provider-level: sends a `Prompt` (messages + options), returns a `ChatResponse` | `OpenAiChatModel`, `AnthropicChatModel`, `OllamaChatModel`, ... (our `FakeChatModel`) |
 | `ChatClient` | the fluent, everyday API on top of a `ChatModel`, with advisors | one implementation, built from a `ChatClient.Builder` |
 | **Advisor** | an interceptor around every `ChatClient` call (like a servlet filter) | logging, memory, RAG, tool calling, safeguard, validation |
 | `ChatMemory` | stores past messages per conversation | `MessageWindowChatMemory` over in-memory / JDBC / other repositories |
 | Structured output | converts the text answer into a Java type | `BeanOutputConverter`, `.entity(...)` |
 | `ToolCallback` / `@Tool` | a Java method the model may ask to run | method tools, function tools, MCP tools |
-| `EmbeddingModel` | turns text into a vector (a fixed-length list) of numbers | OpenAI, Ollama, ONNX transformers, ... (our `FakeEmbeddingModel`) |
-| `VectorStore` | stores document vectors and finds similar ones | `SimpleVectorStore` (in memory), PgVector (a PostgreSQL extension for vectors), Redis, Elasticsearch, Qdrant, ... |
+| `EmbeddingModel` | turns text into a vector (fixed-length list of numbers) | OpenAI, Ollama, ONNX transformers, ... (our `FakeEmbeddingModel`) |
+| `VectorStore` | stores document vectors and finds similar ones | `SimpleVectorStore` (in memory), PgVector (PostgreSQL vector extension), Redis, Elasticsearch, Qdrant, ... |
 | MCP | standard protocol to expose / consume tools across processes | MCP server and client starters |
 
 ```mermaid
@@ -97,11 +70,6 @@ flowchart LR
     ADV --- T["@Tool methods and MCP tools"]
 ```
 
-### Self-check
-
-1. Which Spring AI version goes with Boot 4.1? → 2.0.x (2.0.1 at the time of writing).
-2. Why do you import a BOM? → Spring AI is versioned separately from Boot; the BOM keeps all `spring-ai-*` artifacts on the same version.
-3. What is the difference between `ChatModel` and `ChatClient`? → `ChatModel` is the provider-level interface (one prompt in, one response out). `ChatClient` is the fluent API on top, with advisors, templates, tools and output conversion.
 
 ---
 
@@ -124,7 +92,7 @@ flowchart LR
 </dependency>
 ```
 
-2. Configure it. Keep the key in an environment variable or a secret store, **never** in Git ([Chapter 3](../03-configuration-and-auto-configuration/README.md) explains `${...}` placeholders):
+2. Configure it — key in an environment variable or secret store, **never** in Git ([Chapter 3](../03-configuration-and-auto-configuration/README.md) explains `${...}`):
 
 ```properties
 # OpenAI (needs an API key — not run)
@@ -142,19 +110,19 @@ spring.ai.anthropic.chat.model=claude-sonnet-5-5
 spring.ai.anthropic.chat.max-tokens=4096
 ```
 
-3. Inject `ChatClient.Builder` and use it. (In the properties above, `temperature` controls randomness — lower is more predictable — and `max-tokens` caps the length of the answer.) The code in the rest of this chapter works unchanged with either provider.
+3. Inject `ChatClient.Builder` and use it (`temperature` controls randomness — lower is more predictable; `max-tokens` caps answer length). The rest of the chapter works unchanged with either provider.
 
-Facts worth knowing about Spring AI 2.0 configuration (from the 2.0 upgrade notes):
+Spring AI 2.0 configuration facts (from the 2.0 upgrade notes):
 
 | Change in 2.0 | Before (1.x) | Now (2.0) |
 |---|---|---|
 | option properties are **flat** | `spring.ai.openai.chat.options.model=...` | `spring.ai.openai.chat.model=...` |
-| Anthropic module | Spring's own `AnthropicApi` client | the official `anthropic-java` SDK (software development kit: the vendor's own client library); default `max-tokens` raised from 500 to 4096 |
+| Anthropic module | Spring's own `AnthropicApi` client | the official `anthropic-java` SDK; default `max-tokens` raised from 500 to 4096 |
 | OpenAI modules | three variants (`openai`, `openai-sdk`, `azure-openai`) | one `spring-ai-openai` (Azure/Microsoft Foundry through its properties) |
 | options objects | mutable, `copy()` | immutable, `mutate()`; `ChatClient.options(...)` takes a **builder** |
 | several model starters on the classpath | — | pick one with `spring.ai.model.chat=openai` / `anthropic` / ... |
 
-Default models change over time (Spring AI 2.0's OpenAI default is `gpt-5-mini`, Anthropic's is `claude-haiku-4-5`). Always set the model explicitly so an upgrade does not silently change cost and behaviour.
+Default models change (2.0's OpenAI default is `gpt-5-mini`, Anthropic's `claude-haiku-4-5`). Always set the model explicitly so an upgrade doesn't silently change cost and behaviour.
 
 ### Offline, as in this chapter
 
@@ -164,11 +132,11 @@ Our [`pom.xml`](code/spring-ai-offline/pom.xml) has the BOM plus these artifacts
 |---|---|
 | `spring-boot-starter` | a plain (non-web) Boot app |
 | `spring-ai-autoconfigure-model-chat-client` | auto-configures a `ChatClient.Builder` bean from whatever `ChatModel` bean exists |
-| `spring-ai-autoconfigure-model-tool` | the tool-calling manager and its properties (an *optional* dependency of the previous one, so you add it yourself — without it Boot logs `TypeNotPresentException ... ToolCallingAutoConfiguration`) |
+| `spring-ai-autoconfigure-model-tool` | the tool-calling manager and its properties (an *optional* dependency of the previous one, so add it yourself — else Boot logs `TypeNotPresentException ... ToolCallingAutoConfiguration`) |
 | `spring-ai-autoconfigure-model-chat-memory` | a `ChatMemory` bean (window of the last 20 messages, stored in memory) |
 | `spring-ai-vector-store`, `spring-ai-vector-store-advisor` | `SimpleVectorStore` and `QuestionAnswerAdvisor` |
 
-A model starter would pull these in for you. Then we declare our own `ChatModel` and `EmbeddingModel` beans ([`AiConfig`](code/spring-ai-offline/src/main/java/ch17/ai/AiConfig.java)):
+A model starter would pull these in. We declare our own `ChatModel` and `EmbeddingModel` beans ([`AiConfig`](code/spring-ai-offline/src/main/java/ch17/ai/AiConfig.java)):
 
 ```java
 @Configuration
@@ -186,11 +154,11 @@ public class AiConfig {
 
 ### Why a fake model?
 
-A **fake** (a test double with simple working logic, see [Chapter 12](../12-testing-spring-apps/README.md)) lets you test everything around the model without cost, network, rate limits or random answers. Real LLM output is **non-deterministic**: the same prompt can give different words each time. Tests that assert exact LLM text are flaky. The usual strategy:
+A **fake** (a test double with simple working logic, [Chapter 12](../12-testing-spring-apps/README.md)) tests everything around the model without cost, network, rate limits or randomness. Real LLM output is **non-deterministic** (the same prompt gives different words), so tests asserting exact LLM text are flaky. The usual strategy:
 
 | What you test | How |
 |---|---|
-| your prompts, advisors, tools, parsing, error handling | fake or stub `ChatModel` — fast, deterministic (same result every run), runs in CI (continuous integration: the server that builds and tests every change) |
+| your prompts, advisors, tools, parsing, error handling | fake or stub `ChatModel` — fast, deterministic, runs in CI |
 | "is the answer good?" | a small **evaluation** set run against the real model, scored by rules or by another model (Spring AI has `RelevancyEvaluator` and `FactCheckingEvaluator`); see [AI 8.5](../../../ai/chapters/08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md#85-offline-evaluation-the-evaluation-pyramid) |
 | the provider integration | a few tagged integration tests with a real key, run on demand |
 
@@ -200,16 +168,16 @@ A **fake** (a test double with simple working logic, see [Chapter 12](../12-test
 
 ### `ChatModel`: the provider contract
 
-`ChatModel` has one essential method: `ChatResponse call(Prompt prompt)`. A `Prompt` is a list of **messages** plus **options** (model, temperature, tools, ...). A `ChatResponse` holds one or more `Generation`s, each with an `AssistantMessage`.
+`ChatModel` has one essential method, `ChatResponse call(Prompt prompt)`. A `Prompt` is a list of **messages** plus **options** (model, temperature, tools, ...); a `ChatResponse` holds `Generation`s, each with an `AssistantMessage`.
 
 | Message type | Class | Who writes it |
 |---|---|---|
-| system | `SystemMessage` | you: the rules and persona (the role the model should play: "You are a support assistant...") |
+| system | `SystemMessage` | you: the rules and persona ("You are a support assistant...") |
 | user | `UserMessage` | the end user's question (often via a template) |
 | assistant | `AssistantMessage` | the model's reply; may contain **tool calls** instead of text |
 | tool | `ToolResponseMessage` | your application: the result of a tool the model asked for |
 
-Our fake implements exactly this interface ([`FakeChatModel`](code/spring-ai-offline/src/main/java/ch17/ai/FakeChatModel.java)). It records each prompt so tests can show what reached "the model", then applies a few rules:
+Our fake implements exactly this interface ([`FakeChatModel`](code/spring-ai-offline/src/main/java/ch17/ai/FakeChatModel.java)), recording each prompt so tests can show what reached "the model", then applying a few rules:
 
 ```java
 public class FakeChatModel implements ChatModel {
@@ -242,11 +210,11 @@ public class FakeChatModel implements ChatModel {
 }
 ```
 
-`getOptions()` matters: `ChatClient` copies tool definitions into the prompt's options only when the model's options type supports tools (`ToolCallingChatOptions`). Every real provider's options class does.
+`getOptions()` matters: `ChatClient` copies tool definitions into the prompt's options only when the model's options type supports tools (`ToolCallingChatOptions`), as every real provider's does.
 
 ### `ChatClient`: the everyday API
 
-Boot auto-configures a **prototype-style** (a new instance per injection, instead of one shared instance) `ChatClient.Builder` bean: each injection point gets its own builder, already wired to the `ChatModel` bean and to observability. You customise it and `build()` a `ChatClient`, which is thread-safe (safe to share between threads) and meant to be reused (make it a bean).
+Boot auto-configures a **prototype-style** `ChatClient.Builder` bean (a new builder per injection point), wired to the `ChatModel` bean and observability. Customise it and `build()` a thread-safe `ChatClient` meant for reuse (make it a bean).
 
 ```java
 @SpringBootTest
@@ -280,15 +248,15 @@ What `call()` can return:
 |---|---|---|
 | `.content()` | `String` | you only need the text |
 | `.entity(Type.class)` | your Java type | structured output (§17.7) |
-| `.chatResponse()` | `ChatResponse` | you need metadata: token usage, finish reason (why the model stopped, e.g. done or hit the length limit), model id |
+| `.chatResponse()` | `ChatResponse` | metadata: token usage, finish reason (why the model stopped: done, length limit), model id |
 | `.chatClientResponse()` | response + advisor context | you need what advisors stored, e.g. the retrieved documents |
 | `.stream().content()` | `Flux<String>` | show tokens as they arrive (chat UIs, SSE — [Chapter 13](../13-reactive-and-webflux/README.md)) |
 
 ### Common mistakes
 
-- Creating a new `ChatClient` for every request instead of one bean per use case.
-- Injecting `ChatModel` and calling it directly everywhere, losing advisors, memory and observability. Use `ChatClient` unless you are writing infrastructure.
-- Assuming the model remembers the previous call. It does not (§17.6).
+- A new `ChatClient` per request instead of one bean per use case.
+- Calling `ChatModel` directly everywhere, losing advisors, memory and observability — use `ChatClient` unless writing infrastructure.
+- Assuming the model remembers the previous call (§17.6).
 
 ---
 
@@ -296,13 +264,13 @@ What `call()` can return:
 
 ### What it is
 
-A **prompt template** is text with placeholders, filled at run time — the same idea as a SQL query with bind parameters (`?` placeholders whose values are supplied separately). Spring AI's `PromptTemplate` uses `{name}` placeholders by default (rendered by the StringTemplate engine; the delimiters can be changed with `StTemplateRenderer` if your text contains braces, e.g. JSON examples).
+A **prompt template** is text with placeholders filled at run time — like SQL bind parameters. `PromptTemplate` uses `{name}` placeholders (StringTemplate engine; change delimiters with `StTemplateRenderer` if the text contains braces, e.g. JSON examples).
 
 ### How it works
 
-1. Write the template, inline or in a file such as [`prompts/explain.st`](code/spring-ai-offline/src/main/resources/prompts/explain.st): `Explain {topic} to a {audience} in at most {words} words.`
-2. Supply values with `render(Map)`/`create(Map)`, or with `.param(...)` on `ChatClient`.
-3. A **missing** value is an error, not an empty string — so a typo fails fast.
+1. Write the template inline or in a file such as [`prompts/explain.st`](code/spring-ai-offline/src/main/resources/prompts/explain.st): `Explain {topic} to a {audience} in at most {words} words.`
+2. Supply values with `render(Map)`/`create(Map)`, or `.param(...)` on `ChatClient`.
+3. A **missing** value is an error (`IllegalStateException` listing the names), not an empty string — typos fail fast.
 
 ```java
 PromptTemplate template = new PromptTemplate(
@@ -346,26 +314,19 @@ messages the model received:
   USER: Explain records to a beginner in at most 40 words.
 ```
 
-`defaultSystem(...)`, `defaultUser(...)`, `defaultAdvisors(...)`, `defaultTools(...)` and `defaultOptions(...)` on the builder apply to every request of that client. The per-request `.system(...)`, `.user(...)`, `.advisors(...)`, `.tools(...)` and `.options(...)` add to or override them.
+`defaultSystem(...)`, `defaultUser(...)`, `defaultAdvisors(...)`, `defaultTools(...)` and `defaultOptions(...)` apply to every request of that client; per-request `.system(...)`, `.user(...)`, `.advisors(...)`, `.tools(...)`, `.options(...)` add to or override them.
 
 ### Common mistakes
 
-- Concatenating user input into the **system** message. User text belongs in the user message. Mixing them makes **prompt injection** (text crafted to override your instructions to the model) easier (see [AI 9.4](../../../ai/chapters/09-ai-agents/README.md#94-guardrails-permissions-and-human-in-the-loop)).
-- Templates buried in Java strings. Put long prompts in `src/main/resources/prompts/*.st` files so they can be reviewed and versioned like code.
-- Putting JSON examples with `{...}` in a template without changing the delimiters — the renderer treats the braces as placeholders.
-
-### Self-check
-
-1. What happens if a template variable is missing? → `IllegalStateException` listing the missing names.
-2. Where should long prompts live? → In classpath resource files, loaded as `Resource`.
-
----
+- Concatenating user input into the **system** message — makes **prompt injection** (text crafted to override your instructions) easier ([AI 9.4](../../../ai/chapters/09-ai-agents/README.md#94-guardrails-permissions-and-human-in-the-loop)). User text belongs in the user message.
+- Templates buried in Java strings — put long prompts in `src/main/resources/prompts/*.st`, loaded as `Resource`, reviewed and versioned like code.
+- JSON examples with `{...}` in a template without changing delimiters — the braces become placeholders.
 
 ## 17.5 Advisors
 
 ### What it is
 
-An **advisor** intercepts every `ChatClient` call on the way **to** the model and on the way **back**. It can change the prompt (add memory, add retrieved documents, redact — hide — data), change the response, or short-circuit the call (answer itself without calling the model). Advisors are to `ChatClient` what servlet filters are to Spring MVC ([5.11](../05-spring-mvc-and-rest/README.md)) and what `@Around` advice is to AOP ([Chapter 4](../04-aop-and-proxies/README.md)).
+An **advisor** intercepts every `ChatClient` call on the way **to** the model and **back**. It can change the prompt (add memory or retrieved documents, redact data), change the response, or short-circuit the call (answer without the model). Advisors are to `ChatClient` what servlet filters are to Spring MVC ([5.11](../05-spring-mvc-and-rest/README.md)) and `@Around` advice is to AOP ([Chapter 4](../04-aop-and-proxies/README.md)).
 
 ### How it works
 
@@ -374,7 +335,7 @@ An **advisor** intercepts every `ChatClient` call on the way **to** the model an
 3. Each advisor calls `chain.nextCall(request)` to pass control on. The last link calls the `ChatModel`.
 4. The response travels back through the advisors in reverse order.
 
-`HIGHEST` in the diagram is `Ordered.HIGHEST_PRECEDENCE` (the smallest `int`). The default orders are real Spring AI 2.0 values: memory advisors use `HIGHEST_PRECEDENCE + 200`, the auto-registered `ToolCallingAdvisor` `HIGHEST_PRECEDENCE + 300`, and `SimpleLoggerAdvisor` `0`. So the logger sits *inside* the tool loop and logs every round trip to the model, while memory sits outside it and saves only the final exchange.
+`HIGHEST` is `Ordered.HIGHEST_PRECEDENCE` (the smallest `int`). Real Spring AI 2.0 defaults: memory advisors `HIGHEST_PRECEDENCE + 200`, the auto-registered `ToolCallingAdvisor` `HIGHEST_PRECEDENCE + 300`, `SimpleLoggerAdvisor` `0` — so the logger sits *inside* the tool loop (logging every model round trip) and memory outside it (saving only the final exchange).
 
 ```mermaid
 sequenceDiagram
@@ -404,7 +365,7 @@ sequenceDiagram
 | `SimpleLoggerAdvisor` | logs request and response at DEBUG | below |
 | `MessageChatMemoryAdvisor` | adds past messages of the conversation to the prompt, saves the new exchange | §17.6 |
 | `VectorStoreChatMemoryAdvisor` | long-term memory: retrieves *relevant* past messages from a vector store | §17.6 |
-| `QuestionAnswerAdvisor` | simple RAG: similarity search (finding the stored texts closest in meaning) + context pasted into the user message | §17.9 |
+| `QuestionAnswerAdvisor` | simple RAG: similarity search (closest stored texts in meaning) + context pasted into the user message | §17.9 |
 | `RetrievalAugmentationAdvisor` | modular RAG: query rewriting, expansion, retrieval, joining, augmentation | §17.9 |
 | `ToolCallingAdvisor` | runs the tool-call loop; **auto-registered** by `ChatClient` (new in 2.0; replaced the loop inside each `ChatModel`) | §17.8 |
 | `SafeGuardAdvisor` | blocks requests containing configured sensitive words | — |
@@ -412,7 +373,7 @@ sequenceDiagram
 
 ### A custom advisor: redacting e-mail addresses
 
-Many companies must not send personal data to an external AI provider. An advisor is the right place to enforce that once, for every call ([`RedactingAdvisor`](code/spring-ai-offline/src/main/java/ch17/ai/RedactingAdvisor.java)):
+Many companies must not send personal data to an external provider; an advisor enforces that once, for every call ([`RedactingAdvisor`](code/spring-ai-offline/src/main/java/ch17/ai/RedactingAdvisor.java)):
 
 ```java
 public class RedactingAdvisor implements CallAdvisor {
@@ -435,8 +396,8 @@ public class RedactingAdvisor implements CallAdvisor {
 }
 ```
 
-- `CallAdvisor` handles blocking calls; implement `StreamAdvisor` too if you use `.stream()`. For simple before/after logic, `BaseAdvisor` gives you `before(...)` and `after(...)` hooks.
-- Requests and prompts are **immutable**: you create a modified copy (`mutate()`) and pass it on.
+- `CallAdvisor` handles blocking calls; also implement `StreamAdvisor` for `.stream()`. For simple before/after logic, `BaseAdvisor` offers `before(...)`/`after(...)` hooks.
+- Requests and prompts are **immutable**: create a modified copy (`mutate()`) and pass it on.
 
 The support client wires three advisors as defaults:
 
@@ -456,7 +417,7 @@ ChatClient supportClient(ChatClient.Builder builder, ChatMemory chatMemory) {
 }
 ```
 
-`SimpleLoggerAdvisor` logs at **DEBUG**, so enable `logging.level.org.springframework.ai.chat.client.advisor=DEBUG` ([`application.properties`](code/spring-ai-offline/src/main/resources/application.properties)). By default it logs the whole request and response objects; the two functions above shorten them. The test sends `alice@example.com` and a question about shipping:
+`SimpleLoggerAdvisor` logs at **DEBUG** (enable `logging.level.org.springframework.ai.chat.client.advisor=DEBUG` in [`application.properties`](code/spring-ai-offline/src/main/resources/application.properties)); by default it logs whole request/response objects, shortened above. The test sends `alice@example.com` and a shipping question:
 
 ```
 model saw:      Please send the invoice to [email]
@@ -465,19 +426,19 @@ LOG SimpleLoggerAdvisor    : request: Do you ship to Canada?
 LOG SimpleLoggerAdvisor    : response: (fake model) You asked: Do you ship to Canada?
 ```
 
-Because the redactor runs *before* the memory advisor, neither the model nor the stored history ever sees the address. With the order reversed, memory would store the raw address and send it again in every later prompt.
+Because the redactor runs *before* the memory advisor, neither the model nor the stored history sees the address; reversed, memory would store it and resend it in every later prompt.
 
 ### Common mistakes
 
-- Wrong order. Memory must run before RAG and logging if you want them to see the history. Redaction must run before anything that stores or sends text.
-- Forgetting to call `chain.nextCall(...)` — the model is never called.
-- Logging full prompts in production. Prompts may contain personal data and are large. Spring AI's observations also keep prompt/completion content **out** of logs and traces by default (`spring.ai.chat.client.observations.log-prompt=false`).
+- Wrong order: memory before RAG and logging if they should see history; redaction before anything that stores or sends text.
+- Forgetting `chain.nextCall(...)` — the model is never called.
+- Logging full prompts in production (personal data, size). Spring AI's observations keep prompt/completion content **out** of logs and traces by default (`spring.ai.chat.client.observations.log-prompt=false`).
 
 ### In the interview
 
 **Q: What is an advisor in Spring AI?** → An interceptor around every `ChatClient` call, ordered by `getOrder()`, that can modify the request (add memory, retrieved documents, redaction) or the response. Memory, RAG, logging and — since 2.0 — the tool-calling loop are all advisors.
-- *Follow-up: how is it like something else in Spring?* → Like a servlet filter chain or AOP `@Around` advice: each link calls the next.
-- *Follow-up: where do you enforce a "no personal data to the provider" rule?* → In an early advisor, so it applies to every call and to stored memory.
+- *Like what else in Spring?* → A servlet filter chain or AOP `@Around` advice: each link calls the next.
+- *Where to enforce "no personal data to the provider"?* → An early advisor, so it covers every call and stored memory.
 
 ---
 
@@ -485,7 +446,7 @@ Because the redactor runs *before* the memory advisor, neither the model nor the
 
 ### What it is
 
-LLM APIs are **stateless** (the server keeps nothing between calls): each request must carry the whole conversation. "Memory" means your application stores past messages and **re-sends** the relevant ones. Spring AI splits this into:
+LLM APIs are **stateless**: each request must carry the whole conversation, so "memory" means your app stores past messages and **re-sends** the relevant ones. Spring AI splits this into:
 
 | Piece | Role | Default |
 |---|---|---|
@@ -493,7 +454,7 @@ LLM APIs are **stateless** (the server keeps nothing between calls): each reques
 | `ChatMemory` | decides **which** messages to keep | `MessageWindowChatMemory`: the last **20** messages (system messages are kept) |
 | memory advisor | loads history into the prompt, saves the new exchange | `MessageChatMemoryAdvisor` (history as messages) or `VectorStoreChatMemoryAdvisor` (relevant old messages from a vector store) |
 
-Why a window? The context window of a model is limited and every token costs money ([AI 6.9](../../../ai/chapters/06-building-llm-apps-in-python/README.md#69-conversation-memory-management)). Long conversations need trimming or summarising.
+Why a window? The context window is limited and every token costs ([AI 6.9](../../../ai/chapters/06-building-llm-apps-in-python/README.md#69-conversation-memory-management)); long conversations need trimming or summarising.
 
 ### How it works
 
@@ -530,19 +491,13 @@ second call for alice-42 sent these messages to the model:
   USER: What is my name?
 ```
 
-The fake model has no memory of its own. It "knows" Alice's name only because the advisor re-sent the first exchange. Bob's conversation is separate. The test also asserts that the memory holds 4 messages for `alice-42` and 2 for `bob-7`.
+The fake has no memory: it "knows" Alice's name only because the advisor re-sent the first exchange. Bob's conversation is separate; the test asserts 4 stored messages for `alice-42`, 2 for `bob-7`.
 
 ### Common mistakes
 
-- Using one fixed conversation id for everybody — users see each other's history. Derive the id from the authenticated user and session ([Chapter 10](../10-spring-security-1-fundamentals/README.md)).
-- In-memory repository in a cluster: each instance has different memory and it is lost on restart. Use the JDBC (or another shared) repository.
-- Unbounded history: cost and latency grow with every turn. Keep a window; summarise older turns if needed.
-
-### Self-check
-
-1. Does the model remember earlier calls? → No; the memory advisor re-sends stored messages.
-2. What changed for conversation ids in 2.0? → They must be passed per call with `ChatMemory.CONVERSATION_ID`.
-3. Which memory for three app instances behind a load balancer? → A shared repository such as JDBC.
+- One fixed conversation id for everybody — users see each other's history. Derive it from the authenticated user and session ([Chapter 10](../10-spring-security-1-fundamentals/README.md)).
+- In-memory repository in a cluster (e.g. three instances behind a load balancer): different memory per instance, lost on restart. Use JDBC or another shared repository.
+- Unbounded history: cost and latency grow every turn. Keep a window; summarise older turns.
 
 ---
 
@@ -550,7 +505,7 @@ The fake model has no memory of its own. It "knows" Alice's name only because th
 
 ### What it is
 
-**Structured output** means getting the answer as data — a record, a list, a map — instead of free text. Spring AI does it with a **converter** that (1) appends format instructions with a **JSON Schema** (a standard JSON document that describes which fields and types a JSON value must have) of your type to the prompt, and (2) parses the reply into your type with Jackson 3. See [AI 6.4](../../../ai/chapters/06-building-llm-apps-in-python/README.md#64-structured-output-json-mode-and-schemas) for why schemas help.
+**Structured output** returns the answer as data (record, list, map). A **converter** (1) appends format instructions with a **JSON Schema** (a JSON document describing required fields and types) of your type to the prompt and (2) parses the reply with Jackson 3. Why schemas help: [AI 6.4](../../../ai/chapters/06-building-llm-apps-in-python/README.md#64-structured-output-json-mode-and-schemas).
 
 ```java
 public record MovieRecommendation(String title, int year, List<String> genres, double score) {}
@@ -572,9 +527,9 @@ user message sent to the model (first 3 lines):
 parsed record: MovieRecommendation[title=The Martian, year=2015, genres=[sci-fi, survival], score=8.0]
 ```
 
-Notice two things. The converter added about 30 lines to the prompt (tokens you pay for). And the fake replied with JSON **inside a Markdown code fence** (Markdown is the lightweight text-formatting syntax; a fence is the ```` ``` ```` wrapper around code) (```` ```json ````), which models often do; the converter strips the fence before parsing.
+The converter added ~30 lines to the prompt (tokens you pay for), and the fake replied with JSON **inside a Markdown code fence** (```` ```json ````), as models often do; the converter strips the fence before parsing.
 
-The converter can also be used on its own:
+The converter also works standalone:
 
 ```java
 var converter = new BeanOutputConverter<>(MovieRecommendation.class);
@@ -594,14 +549,14 @@ schema mentions the fields: true, true
 | a class / record | `.entity(MovieRecommendation.class)` | most common |
 | generic types | `.entity(new ParameterizedTypeReference<List<MovieRecommendation>>() {})` | lists, maps |
 | map / list converters | `MapOutputConverter`, `ListOutputConverter` | loose structures |
-| **native** structured output | `.advisors(AdvisorParams.ENABLE_NATIVE_STRUCTURED_OUTPUT)` | the provider itself constrains the output to the schema (only for providers and models that support it, such as OpenAI; check your provider's Spring AI page) — more reliable than instructions |
+| **native** structured output | `.advisors(AdvisorParams.ENABLE_NATIVE_STRUCTURED_OUTPUT)` | the provider itself constrains output to the schema (only supporting providers/models, e.g. OpenAI; check your provider's page) — more reliable than instructions |
 | validation + retry | `StructuredOutputValidationAdvisor` (2.0) | checks the JSON against the schema; asks the model again on mismatch |
 
 ### Common mistakes
 
-- Trusting the parsed object blindly. The model can still return wrong *values* with the right *shape*. Validate business rules (Bean Validation, [5.6](../05-spring-mvc-and-rest/README.md)).
-- Huge nested types. The schema grows and costs tokens; keep output types small.
-- Forgetting that parsing can fail. Catch the exception, retry once, or use the validation advisor.
+- Trusting the parsed object blindly — right *shape*, possibly wrong *values*. Validate business rules (Bean Validation, [5.6](../05-spring-mvc-and-rest/README.md)).
+- Huge nested types — the schema costs tokens; keep output types small.
+- Forgetting parsing can fail — catch, retry once, or use the validation advisor.
 
 ---
 
@@ -609,7 +564,7 @@ schema mentions the fields: true, true
 
 ### What it is
 
-**Tool calling** (function calling) lets the model ask your application to run a function — look up an order, check stock, call an API — and then answer with the result. The model **never runs code itself**: it only returns a request "call `orderStatus` with `{"orderId":"A-1001"}`". Your application decides whether to run it. See [AI 6.5](../../../ai/chapters/06-building-llm-apps-in-python/README.md#65-tool-use-function-calling-the-end-to-end-loop) and [AI 9.3](../../../ai/chapters/09-ai-agents/README.md#93-tool-function-calling) for the concept.
+**Tool calling** (function calling) lets the model ask your application to run a function — look up an order, check stock, call an API — and answer with the result. The model **never runs code**: it returns a request like "call `orderStatus` with `{"orderId":"A-1001"}`", and your app decides whether to run it. Concept: [AI 6.5](../../../ai/chapters/06-building-llm-apps-in-python/README.md#65-tool-use-function-calling-the-end-to-end-loop), [AI 9.3](../../../ai/chapters/09-ai-agents/README.md#93-tool-function-calling).
 
 ### How it works
 
@@ -664,7 +619,7 @@ model calls: 2
 no tools -> (fake model) You asked: Where is my order A-1001?
 ```
 
-One user question cost **two model calls**. Every tool round trip adds latency and tokens.
+One user question cost **two model calls** — every tool round trip adds latency and tokens.
 
 ### Details worth knowing (Spring AI 2.0)
 
@@ -673,24 +628,24 @@ One user question cost **two model calls**. Every tool round trip adds latency a
 | description | the model decides *when* to call a tool from its **description** — write it like documentation for a new colleague |
 | `returnDirect = true` | return the tool result straight to the caller without a second model call |
 | `ToolContext` | pass hidden data (tenant id, user id) to tools with `.toolContext(Map)`; it is **not** sent to the model |
-| limits | at most **40 calls per tool** and **150 in total** per request by default (`spring.ai.tools.limits.*`), to stop runaway (never-ending) loops |
+| limits | at most **40 calls per tool** and **150 in total** per request by default (`spring.ai.tools.limits.*`) against runaway loops |
 | resolution | only tools attached to the request or client can run; resolving arbitrary beans by name is **off** by default in 2.0 |
 | errors | by default a tool exception is sent back to the model as an error message (`spring.ai.tools.throw-exception-on-error=false`) so it can recover |
 | programmatic tools | `FunctionToolCallback` / `MethodToolCallback` build tools without annotations |
 
 ### Security: tools are an attack surface
 
-Tools are an **attack surface** (a place where an attacker can try to get in). The model's tool arguments are **untrusted input**. A prompt-injection text in a retrieved document or user message can make the model call tools with harmful arguments. Rules:
+Tools are an **attack surface**: the model's tool arguments are **untrusted input**, and prompt-injection text in a retrieved document or user message can make the model call tools with harmful arguments. Rules:
 
-- Check authorization **inside** the tool, for the real user (take the user from `ToolContext` or the security context, never from model-supplied arguments).
-- Give tools the least power possible: read-only where you can, and a human confirmation step for anything irreversible ([AI 9.4](../../../ai/chapters/09-ai-agents/README.md#94-guardrails-permissions-and-human-in-the-loop)).
+- Check authorization **inside** the tool for the real user (from `ToolContext` or the security context, never from model-supplied arguments).
+- Least power: read-only where possible, human confirmation for anything irreversible ([AI 9.4](../../../ai/chapters/09-ai-agents/README.md#94-guardrails-permissions-and-human-in-the-loop)).
 - Validate arguments like any request body.
 
 ### In the interview
 
 **Q: Explain tool calling in Spring AI.** → You annotate methods with `@Tool`; Spring AI sends their JSON-schema definitions with the prompt. When the model returns a tool call, the `ToolCallingAdvisor` executes the method, sends the result back as a tool message, and calls the model again until it produces a final answer. The model only *requests* calls; the application executes them.
-- *Follow-up: how do you stop an infinite loop?* → Tool-call limits (40 per tool, 150 total by default in 2.0) plus timeouts.
-- *Follow-up: how do you pass the current user to a tool safely?* → `ToolContext` or the security context — never trust a user id argument chosen by the model.
+- *Stop an infinite loop?* → Tool-call limits (40 per tool, 150 total by default in 2.0) plus timeouts.
+- *Pass the current user to a tool safely?* → `ToolContext` or the security context — never a model-chosen user id argument.
 
 ---
 
@@ -698,7 +653,7 @@ Tools are an **attack surface** (a place where an attacker can try to get in). T
 
 ### What it is
 
-**RAG** answers questions from **your** documents: find the most relevant chunks, paste them into the prompt, and tell the model to answer only from them. It reduces made-up answers and lets you use private or fresh data without retraining (teaching the model new data, which is slow and expensive). The design questions (chunking — splitting documents into pieces, hybrid search — combining keyword and meaning search, reranking — re-sorting results with a stronger model, access control, evaluation) are covered in [AI Chapter 7](../../../ai/chapters/07-embeddings-vector-databases-and-rag/README.md); here is the Spring AI wiring.
+**RAG** answers from **your** documents: find the most relevant chunks, paste them into the prompt, tell the model to answer only from them. It reduces made-up answers and uses private or fresh data without retraining. Design questions (chunking — splitting documents, hybrid search — keyword + meaning, reranking — re-sorting with a stronger model, access control, evaluation): [AI Chapter 7](../../../ai/chapters/07-embeddings-vector-databases-and-rag/README.md). Here: the Spring AI wiring.
 
 ```mermaid
 flowchart LR
@@ -727,9 +682,9 @@ flowchart LR
 
 ### The embedding model and the vector store
 
-An **embedding** is a list of numbers (a vector) representing a text, so that texts with similar meaning have vectors pointing in similar directions ([AI 7.2](../../../ai/chapters/07-embeddings-vector-databases-and-rag/README.md#72-embeddings-meaning-as-geometry)). Similarity is usually the **cosine** of the angle between vectors: 1 = same direction, 0 = unrelated.
+An **embedding** is a vector representing a text so that similar meanings point in similar directions ([AI 7.2](../../../ai/chapters/07-embeddings-vector-databases-and-rag/README.md#72-embeddings-meaning-as-geometry)); similarity is usually the **cosine** of the angle (1 = same direction, 0 = unrelated).
 
-Our [`FakeEmbeddingModel`](code/spring-ai-offline/src/main/java/ch17/ai/FakeEmbeddingModel.java) is deliberately simple: it hashes each word (turns it into a number with a fixed function; stop words — very common words such as "the" — are skipped, and words are cut to 5 letters) into one of 256 slots and normalises the vector (scales it to length 1). Texts sharing words become similar. A real model captures *meaning* ("refund" is close to "money back"), which word hashing cannot.
+Our [`FakeEmbeddingModel`](code/spring-ai-offline/src/main/java/ch17/ai/FakeEmbeddingModel.java) hashes each word (skipping stop words like "the", cutting words to 5 letters) into one of 256 slots and normalises the vector to length 1, so texts sharing words become similar. A real model captures *meaning* ("refund" ≈ "money back"), which word hashing can't.
 
 ```java
 @Bean
@@ -746,7 +701,7 @@ VectorStore vectorStore(EmbeddingModel embeddingModel) {
 }
 ```
 
-`add(...)` embeds each document and stores the vector with its text and **metadata** (source, tenant, date — used for filtering and citations).
+`add(...)` embeds each document and stores the vector with its text and **metadata** (source, tenant, date — for filtering and citations).
 
 ```java
 List<Document> hits = vectorStore.similaritySearch(
@@ -764,7 +719,7 @@ score 0.000  shipping.md        Standard shipping takes 3 to 7 days. Express shi
 with similarityThreshold(0.1): 1 document(s)
 ```
 
-`topK(2)` always returns two documents, even an irrelevant one (score 0.000). A **similarity threshold** drops weak matches. Without it, RAG pastes noise into the prompt. Tune K and the threshold on real questions.
+`topK(2)` always returns two documents, even an irrelevant one (score 0.000); a **similarity threshold** drops weak matches — without it RAG pastes noise into the prompt. Tune K and the threshold on real questions.
 
 ### `QuestionAnswerAdvisor`
 
@@ -794,13 +749,13 @@ augmented user message:
 answer: According to our docs: Standard shipping takes 3 to 7 days. Express shipping arrives the next day.
 ```
 
-The rest of the default template (cut above) tells the model to answer from the context and to say so when the answer is not there. You can replace the template with `.promptTemplate(...)`, and restrict the search per request with a **filter expression** on metadata, e.g. `a.param(QuestionAnswerAdvisor.FILTER_EXPRESSION, "tenant == 'acme'")` — this is how you enforce document-level permissions ([AI 7.9](../../../ai/chapters/07-embeddings-vector-databases-and-rag/README.md#79-access-control-freshness-and-deletion)). The retrieved documents are also stored in the response context under `QuestionAnswerAdvisor.RETRIEVED_DOCUMENTS`, which you can use to show citations.
+The rest of the default template tells the model to answer from the context and say so when the answer isn't there. Replace it with `.promptTemplate(...)`; restrict the search per request with a metadata **filter expression**, e.g. `a.param(QuestionAnswerAdvisor.FILTER_EXPRESSION, "tenant == 'acme'")` — how document-level permissions are enforced ([AI 7.9](../../../ai/chapters/07-embeddings-vector-databases-and-rag/README.md#79-access-control-freshness-and-deletion)). Retrieved documents are stored in the response context under `QuestionAnswerAdvisor.RETRIEVED_DOCUMENTS`, for citations.
 
 For more control, `RetrievalAugmentationAdvisor` (module `spring-ai-rag`) builds a pipeline from parts: `RewriteQueryTransformer`/`CompressionQueryTransformer` (improve the query), `MultiQueryExpander`, `VectorStoreDocumentRetriever`, a `DocumentJoiner`, post-processors (e.g. reranking) and `ContextualQueryAugmenter`.
 
 ### A production vector store (needs a database — not run)
 
-`SimpleVectorStore` keeps everything in memory (it can `save`/`load` a JSON file) — fine for tests and demos, not for real data. With PostgreSQL + the `pgvector` extension:
+`SimpleVectorStore` keeps everything in memory (`save`/`load` to a JSON file) — fine for tests and demos, not real data. With PostgreSQL + `pgvector`:
 
 ```xml
 <dependency>
@@ -818,20 +773,14 @@ spring.ai.vectorstore.pgvector.distance-type=cosine-distance
 spring.ai.vectorstore.pgvector.dimensions=1536
 ```
 
-`dimensions` must match the embedding model (1536 for `text-embedding-3-small`). Changing the embedding model means **re-embedding every document**. `hnsw` (Hierarchical Navigable Small World) is an approximate nearest-neighbour index ([AI 7.3](../../../ai/chapters/07-embeddings-vector-databases-and-rag/README.md#73-making-nearest-neighbour-search-fast-ann-indexes)); `initialize-schema=true` is convenient in development, but in production create the table with Flyway ([8.16](../08-spring-data-jpa-and-hibernate/README.md#816-schema-migrations-with-flyway)).
+`dimensions` must match the embedding model (1536 for `text-embedding-3-small`); changing the model means **re-embedding every document**. `hnsw` (Hierarchical Navigable Small World) is an approximate nearest-neighbour index ([AI 7.3](../../../ai/chapters/07-embeddings-vector-databases-and-rag/README.md#73-making-nearest-neighbour-search-fast-ann-indexes)); `initialize-schema=true` suits development, but production creates the table with Flyway ([8.16](../08-spring-data-jpa-and-hibernate/README.md#816-schema-migrations-with-flyway)).
 
 ### Common mistakes
 
 - No similarity threshold — irrelevant chunks confuse the model.
-- Chunks too large (costly, diluted) or too small (no context). Start around a few hundred tokens with some overlap.
-- Ignoring permissions: every user can retrieve every document. Store tenant/role in metadata and filter.
-- Mixing embeddings from two different models in one store — the vectors are not comparable.
-
-### Self-check
-
-1. What does `QuestionAnswerAdvisor` add to the prompt? → The top matching documents, wrapped in a template that says to answer from them.
-2. Why a similarity threshold? → `topK` always returns K documents; the threshold drops weak matches.
-3. What must match between the embedding model and a PgVector table? → The number of dimensions (and the model itself).
+- Chunks too large (costly, diluted) or too small (no context) — start around a few hundred tokens with some overlap.
+- Ignoring permissions — store tenant/role in metadata and filter.
+- Mixing embeddings from two models in one store — vectors aren't comparable.
 
 ---
 
@@ -839,14 +788,14 @@ spring.ai.vectorstore.pgvector.dimensions=1536
 
 ### What it is
 
-**MCP** is an open protocol (started by Anthropic in November 2024, now widely adopted) that standardises how an AI application discovers and calls **tools**, reads **resources** and uses **prompts** exposed by another process. Think "USB for AI tools": write a tool server once, and any MCP-capable host (Claude Desktop, IDE — code editor — assistants, your own Spring AI app) can use it. Concepts and security are in [AI 6.10](../../../ai/chapters/06-building-llm-apps-in-python/README.md#610-the-model-context-protocol-mcp) and [AI 9.8](../../../ai/chapters/09-ai-agents/README.md#98-mcp-and-agent-protocols).
+**MCP** is an open protocol (started by Anthropic in November 2024, now widely adopted) standardising how an AI application discovers and calls **tools**, reads **resources** and uses **prompts** exposed by another process — "USB for AI tools": write a tool server once, and any MCP host (Claude Desktop, IDE assistants, your Spring AI app) can use it. Concepts and security: [AI 6.10](../../../ai/chapters/06-building-llm-apps-in-python/README.md#610-the-model-context-protocol-mcp), [AI 9.8](../../../ai/chapters/09-ai-agents/README.md#98-mcp-and-agent-protocols).
 
 | Role | What it does | Spring AI starter |
 |---|---|---|
 | **MCP server** | exposes tools/resources/prompts | `spring-ai-starter-mcp-server` (STDIO), `spring-ai-starter-mcp-server-webmvc`, `spring-ai-starter-mcp-server-webflux` |
 | **MCP client** | connects to servers, turns their tools into `ToolCallback`s | `spring-ai-starter-mcp-client`, `spring-ai-starter-mcp-client-webflux` |
 
-Transports: **STDIO** (standard input/output: the host starts the server as a child process and they talk through its input and output streams — local tools) and **Streamable HTTP** (a remote server; the default for Spring AI 2.0's web servers, endpoint `POST /mcp`). The older SSE transport is deprecated since 2.0.
+Transports: **STDIO** (the host starts the server as a child process and they talk over its input/output streams — local tools) and **Streamable HTTP** (remote; the default for Spring AI 2.0's web servers, endpoint `POST /mcp`). The older SSE transport is deprecated since 2.0.
 
 ```mermaid
 flowchart LR
@@ -887,7 +836,7 @@ spring.ai.mcp.server.name=order-tools
 spring.ai.mcp.server.protocol=STREAMABLE
 ```
 
-In Spring AI 2.0 the MCP annotations live in `org.springframework.ai.mcp.annotation` (they came from the `org.springaicommunity.mcp` community project in 1.1). Beans with `@McpTool`, `@McpResource`, `@McpPrompt` methods are discovered automatically.
+In Spring AI 2.0 the MCP annotations live in `org.springframework.ai.mcp.annotation` (from the `org.springaicommunity.mcp` community project in 1.1); beans with `@McpTool`, `@McpResource`, `@McpPrompt` methods are discovered automatically.
 
 ### An MCP client (snippet — needs a running server, not run)
 
@@ -905,7 +854,7 @@ ChatClient agent(ChatClient.Builder builder, ToolCallbackProvider mcpTools) {
 }
 ```
 
-The client auto-configuration exposes the remote tools as a `ToolCallbackProvider` bean (`spring.ai.mcp.client.toolcallback.enabled=true` by default), so the tool-calling loop from §17.8 works unchanged.
+The client auto-configuration exposes remote tools as a `ToolCallbackProvider` bean (`spring.ai.mcp.client.toolcallback.enabled=true` by default), so §17.8's tool loop works unchanged.
 
 ### Trade-offs
 
@@ -914,9 +863,9 @@ The client auto-configuration exposes the remote tools as a `ToolCallbackProvide
 | latency | method call | network or process hop |
 | reuse | this app only | any MCP host, any language |
 | deployment | ships with the app | separate service, separate lifecycle |
-| security | your normal code review | you now trust a remote server's tool descriptions and results — authenticate it (OAuth 2 for HTTP servers), allow-list (explicitly permit only named) tools, treat results as untrusted input |
+| security | your normal code review | you now trust a remote server's tool descriptions and results — authenticate it (OAuth 2 for HTTP servers), allow-list tools, treat results as untrusted input |
 
-Use `@Tool` for logic that belongs to your application. Use MCP to share tools across teams or AI hosts, or to consume existing MCP servers.
+`@Tool` for logic belonging to your app; MCP to share tools across teams or AI hosts, or to consume existing servers.
 
 ---
 
@@ -928,23 +877,23 @@ Use `@Tool` for logic that belongs to your application. Use MCP to share tools a
 | **cost** | token usage in `chatResponse().getMetadata().getUsage()` | [AI 6.6](../../../ai/chapters/06-building-llm-apps-in-python/README.md#66-tokens-counting-and-cost-estimation) |
 | **retries and timeouts** | provider SDK retries (e.g. `spring.ai.openai.chat.max-retries`, default 3) and `spring.ai.retry.*` for providers using Spring's retry; set HTTP timeouts | [AI 6.7](../../../ai/chapters/06-building-llm-apps-in-python/README.md#67-retries-rate-limits-and-timeouts), [4.7](../04-aop-and-proxies/README.md#47-framework-7-core-resilience-retryable-and-concurrencylimit) |
 | **streaming** | `.stream().content()` returns `Flux<String>`; send it to browsers with SSE | [Chapter 13](../13-reactive-and-webflux/README.md) |
-| **blocking calls** | model calls take seconds; on Spring MVC turn on virtual threads (`spring.threads.virtual.enabled=true`) so waiting threads are cheap | [Java 15.4](../../../java/chapters/15-concurrency-2-modern/README.md#154-virtual-threads) |
+| **blocking calls** | model calls take seconds; on Spring MVC enable virtual threads (`spring.threads.virtual.enabled=true`) so waiting is cheap | [Java 15.4](../../../java/chapters/15-concurrency-2-modern/README.md#154-virtual-threads) |
 | **safety** | redaction advisor, `SafeGuardAdvisor`, output validation, tool permissions | [AI Chapter 12](../../../ai/chapters/12-safety-ethics-governance/README.md) |
 | **testing** | fake `ChatModel` for logic, evaluators for quality | §17.2 |
 
 ### Common mistakes (Spring AI, whole part)
 
-- Calling the model inside a database transaction ([Chapter 7](../07-data-access-jdbc-and-transactions/README.md)): the transaction and its connection stay open for seconds.
+- Calling the model inside a database transaction ([Chapter 7](../07-data-access-jdbc-and-transactions/README.md)) — the transaction and connection stay open for seconds.
 - No timeout or limit on tool loops and output tokens.
-- Letting the model's text reach SQL, shell commands or HTML without validation or escaping (neutralising special characters so text cannot act as code).
-- Hard-coding a model id that the provider later retires — keep it in configuration.
-- Tests that call the real API on every build.
+- Model text reaching SQL, shell commands or HTML without validation or escaping.
+- Hard-coding a model id the provider later retires — keep it in configuration.
+- Tests calling the real API on every build.
 
 ### In the interview
 
-**Q: How would you add an AI assistant to an existing Spring Boot service?** → Add the Spring AI BOM and a model starter, configure the key and model in properties, build a `ChatClient` bean with a system prompt and advisors (memory with a per-user conversation id, RAG over our documents with metadata filters, logging/redaction), expose business functions as `@Tool` methods that check authorization themselves, and return typed results with `.entity(...)`. Test logic with a fake `ChatModel`, measure quality with an evaluation set, watch token usage and latency through Micrometer.
-- *Follow-up: why Spring AI rather than the provider's SDK?* → Portability across providers, and the Spring integration: auto-configuration, observability, advisors, vector stores, testing. For one provider-specific feature you can still reach the native options.
-- *Follow-up: how do you keep answers grounded (based only on real sources, not invented)?* → RAG with a similarity threshold, a template that says "answer only from the context", citations from retrieved-document metadata, and evaluation of faithfulness.
+**Q: How would you add an AI assistant to an existing Spring Boot service?** → Spring AI BOM + a model starter, key and model in properties, a `ChatClient` bean with a system prompt and advisors (memory with a per-user conversation id, RAG over our documents with metadata filters, logging/redaction), business functions as `@Tool` methods that check authorization themselves, typed results with `.entity(...)`. Test logic with a fake `ChatModel`, measure quality with an evaluation set, watch token usage and latency through Micrometer.
+- *Why Spring AI rather than the provider's SDK?* → Portability across providers plus Spring integration: auto-configuration, observability, advisors, vector stores, testing. Provider-specific features remain reachable via native options.
+- *Keeping answers grounded (based only on real sources)?* → RAG with a similarity threshold, an "answer only from the context" template, citations from retrieved-document metadata, faithfulness evaluation.
 
 ### Spring AI TL;DR
 
@@ -962,9 +911,9 @@ Use `@Tool` for logic that belongs to your application. Use MCP to share tools a
 
 ## 17.12 What's new: how to read the rest of this chapter
 
-The Spring generation that arrived in **November 2025** (Framework 7.0 on 13 Nov, Boot 4.0 on 20 Nov, Security 7.0) is the biggest change since Boot 3 moved everything from `javax.*` to `jakarta.*` (Java's enterprise APIs — servlets, JPA, validation — were handed to the Eclipse Foundation as **Jakarta EE** and had to change package names). This book targets **Boot 4.1.1**, whose dependency BOM gives you Framework 7.0.9, Security 7.1.1, Hibernate ORM 7.4, Spring Data 2026.0, Jackson 3.1.5, Tomcat 11.0.24 and JUnit 6.0.3 ([1.4](../01-spring-ecosystem-and-first-app/README.md#14-history-and-versions)).
+The Spring generation of **November 2025** (Framework 7.0 on 13 Nov, Boot 4.0 on 20 Nov, Security 7.0) is the biggest change since Boot 3 moved `javax.*` to `jakarta.*` (Java's enterprise APIs were handed to the Eclipse Foundation as **Jakarta EE** and renamed). This book targets **Boot 4.1.1**, whose BOM gives Framework 7.0.9, Security 7.1.1, Hibernate ORM 7.4, Spring Data 2026.0, Jackson 3.1.5, Tomcat 11.0.24 and JUnit 6.0.3 ([1.4](../01-spring-ecosystem-and-first-app/README.md#14-history-and-versions)).
 
-The tables below are a **map**, not a second textbook: one line per change, with a pointer to the chapter that explains and demonstrates it. They were checked against the Boot 4.0 migration guide, the Boot 4.0 and 4.1 release notes, the Framework 7.0 release notes and the Spring Security 7 reference.
+The tables below are a **map**, one line per change with a pointer to the chapter that teaches it — checked against the Boot 4.0 migration guide, Boot 4.0/4.1 release notes, Framework 7.0 release notes and the Spring Security 7 reference.
 
 ### A safe upgrade path (Boot 3.x → 4.x)
 
@@ -981,16 +930,16 @@ flowchart TD
     I --> J["Remove the properties migrator"]
 ```
 
-1. **Go to 3.5 first.** The migration guide assumes 3.5; code deprecated (marked as "will be removed, stop using") in 3.x is removed in 4.0.
-2. **Automate the boring part** with OpenRewrite (a tool that applies automated, rule-based source-code changes called *recipes*; not run here):
+1. **Go to 3.5 first.** The migration guide assumes 3.5; code deprecated in 3.x is removed in 4.0.
+2. **Automate the boring part** with OpenRewrite (rule-based automated source changes called *recipes*; not run here):
    ```bash
    mvn -U org.openrewrite.maven:rewrite-maven-plugin:run \
      -Drewrite.recipeArtifactCoordinates=org.openrewrite.recipe:rewrite-spring:RELEASE \
      -Drewrite.activeRecipes=org.openrewrite.java.spring.boot4.UpgradeSpringBoot_4_0
    ```
-   It updates versions, renames starters and properties, and applies the Framework 7 / Security 7 sub-recipes. Review its diff (the list of line-by-line changes) like any other change.
-3. **`spring-boot-properties-migrator`** (runtime dependency, temporarily) reports renamed/removed properties at startup and maps the old names for you while you fix them.
-4. If you are stuck, the **"classic" starters** (`spring-boot-starter-classic`, `spring-boot-starter-test-classic`) bring back the old all-in-one auto-configuration jar layout to get you compiling, then move to the modular starters.
+   It updates versions, renames starters and properties, and applies the Framework 7 / Security 7 sub-recipes. Review its diff like any change.
+3. **`spring-boot-properties-migrator`** (temporary runtime dependency) reports renamed/removed properties at startup and maps old names while you fix them.
+4. Stuck? The **"classic" starters** (`spring-boot-starter-classic`, `spring-boot-starter-test-classic`) restore the old all-in-one auto-configuration layout to get you compiling; then move to modular starters.
 
 ---
 
@@ -1022,7 +971,7 @@ flowchart TD
 | Flyway / Liquibase auto-configured only with **`spring-boot-starter-flyway`** / `-liquibase` (the library alone is no longer enough) | add the starter | [8.16](../08-spring-data-jpa-and-hibernate/README.md#816-schema-migrations-with-flyway) |
 | `RestClient`/`RestTemplate` builders come from **`spring-boot-starter-restclient`** | add it for client code | [Chapter 6](../06-rest-clients-and-http-interfaces/README.md) |
 | `@EntityScan` moved to `org.springframework.boot.persistence.autoconfigure` | fix the import | [Chapter 8](../08-spring-data-jpa-and-hibernate/README.md) |
-| `hibernate-jpamodelgen` → `hibernate-processor` | rename the annotation processor (a compiler plug-in that generates code from annotations) | [Chapter 8](../08-spring-data-jpa-and-hibernate/README.md) |
+| `hibernate-jpamodelgen` → `hibernate-processor` | rename the annotation processor (compiler plug-in generating code from annotations) | [Chapter 8](../08-spring-data-jpa-and-hibernate/README.md) |
 | Spring Batch runs **without a database** by default | use `spring-boot-starter-batch-jdbc` for JDBC job metadata | — |
 
 ### Jackson 3
@@ -1060,7 +1009,7 @@ flowchart TD
 | `spring.kafka.retry.topic.backoff.random` | `spring.kafka.retry.topic.backoff.jitter` |
 | DevTools LiveReload on by default | `spring.devtools.livereload.enabled` defaults to **false** (and LiveReload is deprecated in 4.1) |
 | Kubernetes liveness/readiness probes only on Kubernetes | health **probes enabled by default** (`management.endpoint.health.probes.enabled`) — [Chapter 15](../15-observability-and-production/README.md) |
-| `server.forward-headers-strategy` applied to war deployments (apps packaged as `.war` files and installed into a separate servlet server) | no longer applies to wars — register a `ForwardedHeaderFilter` yourself |
+| `server.forward-headers-strategy` applied to war deployments | no longer applies to wars — register a `ForwardedHeaderFilter` yourself |
 
 ### Removed features
 
@@ -1069,7 +1018,7 @@ flowchart TD
 | Undertow | Tomcat or Jetty |
 | executable "fully executable" jar launch scripts | run with `java -jar`, systemd, containers |
 | Maven `CLASSIC` loader implementation | the default loader |
-| optional dependencies packed into the uber jar (the single "fat" jar containing the app and all its libraries) | `<includeOptional>true</includeOptional>` if you really need them |
+| optional dependencies packed into the uber (fat) jar | `<includeOptional>true</includeOptional>` if you really need them |
 | Spock integration (Groovy 5 incompatibility) | **back in Boot 4.1** with Spock 2.4 |
 | Spring Session Hazelcast / MongoDB (moved to those vendors) | the vendors' own modules |
 | Pulsar reactive support | Spring Pulsar imperative API |
@@ -1088,13 +1037,6 @@ flowchart TD
 | `logging.console.enabled=false` to turn console logging off | [Chapter 15](../15-observability-and-production/README.md) |
 | Kotlin serialization starter | — |
 
-### Self-check
-
-1. You upgrade and your app no longer runs Flyway migrations. Why? → Boot 4 auto-configures Flyway only with `spring-boot-starter-flyway`.
-2. `@MockBean` no longer compiles. Replacement? → `@MockitoBean` (and `@MockitoSpyBean` for `@SpyBean`).
-3. Why does `import com.fasterxml.jackson.databind.ObjectMapper` fail? → Boot 4 uses Jackson 3 in `tools.jackson.*`; only the annotations kept the old package.
-4. Your `@SpringBootTest` can no longer inject `MockMvc`. Fix? → Add `@AutoConfigureMockMvc`.
-
 ---
 
 ## 17.14 Spring Framework 6 → 7
@@ -1105,7 +1047,7 @@ flowchart TD
 | **null-safety** | whole codebase annotated with **JSpecify**, including generics, arrays and varargs; JSR 305-style Spring annotations deprecated | [2.13](../02-ioc-and-dependency-injection/README.md#213-null-safety-with-jspecify-framework-7) |
 | **programmatic beans** | new `BeanRegistrar` contract for registering beans with code (loops, conditions) | [2.14](../02-ioc-and-dependency-injection/README.md#214-programmatic-registration-with-beanregistrar-framework-7) |
 | **resilience** | `RetryTemplate` / `RetryPolicy` in `spring-core` (`org.springframework.core.retry`), `@Retryable` and `@ConcurrencyLimit` in `spring-context`, enabled with **`@EnableResilientMethods`**; `@Retryable` also adapts to reactive return types | [4.7](../04-aop-and-proxies/README.md#47-framework-7-core-resilience-retryable-and-concurrencylimit) |
-| proxies | CGLIB (the library that creates proxies by generating subclasses) default applied consistently to all proxy processors (including `@Async`); **`@Proxyable`** overrides per bean | [4.4](../04-aop-and-proxies/README.md#44-how-spring-aop-works-proxies) |
+| proxies | CGLIB (subclass-generating proxies) default applied consistently to all proxy processors (including `@Async`); **`@Proxyable`** overrides per bean | [4.4](../04-aop-and-proxies/README.md#44-how-spring-aop-works-proxies) |
 | **API versioning** | first-class in Spring MVC and WebFlux: resolve the version from header, query parameter, path segment or media type; deprecation hints; client-side support in `RestClient`, `WebClient`, HTTP interfaces; testing support | [5.9](../05-spring-mvc-and-rest/README.md#59-api-versioning-framework-7), [6.7](../06-rest-clients-and-http-interfaces/README.md#67-client-side-api-versioning-and-retries) |
 | **HTTP interface clients** | group-based configuration with `@ImportHttpServices` and `HttpServiceGroupConfigurer`; `InputStream`/`OutputStream` support | [6.6](../06-rest-clients-and-http-interfaces/README.md#66-http-service-interfaces-httpexchange) |
 | `RestTemplate` | deprecated in the reference docs in 7.0, `@Deprecated` planned for 7.1, removal in 8.0 | [6.1](../06-rest-clients-and-http-interfaces/README.md#61-choosing-a-client) |
@@ -1116,7 +1058,7 @@ flowchart TD
 | data access | JPA 3.2: inject `EntityManagerFactory`/`EntityManager` with `@Autowired`; Hibernate 7 support moved to `orm.jpa.hibernate`; `JdbcClient` gains fetch size, max rows, query timeout | [Chapter 7](../07-data-access-jdbc-and-transactions/README.md), [Chapter 8](../08-spring-data-jpa-and-hibernate/README.md) |
 | messaging | new **`JmsClient`** (like `JdbcClient`/`RestClient` for JMS) | [Chapter 14](../14-messaging-async-and-scheduling/README.md) |
 | testing | **`RestTestClient`** (non-reactive `WebTestClient`), test application contexts **paused** when not in use, `@MockitoBean` on non-singleton beans, better `@Nested` injection | [Chapter 12](../12-testing-spring-apps/README.md) |
-| SpEL (Spring Expression Language, the `#{...}` expressions) | `Optional` support with `?.` and Elvis (`?:`, "use this default if null"); since 7.0.8 a default limit of 10,000 operations per evaluation | — |
+| SpEL (Spring Expression Language, `#{...}`) | `Optional` support with `?.` and Elvis (`?:`, default if null); since 7.0.8 a default limit of 10,000 operations per evaluation | — |
 | Java 24+ | bytecode metadata read with the JDK **Class-File API** (JEP 484) — transparent | [Java Ch. 17](../../../java/chapters/17-modern-java-17-to-25/README.md) |
 | **removed** | `javax.annotation`/`javax.inject` support (use `jakarta.*`), `spring-jcl` (Apache Commons Logging 1.3 instead), `ListenableFuture` (use `CompletableFuture`), OkHttp3 support, `Theme` support, `webjars-locator-core` (use `webjars-locator-lite`), Undertow-specific classes | [2.15](../02-ioc-and-dependency-injection/README.md) |
 | **deprecated** | JUnit 4 support (`SpringRunner`, ...), `<mvc:*>` XML namespace, document/feed views (PDF, XLS, RSS), BeanShell | — |
@@ -1124,8 +1066,8 @@ flowchart TD
 ### In the interview
 
 **Q: What's new in Spring Framework 7 / Boot 4?** → Jakarta EE 11 and Java 17 baseline (25 recommended); JSpecify null-safety; built-in API versioning; HTTP service client groups with Boot auto-configuration; core resilience (`@Retryable`, `@ConcurrencyLimit`, `RetryTemplate`); `BeanRegistrar`; Jackson 3; `RestTestClient`; and in Boot, modular auto-configuration with a starter and test starter per technology.
-- *Follow-up: what breaks first when you upgrade?* → Jackson imports (`tools.jackson`), renamed starters (web → webmvc, aop → aspectj), Flyway needing its starter, removed `@MockBean`, `javax.*` annotations, and `.and()`-style security configuration.
-- *Follow-up: do you still need Spring Retry?* → Usually not: Framework 7's `@Retryable` covers retries with backoff and jitter. For circuit breakers use Resilience4j ([Chapter 16](../16-spring-cloud-and-microservices/README.md)).
+- *What breaks first on upgrade?* → Jackson imports (`tools.jackson`), renamed starters (web → webmvc, aop → aspectj), Flyway needing its starter (migrations silently stop), removed `@MockBean`, `@SpringBootTest` without `@AutoConfigureMockMvc` (no `MockMvc`), `javax.*` annotations, `.and()`-style security configuration.
+- *Still need Spring Retry?* → Usually not: Framework 7's `@Retryable` covers retries with backoff and jitter; circuit breakers → Resilience4j ([Chapter 16](../16-spring-cloud-and-microservices/README.md)).
 
 ---
 
@@ -1155,7 +1097,7 @@ flowchart TD
 |---|---|---|
 | everything **deprecated in 4.0 removed** | upgrade 4.0 → 4.1 with zero deprecation warnings first | — |
 | `layertools` jar mode removed | use the `tools` jar mode for layered images | [Chapter 15](../15-observability-and-production/README.md) |
-| **gRPC** (Google's binary remote-procedure-call protocol) support (server and client, Netty or Servlet over HTTP/2) | new | — |
+| **gRPC** (Google's binary RPC protocol) support (server and client, Netty or Servlet over HTTP/2) | new | — |
 | Spock support back (Spock 2.4, Groovy 5) | | [Chapter 12](../12-testing-spring-apps/README.md) |
 | `spring.datasource.connection-fetch=lazy` | wraps the pool in `LazyConnectionDataSourceProxy`: no connection taken until the first statement | [7.2](../07-data-access-jdbc-and-transactions/README.md#72-datasource-and-hikaricp) |
 | `@ConfigurationProperties` records bind `Optional` parameters as `Optional.empty()` instead of `null` | | [3.6](../03-configuration-and-auto-configuration/README.md#36-configurationproperties--type-safe-configuration) |
@@ -1168,10 +1110,10 @@ flowchart TD
 
 ### Common migration mistakes
 
-- Jumping from Boot 2.7 straight to 4.x. Go 2.7 → 3.5 (the `javax` → `jakarta` step) → 4.x.
-- Ignoring startup warnings after the upgrade. Removed auto-configuration usually shows up as "bean not found", not as a compile error.
+- Jumping from Boot 2.7 straight to 4.x — go 2.7 → 3.5 (the `javax` → `jakarta` step) → 4.x.
+- Ignoring startup warnings — removed auto-configuration shows up as "bean not found", not a compile error.
 - Keeping `spring-boot-properties-migrator` in production.
-- Upgrading Boot but not the separately versioned projects: **Spring Cloud** needs its 2025.1 "Oakwood" train for Boot 4 (2025.1.2 or later for Boot 4.1) ([Chapter 16](../16-spring-cloud-and-microservices/README.md)), **Spring AI** needs 2.0, **springdoc-openapi** needs its Boot 4 line ([5.12](../05-spring-mvc-and-rest/README.md#512-documenting-the-api-openapi-with-springdoc)).
+- Upgrading Boot but not separately versioned projects: **Spring Cloud** 2025.1 "Oakwood" (2025.1.2+ for Boot 4.1; [Chapter 16](../16-spring-cloud-and-microservices/README.md)), **Spring AI** 2.0, **springdoc-openapi**'s Boot 4 line ([5.12](../05-spring-mvc-and-rest/README.md#512-documenting-the-api-openapi-with-springdoc)).
 
 ---
 

@@ -1,10 +1,10 @@
 # Chapter 18 — The Data Stack: numpy, pandas, matplotlib
 
-> **What you will learn.** The three libraries almost every Python data, science and ML (machine learning — programs that learn patterns from data instead of following hand-written rules) project stands on. **numpy**: fast n-dimensional arrays (grids of numbers with any number of dimensions), dtypes, indexing and views, broadcasting, vectorisation, aggregation along axes, basic linear algebra (the maths of vectors and matrices) and the modern random API. **pandas**: `Series` and `DataFrame`, reading and writing files, `loc`/`iloc`, filtering, `groupby`/`agg`/`transform`, `merge`/`concat`, `pivot_table`/`melt`, missing data, datetimes, why `apply` is slow, and performance tips — including what changed in **pandas 3.0** (string dtype, Copy-on-Write). **matplotlib**: Figure and Axes, the four workhorse charts, subplots, labels and saving images. The chapter ends with a small end-to-end analysis: messy CSV (comma-separated values — a plain-text table, one row per line) → clean → analyse → chart.
+> **What you will learn.** The three libraries almost every Python data, science and ML (machine learning — programs that learn patterns from data rather than hand-written rules) project stands on. **numpy**: fast n-dimensional arrays, dtypes, indexing and views, broadcasting, vectorisation, aggregation along axes, basic linear algebra (vectors and matrices) and the modern random API. **pandas**: `Series` and `DataFrame`, file I/O, `loc`/`iloc`, filtering, `groupby`/`agg`/`transform`, `merge`/`concat`, `pivot_table`/`melt`, missing data, datetimes, why `apply` is slow, performance tips — and what changed in **pandas 3.0** (string dtype, Copy-on-Write). **matplotlib**: Figure and Axes, the four workhorse charts, subplots, labels, saving images. Ends with a small end-to-end analysis: messy CSV → clean → analyse → chart.
 >
-> **Where this leads.** The ML Handbook, [Chapter 3 — The Python ML stack](../../../ml/chapters/03-python-ml-stack/README.md), takes these tools into machine learning (feature matrices — tables of numeric inputs, one row per example; scikit-learn pipelines — chained preprocessing + model steps; train/test splits — holding back some data to check the model on examples it hasn't seen). This chapter stays with general data work and does not cover scikit-learn.
+> **Where this leads.** The ML Handbook, [Chapter 3 — The Python ML stack](../../../ml/chapters/03-python-ml-stack/README.md), takes these tools into ML (feature matrices — numeric inputs, one row per example; scikit-learn pipelines — chained preprocessing + model steps; train/test splits — holding back data to test the model on unseen examples). This chapter stays with general data work, no scikit-learn.
 >
-> **Code.** `chapters/18-data-stack/code/` — `numpy_basics.py`, `pandas_basics.py`, `matplotlib_demo.py`, `end_to_end.py`, and `plot_style.py` (a shared chart style). Plots are saved to `img/`. Versions used: Python 3.14.7, numpy 2.5, pandas 3.0.6, matplotlib 3.11.
+> **Code.** `chapters/18-data-stack/code/` — `numpy_basics.py`, `pandas_basics.py`, `matplotlib_demo.py`, `end_to_end.py`, `plot_style.py` (shared chart style). Plots go to `img/`. Versions: Python 3.14.7, numpy 2.5, pandas 3.0.6, matplotlib 3.11.
 
 ```mermaid
 flowchart LR
@@ -27,14 +27,12 @@ flowchart LR
 ## 18.1 numpy arrays
 
 ### What it is
-**numpy** (Numerical Python) gives you the `ndarray`: an n-dimensional array whose elements all share one **dtype** (data type such as `int64`, `float64`, `bool`) and sit side by side in one contiguous block of memory. Its **shape** is a tuple of sizes per dimension (`(3, 4)` = 3 rows, 4 columns); `ndim` is the number of dimensions.
-
-Analogy: a Python list is a shelf of labelled boxes, each box holding any kind of object somewhere else in the warehouse; a numpy array is an egg carton — every slot the same size, all in one piece, so a machine can process a whole carton at once.
+**numpy** (Numerical Python) provides the `ndarray`: an n-dimensional array whose elements share one **dtype** (`int64`, `float64`, `bool` …) and sit in one contiguous block of memory. **shape** is the tuple of sizes per dimension (`(3, 4)` = 3 rows, 4 columns); `ndim` is the number of dimensions. A list is a shelf of pointers to objects stored elsewhere; an array is an egg carton — uniform slots in one piece, processed all at once.
 
 ### Why it matters
-- **Speed**: operations run as compiled C loops over raw numbers — typically 10–100× faster than Python loops (measured below: 35×).
-- **Memory**: 8 bytes per `float64` versus ~24–32 bytes per Python float object plus an 8-byte pointer.
-- **Ecosystem**: pandas columns, scikit-learn (the classic ML library) inputs, images in OpenCV/Pillow (image-processing libraries), and PyTorch tensors (a deep-learning library's n-dimensional arrays, which convert to and from numpy) all build on this idea.
+- **Speed**: compiled C loops over raw numbers — typically 10–100× faster than Python loops (35× measured below).
+- **Memory**: 8 bytes per `float64` vs ~24–32 bytes per Python float plus an 8-byte pointer.
+- **Ecosystem**: pandas columns, scikit-learn inputs, OpenCV/Pillow images and PyTorch tensors (which convert to and from numpy) all build on it.
 
 ### How it works — creating and inspecting
 ```python
@@ -59,7 +57,7 @@ Output (`numpy_basics.py`):
 m.shape=(3, 4) m.size=12 m.dtype=int64 m.nbytes=96 itemsize=8
 mixed ints and floats -> float64; astype -> [ 1 -1]
 ```
-`reshape` needs the same total size (12 = 3 × 4); pass `-1` for one dimension to let numpy compute it (`reshape(-1, 2)`). ("Upcast" in the code above means numpy picks a wider type that can hold every value — ints and floats together become floats.) Other creators: `np.full`, `np.eye` (identity matrix: 1s on the diagonal, 0s elsewhere), `np.empty` (uninitialised — fast, contains garbage), `np.zeros_like(m)`.
+`reshape` needs the same total size (12 = 3 × 4); `-1` lets numpy compute one dimension (`reshape(-1, 2)`). "Upcast" = numpy picks a wider type that holds every value. Other creators: `np.full`, `np.eye` (identity matrix), `np.empty` (uninitialised — fast, contains garbage), `np.zeros_like(m)`.
 
 ### Indexing, slicing, views and masks
 ```python
@@ -88,7 +86,7 @@ np.where(m > 5, m, -1):
 | Boolean mask | `m[m > 5]` | Copy (1-D) |
 | Fancy (int lists/arrays) | `m[[2, 0]]` | Copy |
 
-Unlike Python lists, a numpy slice is a **view** (a new array object that looks at the *same* memory as the original): changing it changes the original. ("Strided" in the code above means taking every k-th element.) Call `.copy()` when you need independence. Combine masks with `&`, `|`, `~` and parentheses: `m[(m > 2) & (m < 9)]` (`and`/`or` raise an error on arrays).
+Unlike lists, a numpy slice is a **view** — a new array object over the *same* memory, so changing it changes the original ("strided" = every k-th element). Use `.copy()` for independence. Combine masks with `&`, `|`, `~` and parentheses: `m[(m > 2) & (m < 9)]` (`and`/`or` raise on arrays).
 
 ### Vectorised maths and aggregation along an axis
 ```
@@ -96,7 +94,7 @@ x*2=[2. 4. 6. 8.]  x**2=[ 1.  4.  9. 16.]  np.sqrt(x)=[1.    1.414 1.732 2.   ] 
 m.sum()=66  m.sum(axis=0)=[12 15 18 21]  m.sum(axis=1)=[ 6 22 38]
 m.mean()=5.50  m.max(axis=1)=[ 3  7 11]  m.argmax()=11  cumsum=[ 1  3  6 10]
 ```
-Arithmetic and **ufuncs** (universal functions: `np.sqrt`, `np.exp`, `np.log`, `np.abs` …) apply element-wise (to each element separately). For reductions (operations that collapse many values into one, like `sum` or `max`), `axis=0` means "collapse the rows" — one result **per column**; `axis=1` collapses the columns — one result **per row**. `argmax` gives the position of the maximum (in the flattened — treated as one long 1-D row — array unless you pass `axis`).
+Arithmetic and **ufuncs** (universal functions: `np.sqrt`, `np.exp`, `np.log`, `np.abs` …) work element-wise. For reductions (many values → one, like `sum`, `max`), `axis=0` collapses the rows — one result **per column**; `axis=1` — one result **per row**. `argmax` gives the position of the maximum (in the flattened 1-D array unless `axis` is given).
 
 ### Vectorisation, measured
 ```python
@@ -106,34 +104,31 @@ arr * 2 + 1                   # numpy: two C loops over raw int64s
 ```
 1M elements: list comprehension 25.8 ms, numpy 0.75 ms, x35
 ```
-**Vectorisation** means expressing a computation as whole-array operations instead of a Python loop. The rule of thumb: if you are writing `for i in range(len(arr))` over a numpy array, look for the array operation (`np.where`, masks, `cumsum`, `np.diff`, `np.clip`, broadcasting).
+**Vectorisation** = whole-array operations instead of a Python loop. If you're writing `for i in range(len(arr))` over an array, look for the array operation (`np.where`, masks, `cumsum`, `np.diff`, `np.clip`, broadcasting).
 
-Other everyday array functions: **join** with `np.concatenate([a, b])` (along an existing axis) or `np.stack([a, b])` / `np.vstack` / `np.hstack` (new or row/column axis); **sort** with `np.sort(a)` (returns a copy) or `a.sort()` (in place), and `np.argsort(a)` for the order of indices (e.g. to sort one array by another); **deduplicate/count** with `np.unique(a, return_counts=True)`; **reshape views** with `a.T`, `a.ravel()`, `a[:, None]`.
+Everyday array functions: **join** — `np.concatenate([a, b])` (existing axis), `np.stack` / `np.vstack` / `np.hstack` (new or row/column axis); **sort** — `np.sort(a)` (copy), `a.sort()` (in place), `np.argsort(a)` (index order, e.g. to sort one array by another); **deduplicate/count** — `np.unique(a, return_counts=True)`; **reshape views** — `a.T`, `a.ravel()`, `a[:, None]`.
 
 ### Common mistakes
 - Expecting a slice to be a copy (it's a view) — or the reverse with fancy indexing.
-- Integer overflow (a result too big for the type's fixed number of bits): fixed-size dtypes wrap around (`np.int8(127) + np.int8(1)` → −128 — numpy warns for scalars, but array arithmetic wraps silently); Python ints never overflow.
-- Comparing floats with `==` — use `np.isclose`/`np.allclose`.
-- Building an array by `np.append` in a loop (copies each time, O(n²)) — collect in a list, convert once.
+- Integer overflow: fixed-size dtypes wrap (`np.int8(127) + np.int8(1)` → −128 — numpy warns for scalars, arrays wrap silently); Python ints never overflow.
+- `==` on floats — use `np.isclose`/`np.allclose`.
+- `np.append` in a loop (copies each time, O(n²)) — collect in a list, convert once.
 - Mixing up `axis=0` and `axis=1`.
-
-### TL;DR
-One dtype, one memory block, shape tuple. Slices are views; masks and fancy indexing copy. Whole-array operations replace loops and run tens of times faster.
 
 ---
 
 ## 18.2 Broadcasting
 
 ### What it is
-**Broadcasting** is numpy's rule for combining arrays of different shapes without copying data: the smaller array is (virtually) stretched to match the larger one.
+**Broadcasting** combines arrays of different shapes without copying: the smaller one is (virtually) stretched to match.
 
 ### How it works — the rule
-Compare the two shapes **from the right-most dimension leftwards**:
-1. If one shape is shorter, pad it on the left with 1s.
-2. Two dimensions are compatible if they are **equal** or **one of them is 1**.
-3. A size-1 dimension is stretched to the other size. Any other mismatch → `ValueError`.
+Compare shapes **from the right-most dimension leftwards**:
+1. Pad the shorter shape on the left with 1s.
+2. Two dimensions are compatible if **equal** or **one is 1**.
+3. A size-1 dimension stretches; any other mismatch → `ValueError`.
 
-Worked example: `(3, 1) + (4,)` → pad → `(3, 1)` vs `(1, 4)` → result `(3, 4)`.
+Worked example: `(3, 1) + (4,)` → `(3, 1)` vs `(1, 4)` → `(3, 4)`.
 
 ```python
 col = np.array([[10], [20], [30]])                  # shape (3, 1)
@@ -153,18 +148,11 @@ column-standardised:
  [ 1.225  1.225]]
 (3,2) + (3,) -> ValueError: operands could not be broadcast together with shapes (3,2) (3,)
 ```
-To subtract a **per-row** value, make it a column: `data - data.mean(axis=1, keepdims=True)` (or `[:, None]` / `np.newaxis` to add a dimension).
+To subtract a **per-row** value, make it a column: `data - data.mean(axis=1, keepdims=True)` (or `[:, None]` / `np.newaxis`).
 
-### Real-world examples
-Standardising features (subtract column means, divide by column stds), normalising images (`img / 255.0`, or subtracting a per-channel mean of shape `(3,)` from an `(H, W, 3)` image), pairwise distances (`a[:, None, :] - b[None, :, :]`).
+**Real-world:** standardising features (column means/stds), normalising images (`img / 255.0`, or a per-channel `(3,)` mean from an `(H, W, 3)` image), pairwise distances (`a[:, None, :] - b[None, :, :]`).
 
-### Self-check
-1. Shape of `(5, 1, 3) + (4, 1)`? → `(5, 4, 3)`.
-2. Why does `(3, 2) + (3,)` fail? → Right-most dims 2 and 3 differ and neither is 1.
-3. How do you subtract each row's mean? → `x - x.mean(axis=1, keepdims=True)`.
-
-### TL;DR
-Align shapes from the right; equal or 1 is fine; size 1 stretches. `keepdims=True` or `[:, None]` fixes most shape errors.
+**Self-check:** `(5, 1, 3) + (4, 1)` → `(5, 4, 3)`. `(3, 2) + (3,)` fails because the right-most dims 2 and 3 differ and neither is 1.
 
 ---
 
@@ -189,7 +177,7 @@ eigenvalues = [1.382 3.618], norm of b = 12.042, A.T =
 [[3. 1.]
  [1. 2.]]
 ```
-(Quick glossary: the **determinant** `det` is a single number summarising a square matrix — zero means it has no inverse; the **inverse** `inv(A)` is the matrix that undoes `A`; **eigenvalues** are the factors by which `A` stretches its special directions, the eigenvectors; the **norm** is a vector's length.) Check by hand: 3·2 + 1·3 = 9 and 1·2 + 2·3 = 8. ✓ det = 3·2 − 1·1 = 5. ✓ The norm is √(9² + 8²) = √145 ≈ 12.042. ✓
+Glossary: **determinant** — one number summarising a square matrix (zero → no inverse); **inverse** — the matrix that undoes `A`; **eigenvalues** — factors by which `A` stretches its special directions (eigenvectors); **norm** — a vector's length. Checks: 3·2 + 1·3 = 9, 1·2 + 2·3 = 8 ✓; det = 3·2 − 1·1 = 5 ✓; norm = √(9² + 8²) = √145 ≈ 12.042 ✓.
 
 | Need | Use | Note |
 |---|---|---|
@@ -197,10 +185,10 @@ eigenvalues = [1.382 3.618], norm of b = 12.042, A.T =
 | Solve `A x = b` | `np.linalg.solve` | Faster and more accurate than `inv(A) @ b` |
 | Least squares | `np.linalg.lstsq` | Over-determined systems (more equations than unknowns) |
 | Eigen-decomposition | `np.linalg.eigh` (symmetric), `eig` (general) | With numpy 2.5 here, `eig` returned a complex dtype even for this real-valued case; `eigh` returns real values sorted ascending |
-| SVD (singular value decomposition — splitting a matrix into simpler rotation and scaling parts) | `np.linalg.svd` | Basis of PCA (principal component analysis — compressing data to its most informative directions) |
+| SVD (singular value decomposition — a matrix split into rotation and scaling parts) | `np.linalg.svd` | Basis of PCA (principal component analysis — compressing data to its most informative directions) |
 | Dot product / length | `a @ b`, `np.linalg.norm(a)` | |
 
-The maths behind these (vectors, matrices, eigenvalues) is covered in the ML Handbook's maths chapter.
+The maths (vectors, matrices, eigenvalues) is in the ML Handbook's maths chapter.
 
 ### Random numbers
 ```python
@@ -215,26 +203,21 @@ choice:   ['c' 'c' 'c' 'c']
 shuffle:  [1 0 2 4 3]
 same seed, same numbers: [0 7 6 4 4]
 ```
-Use `np.random.default_rng(seed)` (the seed is the starting value; the same seed always produces the same "random" sequence) and pass the `rng` object around. The old global functions (`np.random.seed`, `np.random.rand`) still work but share hidden global state, which makes reproducibility across modules fragile. `rng.integers(low, high)` excludes `high`. Other useful methods: `random`, `uniform`, `permutation`, `binomial`, `poisson`. (Four 'c's in a row is just chance — with this seed.)
+Use `np.random.default_rng(seed)` (same seed → same sequence) and pass the `rng` around. The old global functions (`np.random.seed`, `np.random.rand`) share hidden global state, making reproducibility across modules fragile. `rng.integers(low, high)` excludes `high`. Also: `random`, `uniform`, `permutation`, `binomial`, `poisson`. (Four 'c's is just chance with this seed.)
 
 ### In the interview
 **30-second answer:** "A numpy array is a typed, contiguous block of memory with a shape, so operations run as C loops — vectorised code is often tens of times faster than Python loops. Slices are views, fancy indexing copies. Broadcasting lines up shapes from the right, and a dimension of 1 stretches. I use `@` for matrix multiply, `linalg.solve` rather than inverting, and `default_rng(seed)` for reproducible randomness."
-- *Why is numpy fast?* — Contiguous typed memory, compiled loops, no per-element Python objects, SIMD (CPU instructions that process several numbers at once), and BLAS/LAPACK (decades-old, heavily optimised libraries of linear-algebra routines) for linear algebra.
+- *Why is numpy fast?* — Contiguous typed memory, compiled loops, no per-element Python objects, SIMD, and BLAS/LAPACK (decades-old, heavily optimised linear-algebra libraries).
 - *`a * b` vs `a @ b`?* — Element-wise vs matrix product.
-- *How do you make results reproducible?* — Seeded `Generator` passed explicitly.
-
-### TL;DR
-`@` for matrices, `solve` not `inv`, `eigh` for symmetric matrices; `default_rng(seed)` for randomness.
+- *Reproducible results?* — A seeded `Generator` passed explicitly.
 
 ---
 
 ## 18.4 pandas: Series and DataFrame
 
 ### What it is
-- A **Series** is a one-dimensional labelled array: values plus an **index** (the row labels).
-- A **DataFrame** is a table: an ordered collection of Series (columns) sharing one index. Each column has its own dtype.
-
-Analogy: a DataFrame is a spreadsheet in which each column is typed and every row has a name tag.
+- **Series** — a 1-D labelled array: values plus an **index** (row labels).
+- **DataFrame** — a table: Series (columns) sharing one index, each with its own dtype.
 
 ```python
 s = pd.Series([10, 20, 30], index=["a", "b", "c"], name="score")
@@ -247,7 +230,7 @@ c    30
 Name: score, dtype: int64
 s['b']=20  s.iloc[0]=10  s[s > 15].tolist()=[20, 30]  s.mean()=20.0
 ```
-Operations between Series **align on the index**: `s1 + s2` adds values with matching labels; labels present in only one become `NaN` ("not a number" — the marker for a missing value, explained below). This automatic alignment is pandas' biggest difference from numpy.
+Operations between Series **align on the index**: `s1 + s2` adds matching labels; labels in only one become `NaN` (missing). This alignment is pandas' biggest difference from numpy.
 
 ### Reading data and first look
 ```python
@@ -273,11 +256,10 @@ mean        4.5  2026-02-03 00:00:00   6.142857   5.928571
 min         1.0  2026-01-03 00:00:00   1.000000   1.500000
 max         8.0  2026-03-05 00:00:00  20.000000  25.000000
 ```
-What to notice:
-- `qty` became `float64` because it has a missing value: `NaN` (Not a Number, numpy's missing marker) is a float. Use the nullable dtype (a type that can also hold "missing") `"Int64"` (capital I) to keep integers with missing values (shown as `<NA>`).
-- Text columns show dtype **`str`** — new in pandas 3.0. Earlier versions used the generic `object` dtype. The `str` dtype holds only strings (and missing values); it is backed by PyArrow (the Python library for Apache Arrow, a fast, standard in-memory columnar data format) when installed, otherwise by Python objects.
-- Dates parsed from strings default to **microsecond** resolution (`datetime64[us]`) in pandas 3.0 (earlier: nanoseconds).
-- First-look checklist: `head()`, `info()` (dtypes, non-null counts, memory), `describe()` (count/mean/std — standard deviation, a measure of spread — /min/quartiles — the values 25 %, 50 % and 75 % of the way through the sorted data — /max), `value_counts()` on categorical columns (columns holding a small set of labels, like city names), `isna().sum()`.
+- `qty` is `float64` because it has a missing value: `NaN` (Not a Number, numpy's missing marker) is a float. The nullable dtype `"Int64"` (capital I) keeps integers with missing values (`<NA>`).
+- Text columns are **`str`** — new in pandas 3.0 (earlier: generic `object`). It holds only strings (and missing values), backed by PyArrow (Python library for Apache Arrow, a fast standard columnar in-memory format) when installed, else Python objects.
+- Dates parse at **microsecond** resolution (`datetime64[us]`) in pandas 3.0 (earlier: nanoseconds).
+- First-look checklist: `head()`, `info()` (dtypes, non-null counts, memory), `describe()` (count, mean, std, min, quartiles — the 25/50/75 % points — max), `value_counts()` on categorical columns, `isna().sum()`.
 
 ### Input and output
 | Format | Read | Write | Notes |
@@ -285,14 +267,11 @@ What to notice:
 | CSV | `pd.read_csv(path, usecols=, dtype=, parse_dates=, chunksize=)` | `df.to_csv(path, index=False)` | Universal, slow, loses dtypes |
 | Excel | `pd.read_excel` | `df.to_excel` | Needs `openpyxl` |
 | JSON | `pd.read_json(lines=True)` | `df.to_json(orient="records")` | APIs, logs |
-| Parquet | `pd.read_parquet` | `df.to_parquet` | Columnar (stores each column together, so reading a few columns is cheap), compressed, keeps dtypes, fast; needs `pyarrow`. Preferred for anything big. |
+| Parquet | `pd.read_parquet` | `df.to_parquet` | Columnar (each column stored together, so reading a few is cheap), compressed, keeps dtypes, fast; needs `pyarrow`. Preferred for anything big. |
 | SQL | `pd.read_sql(query, conn)` | `df.to_sql(name, conn)` | Via SQLAlchemy or `sqlite3` |
 | Clipboard / HTML | `read_clipboard`, `read_html` | | Quick grabs |
 
-`chunksize=100_000` in `read_csv` returns an iterator of DataFrames — process files larger than memory piece by piece.
-
-### TL;DR
-Series = labelled 1-D; DataFrame = table of Series. Operations align on labels. pandas 3: text columns are `str`, dates default to microseconds. Parquet for storage, CSV for exchange.
+`chunksize=100_000` makes `read_csv` return an iterator of DataFrames — process larger-than-memory files piecewise.
 
 ---
 
@@ -318,17 +297,17 @@ ana | ana | {'customer': ['ben', 'ana'], 'qty': [2.0, nan]}
 [1, 4, 8]
 [2, 3, 5, 6, 7]
 ```
-Other handy filters: `.between(a, b)`, `.str.contains("x")`, `.str.startswith`, `.isna()`/`.notna()`, `~mask` for NOT.
+Other filters: `.between(a, b)`, `.str.contains("x")`, `.str.startswith`, `.isna()`/`.notna()`, `~mask` for NOT.
 
-Sorting and ranking: `df.sort_values("revenue", ascending=False)` (or a list of columns), `df.sort_index()`, `df.nlargest(3, "revenue")` for a quick top-N, and `df["city"].value_counts()` (frequency of each value, most common first; `normalize=True` for shares).
+Sorting and ranking: `df.sort_values("revenue", ascending=False)` (or a list of columns), `df.sort_index()`, `df.nlargest(3, "revenue")`, `df["city"].value_counts()` (most common first; `normalize=True` for shares).
 
 ### Setting values and Copy-on-Write
-Always set with **one** `.loc` call:
+Set with **one** `.loc` call:
 ```python
 df.loc[df["revenue"] >= 20, "tier"] = "big"      # correct
 # df["tier"][df["revenue"] >= 20] = "big"       # chained assignment: never modifies df in pandas 3
 ```
-In **pandas 3.0, Copy-on-Write (CoW)** is always on: any result of indexing *behaves as a copy*. Changing it never changes the original DataFrame, and "chained assignment" (`df[a][b] = v`) does nothing to `df` (pandas warns). The old `SettingWithCopyWarning` is gone. Internally pandas still shares memory until one side is modified, so it stays fast.
+In **pandas 3.0, Copy-on-Write (CoW)** is always on: every indexing result *behaves as a copy*, so changing it never changes the original, and chained assignment (`df[a][b] = v`) does nothing to `df` (pandas warns). `SettingWithCopyWarning` is gone. Memory is still shared until one side is modified, so it stays fast.
 ```python
 sub = df[df["city"] == "Pune"]
 sub["qty"] = 0                                    # modifies only `sub`, never df
@@ -339,20 +318,17 @@ df Pune qty still: [10, 0, 2, 20]
 (The 0 is the order whose missing quantity was filled with 0 earlier.)
 
 ### Common mistakes
-- Using `and`/`or` instead of `&`/`|` → `ValueError: The truth value of a Series is ambiguous`.
-- Forgetting parentheses around each condition (`&` binds tighter than `==`).
+- `and`/`or` instead of `&`/`|` → `ValueError: The truth value of a Series is ambiguous`.
+- Missing parentheses around each condition (`&` binds tighter than `==`).
 - Assuming `loc` slices exclude the end label.
 - Relying on chained assignment (silently ineffective in pandas 3).
-
-### TL;DR
-`loc` = labels (inclusive), `iloc` = positions (exclusive). Filter with masks joined by `&`/`|`. Assign with a single `.loc[mask, col] = value`.
 
 ---
 
 ## 18.6 Cleaning: missing data and new columns
 
 ### Missing data
-pandas marks missing values as `NaN` (floats), `NaT` (datetimes) or `pd.NA` (nullable dtypes); `None` in input becomes one of these.
+Missing values are `NaN` (floats), `NaT` (datetimes) or `pd.NA` (nullable dtypes); `None` in input becomes one of these.
 
 | Task | Method |
 |---|---|
@@ -360,8 +336,8 @@ pandas marks missing values as `NaN` (floats), `NaT` (datetimes) or `pd.NA` (nul
 | Drop | `df.dropna()` (any NaN in row), `dropna(subset=["qty"])`, `dropna(thresh=5)` |
 | Fill with constant | `df["qty"].fillna(0)` |
 | Fill with statistic | `fillna(df["price"].median())` or per group with `transform` (below) |
-| Fill from neighbours | `ffill()` (forward-fill: copy the previous value down), `bfill()` (backward-fill), `interpolate()` (estimate in-between values; time series — data recorded over time) |
-| Replace sentinel values (placeholder codes such as -1 meaning "unknown") | `df.replace(-1, np.nan)` |
+| Fill from neighbours | `ffill()` (copy the previous value down), `bfill()` (backward), `interpolate()` (estimate in-between values; time series) |
+| Replace sentinel values (placeholder codes like -1 = "unknown") | `df.replace(-1, np.nan)` |
 
 ```python
 df["qty"] = df["qty"].fillna(0).astype(int)
@@ -371,7 +347,7 @@ df["price"] = df["price"].fillna(df.groupby("product")["price"].transform("media
 {'qty': 1, 'price': 1}
 after fill: nulls=0, order 6 (missing price, bag) filled with bag median=25.0
 ```
-The missing bag price was filled with the median (middle value when sorted) price of *bags*, not of all products — group-aware filling is usually more sensible. Choosing between dropping and filling is a modelling decision: drop when few rows are affected at random; fill (and possibly add an "was_missing" flag column) when missingness is common or informative. Aggregations skip `NaN` by default (`sum`, `mean`), and `NaN != NaN`, so always test with `isna()`.
+The missing bag price got the median price of *bags*, not all products — group-aware filling is usually more sensible. Drop vs fill is a modelling decision: drop when few rows are affected at random; fill (maybe with a "was_missing" flag column) when missingness is common or informative. Aggregations skip `NaN` by default, and `NaN != NaN`, so test with `isna()`.
 
 ### New columns, vectorised
 ```python
@@ -386,17 +362,14 @@ df["tier"] = df["tier"].fillna("small")
 2         3      0.0  2026-01  small
 3         4      7.5  2026-02  small
 ```
-`assign` returns a new DataFrame, so it chains nicely. For several conditions use `np.select([cond1, cond2], [val1, val2], default=...)`; for bins (ranges that group numbers, e.g. 0–10, 10–20) use `pd.cut` (fixed edges) or `pd.qcut` (quantiles — edges chosen so each bin holds the same number of rows). Other cleaning tools: `astype`, `pd.to_numeric(errors="coerce")` (bad strings → NaN), `.str.strip().str.lower()`, `rename(columns=...)`, `drop_duplicates()`, `drop(columns=...)`.
-
-### TL;DR
-Find with `isna().sum()`, then drop or fill thoughtfully (group medians, forward-fill for time series). Build columns with vectorised expressions and `.loc`; never loop row by row.
+`assign` returns a new DataFrame, so it chains. Several conditions: `np.select([cond1, cond2], [val1, val2], default=...)`; bins: `pd.cut` (fixed edges) or `pd.qcut` (quantile edges — equal rows per bin). Other tools: `astype`, `pd.to_numeric(errors="coerce")` (bad strings → NaN), `.str.strip().str.lower()`, `rename(columns=...)`, `drop_duplicates()`, `drop(columns=...)`. Never loop row by row.
 
 ---
 
 ## 18.7 `groupby`: split–apply–combine
 
 ### What it is
-`groupby` implements **split–apply–combine**: split rows into groups by key(s), apply a function to each group, combine the results. It's SQL's `GROUP BY` (SQL is the standard query language for databases).
+`groupby` implements **split–apply–combine**: split rows into groups by key(s), apply a function per group, combine the results — SQL's `GROUP BY`.
 
 ```mermaid
 flowchart LR
@@ -445,21 +418,16 @@ dev            1     50.0      2.0
 | `filter` | Subset of original rows | Keep groups meeting a condition (`lambda g: len(g) > 1`) |
 | `apply` | Anything | Flexible but slowest — last resort |
 
-`size()` counts rows including NaN; `count()` counts non-null values. Group by several keys with a list (`["city", "product"]`) → a MultiIndex (an index with several levels of labels) result; `.reset_index()` flattens it, or pass `as_index=False`. With categorical keys, pass `observed=True` to skip category combinations that never occur.
+`size()` counts rows including NaN; `count()` counts non-null values. Several keys (`["city", "product"]`) → a MultiIndex (multi-level labels); `.reset_index()` flattens it, or pass `as_index=False`. Categorical keys: `observed=True` skips combinations that never occur.
 
-### Real-world examples
-Revenue per region per month, average session length per user cohort (a group of users who share a starting point, e.g. signed up in the same month), top product per store, feature engineering (creating useful input columns for a model) such as "user's average order value" for ML models.
-
-### TL;DR
-`groupby(keys)[col].agg(...)` for summaries; `transform` to broadcast group stats back to rows; avoid `apply` when a built-in aggregation exists.
+**Real-world:** revenue per region per month, average session length per user cohort (users sharing a start point, e.g. sign-up month), top product per store, feature engineering such as "user's average order value".
 
 ---
 
 ## 18.8 Combining tables: `merge`, `join`, `concat`
 
-### What it is
-- **`merge`** joins two tables on key columns (columns whose values match rows across tables, like a customer ID), like SQL `JOIN`.
-- **`join`** is a shortcut for merging on the index.
+- **`merge`** joins two tables on key columns (e.g. customer ID), like SQL `JOIN`.
+- **`join`** — shortcut for merging on the index.
 - **`concat`** stacks tables vertically (more rows) or side by side (`axis=1`).
 
 ```python
@@ -489,24 +457,17 @@ concat rows: 9
 | `outer` | All keys from both | `FULL OUTER JOIN` |
 | `cross` | Every pair | `CROSS JOIN` |
 
-`indicator=True` adds a `_merge` column that tells you where each row came from — a quick data-quality check ("which orders have no customer record?"). Use `validate="many_to_one"` to make pandas raise if the right table unexpectedly has duplicate keys, which would otherwise **multiply** rows silently. Different key names: `left_on=` / `right_on=`. Overlapping column names get `suffixes=("_x", "_y")`.
+`indicator=True` adds `_merge` showing each row's origin — a quick data-quality check ("which orders have no customer?"). `validate="many_to_one"` raises if the right table has duplicate keys, which would otherwise **multiply** rows silently. Different key names: `left_on=` / `right_on=`; overlapping columns get `suffixes=("_x", "_y")`.
 
-### Common mistakes
-- Row explosion from duplicate keys (check `len` before and after, or `validate=`).
-- Keys with different dtypes (`int` vs `str`) → no matches.
-- `concat` in a loop (quadratic) — collect DataFrames in a list and concat once.
-
-### TL;DR
-`merge` = SQL join (choose `how`, check with `indicator`/`validate`); `concat` = stack.
+**Common mistakes:** row explosion from duplicate keys (compare `len` before/after, or `validate=`); keys with different dtypes (`int` vs `str`) → no matches; `concat` in a loop (quadratic) — collect in a list, concat once.
 
 ---
 
 ## 18.9 Reshaping: `pivot_table` and `melt`
 
-### What it is
 - **Wide** format: one row per entity, one column per variable (a spreadsheet report).
-- **Long** ("tidy") format: one row per observation (one measured fact) — `(city, product, revenue)`. Plotting and grouping libraries usually prefer long.
-- `pivot_table` goes long → wide (aggregating duplicates); `melt` goes wide → long.
+- **Long** ("tidy") format: one row per observation — `(city, product, revenue)`; plotting and grouping libraries prefer it.
+- `pivot_table`: long → wide (aggregating duplicates, like an Excel pivot); `melt`: wide → long (unpivot).
 
 ```python
 pivot = df.pivot_table(index="city", columns="product", values="revenue",
@@ -524,21 +485,17 @@ Pune     50.0       0.0  45.0
 1  Mumbai     bag      0.0
 2    Pune     bag     50.0
 ```
-Related: `pivot` (no aggregation — fails on duplicate pairs), `stack`/`unstack` (move a level between index and columns), `pd.crosstab` (frequency tables), `margins=True` in `pivot_table` for totals.
-
-### TL;DR
-`pivot_table` = Excel pivot (long → wide with aggregation); `melt` = unpivot (wide → long).
+Related: `pivot` (no aggregation — fails on duplicate pairs), `stack`/`unstack` (move a level between index and columns), `pd.crosstab` (frequency tables), `margins=True` for totals.
 
 ---
 
 ## 18.10 Dates and times
 
-### How it works
-- Parse: `pd.to_datetime(col, format="%Y-%m-%d", errors="coerce")` or `parse_dates=` in `read_csv`. Giving `format` is faster and avoids day/month ambiguity.
-- The `.dt` accessor: `.dt.year`, `.dt.month`, `.dt.day_name()`, `.dt.hour`, `.dt.to_period("M")`, `.dt.floor("h")`.
+- Parse: `pd.to_datetime(col, format="%Y-%m-%d", errors="coerce")` or `parse_dates=` in `read_csv`; an explicit `format` is faster and avoids day/month ambiguity.
+- `.dt` accessor: `.dt.year`, `.dt.month`, `.dt.day_name()`, `.dt.hour`, `.dt.to_period("M")`, `.dt.floor("h")`.
 - Arithmetic: `date + pd.Timedelta(days=7)`, `df["end"] - df["start"]` → timedelta, `pd.date_range("2026-01-01", periods=3, freq="D")`.
-- Time series: set a `DatetimeIndex`, then `resample("ME")` (month end), `"W"`, `"D"`, `"h"` to aggregate by period, and `rolling(7).mean()` for moving averages.
-- Time zones: `tz_localize("Asia/Kolkata")` then `tz_convert("UTC")`; pandas 3 uses the standard-library `zoneinfo`.
+- Time series: set a `DatetimeIndex`, then `resample("ME")` (month end), `"W"`, `"D"`, `"h"` for calendar buckets, and `rolling(7).mean()` for moving averages.
+- Time zones: `tz_localize("Asia/Kolkata")` then `tz_convert("UTC")`; pandas 3 uses stdlib `zoneinfo`.
 
 ```python
 df["date"].dt.day_name().head(5); df["date"].dt.month.unique()
@@ -552,10 +509,7 @@ date
 2026-03-31    42.0
 Freq: ME, Name: revenue, dtype: float64
 ```
-Version note: pandas 3.0 removed the old frequency aliases — month end is `"ME"` (not `"M"`), quarter end `"QE"`, year end `"YE"`, hour `"h"`. Old tutorials using `resample("M")` now fail.
-
-### TL;DR
-Parse early with an explicit format, use `.dt` for parts, `resample` for calendar buckets, `rolling` for moving windows. Use `"ME"`/`"h"` aliases in pandas 3.
+Version note: pandas 3.0 removed the old frequency aliases — month end `"ME"` (not `"M"`), quarter end `"QE"`, year end `"YE"`, hour `"h"`. Old tutorials using `resample("M")` now fail.
 
 ---
 
@@ -569,7 +523,7 @@ big["qty"] * big["price"]                            # one C loop per column
 ```
 100k rows: apply(axis=1) 210 ms, vectorised 0.08 ms, x2523
 ```
-`apply(axis=1)` builds a Series object for every row and calls your Python function on it — it's a loop with extra overhead. Row iteration with `iterrows()` is even slower; if you truly must loop, `itertuples()` is much faster.
+`apply(axis=1)` builds a Series per row and calls your Python function — a loop with extra overhead. `iterrows()` is even slower; if you must loop, `itertuples()` is much faster.
 
 ### Performance checklist
 | Tip | Why |
@@ -577,12 +531,12 @@ big["qty"] * big["price"]                            # one C loop per column
 | Vectorise: arithmetic on columns, `np.where`/`np.select`, `.str` and `.dt` methods | C loops instead of Python calls |
 | Right dtypes: `category` for low-cardinality (few distinct values) text, smaller numeric types (`float32`, `int32`) where precision allows | Less memory, faster group-bys |
 | Read less: `usecols=`, `dtype=`, `nrows=`, `chunksize=` | Don't load what you don't need |
-| Store as Parquet | Faster reads, keeps dtypes, column pruning (skipping columns you don't ask for) |
+| Store as Parquet | Faster reads, keeps dtypes, column pruning (skipping unrequested columns) |
 | Use built-in aggregations (`"sum"`, `"mean"`) rather than `lambda` in `agg` | Built-ins run in optimised (Cython) code |
 | Avoid growing DataFrames in a loop | Collect rows/frames in a list, build once |
 | `merge` on the right keys, with `validate` | Avoid accidental row explosions |
 | Check `df.memory_usage(deep=True)` | Find heavy columns |
-| When data outgrows pandas | Polars (a fast DataFrame library written in Rust), DuckDB (an embedded analytics database), Dask or Spark (spread work over many cores or machines) |
+| When data outgrows pandas | Polars (fast Rust DataFrame library), DuckDB (embedded analytics database), Dask or Spark (spread work over many cores or machines) |
 
 ```python
 cities = pd.Series(rng.choice(["Pune", "Delhi", "Mumbai"], 100_000))
@@ -591,33 +545,24 @@ cities.memory_usage(deep=True); cities.astype("category").memory_usage(deep=True
 ```
 dtype str: 5.40 MB, category: 0.10 MB
 ```
-A **categorical** stores each distinct value once plus a small integer code per row — here 54× less memory. (With PyArrow installed, the `str` dtype itself is also far more compact than Python string objects.)
+A **categorical** stores each distinct value once plus a small integer code per row — 54× less memory here. (With PyArrow, the `str` dtype is also far more compact than Python string objects.)
 
 ### In the interview
-**30-second answer:** "pandas is fast when you stay vectorised: column arithmetic, `np.where`, `.str`/`.dt` accessors and built-in group aggregations all run in compiled code. `apply(axis=1)` and `iterrows` are Python loops. For memory I use categoricals and smaller dtypes, read only needed columns and store Parquet. In pandas 3, Copy-on-Write means every indexing result behaves as a copy, so I always assign with a single `.loc`."
+**30-second answer:** "pandas is fast when you stay vectorised: column arithmetic, `np.where`, `.str`/`.dt` accessors and built-in group aggregations run in compiled code. `apply(axis=1)` and `iterrows` are Python loops. For memory I use categoricals and smaller dtypes, read only needed columns and store Parquet. In pandas 3, Copy-on-Write means every indexing result behaves as a copy, so I always assign with a single `.loc`."
 - *`loc` vs `iloc`?* — Labels (inclusive end) vs positions (exclusive end).
-- *`transform` vs `agg`?* — `transform` returns one value per original row; `agg` one per group.
-- *How do you find orders with no matching customer?* — Left merge with `indicator=True` and filter `left_only`.
-
-### Self-check
-1. Why does `qty` load as float? → It contains `NaN`, which is a float.
-2. What does `how="left"` keep? → Every row of the left table.
-3. What changed about chained assignment in pandas 3? → It never updates the original (Copy-on-Write).
-4. Month-end frequency alias in pandas 3? → `"ME"`.
-5. Faster way to compute `qty * price` than `apply`? → `df["qty"] * df["price"]`.
-
-### TL;DR
-Vectorise, pick dtypes, read less, store Parquet, don't loop. `apply` is the last resort.
+- *`transform` vs `agg`?* — One value per original row vs one per group.
+- *Orders with no matching customer?* — Left merge with `indicator=True`, filter `left_only`.
+- *Why does `qty` load as float?* — It contains `NaN`, which is a float.
 
 ---
 
 ## 18.12 matplotlib: Figure, Axes and the four workhorse charts
 
 ### What it is
-**matplotlib** is Python's foundational plotting library (pandas' `.plot()` and seaborn — a higher-level statistical charting library — are built on it).
+**matplotlib** is Python's foundational plotting library (pandas' `.plot()` and seaborn, a higher-level statistical charting library, build on it).
 - A **Figure** is the whole canvas/image.
-- An **Axes** is one plot inside it — with its own x/y axis, title, labels and legend. A figure can hold many axes.
-- Two styles: the **pyplot state machine** (it silently remembers a "current" figure and axes between calls: `plt.plot(...)` acts on "the current axes" — quick in notebooks) and the **object-oriented (OO) API** (you hold the figure and axes objects and call methods on them: `fig, ax = plt.subplots(); ax.plot(...)` — explicit, recommended for scripts and multiple plots). Use the OO API.
+- An **Axes** is one plot in it — its own x/y axis, title, labels, legend. A figure can hold many.
+- Two styles: the **pyplot state machine** (`plt.plot(...)` acts on a remembered "current" axes — quick in notebooks) and the **object-oriented (OO) API** (`fig, ax = plt.subplots(); ax.plot(...)` — explicit). Use the OO API for scripts and multiple plots.
 
 ### How it works
 ```python
@@ -655,27 +600,24 @@ saved line_plot.png, four_charts.png
 |---|---|---|---|
 | Line | How does it change over an ordered x (time)? | `ax.plot(x, y)` | Don't use for unordered categories |
 | Bar | How do categories compare? | `ax.bar` / `ax.barh` | Start the y-axis at 0; horizontal bars for long labels |
-| Scatter | Are two numbers related? | `ax.scatter(x, y)` | `alpha` (transparency) for overplotting (so many points on top of each other that you can't see density) |
+| Scatter | Are two numbers related? | `ax.scatter(x, y)` | `alpha` (transparency) against overplotting (points so dense you can't see density) |
 | Histogram | How are values distributed? | `ax.hist(values, bins=30)` | Try several `bins` values |
 | Box plot | Spread and outliers (values far from the rest) by group | `ax.boxplot` | |
 
-Labelling essentials: `ax.set_title`, `ax.set_xlabel`/`ax.set_ylabel` (include units), `ax.legend()` whenever there are two or more series, `ax.tick_params(axis="x", rotation=30)` for crowded dates, `ax.set_xlim`/`set_ylim`, `ax.axhline` for reference lines. `savefig(..., bbox_inches="tight")` trims margins; `dpi=150–300` (dots per inch — image resolution) for print. Shortcut from pandas: `df.plot(kind="bar", ax=ax)`.
+Labelling essentials: `ax.set_title`, `ax.set_xlabel`/`set_ylabel` (with units), `ax.legend()` for two or more series, `ax.tick_params(axis="x", rotation=30)` for crowded dates, `ax.set_xlim`/`set_ylim`, `ax.axhline` for reference lines. `savefig(..., bbox_inches="tight")` trims margins; `dpi=150–300` (dots per inch) for print. From pandas: `df.plot(kind="bar", ax=ax)`.
 
 ### Common mistakes
 - Mixing pyplot and OO calls, so labels land on the wrong subplot.
-- Forgetting `plt.close(fig)` in loops → memory grows and matplotlib warns about too many open figures.
-- Calling `plt.show()` in a headless script (one running with no screen, e.g. on a server) instead of `savefig` (use the `Agg` backend — the renderer that draws straight to image files).
+- No `plt.close(fig)` in loops → memory grows; matplotlib warns about too many open figures.
+- `plt.show()` in a headless script (no screen, e.g. a server) instead of `savefig` with the `Agg` backend (renders straight to files).
 - Two y-axes (`twinx`) for unrelated measures — usually misleading; use two panels.
-- Rainbow colour maps (the mapping from numbers to colours) for ordered data — use a single-hue sequential map (e.g. `viridis`).
-
-### TL;DR
-`fig, ax = plt.subplots()`, draw on `ax`, label everything, `fig.savefig(path, dpi=...)`, `plt.close(fig)`. Line = trend, bar = compare, scatter = relationship, histogram = distribution.
+- Rainbow colour maps for ordered data — use a single-hue sequential map (e.g. `viridis`).
 
 ---
 
 ## 18.13 Mini end-to-end analysis
 
-A coffee chain with three stores wants to know: which store earns most, how revenue moved month by month, and which item matters most. The script generates a realistic messy CSV (6 months, 2,000 orders, 3 % missing quantities, a negative price, 10 duplicated rows) and then runs the standard pipeline.
+A coffee chain with three stores asks: which store earns most, how did revenue move monthly, which item matters most? The script generates a realistic messy CSV (6 months, 2,000 orders, 3 % missing quantities, a negative price, 10 duplicated rows), then runs the standard pipeline.
 
 ```mermaid
 flowchart LR
@@ -730,12 +672,12 @@ saved coffee_analysis.png
 ![Left: monthly revenue lines for Airport, Campus and Downtown, Jan-Jun 2026. Right: horizontal bars of total revenue by item, latte highest](img/coffee_analysis.png)
 
 Reading the results:
-1. **Data quality** — 10 duplicates removed (the duplicated block contained the bad row, hence 2 negative prices, 1 after dedup); 1 negative price dropped; 65 missing quantities filled with the median. Always report what cleaning did.
-2. **Stores** — Downtown has the most orders and revenue; Airport has the fewest orders but the highest average ticket (8.49 vs ~6), which matches the 40 % airport markup (higher price) built into the data. (`pct_change` in the code computes the percentage change from one row to the next.)
-3. **Trend** — February dropped 20 % (it has 28 days, and our synthetic data is uniform per day — a reminder to normalise by days or compare like periods); Airport declines towards June while Downtown grows.
-4. **Items** — lattes lead in every store: highest price among drinks and most frequent item.
+1. **Data quality** — 10 duplicates removed (the duplicated block contained the bad row: 2 negative prices before dedup, 1 after); 1 negative price dropped; 65 missing quantities filled with the median. Always report what cleaning did.
+2. **Stores** — Downtown has the most orders and revenue; Airport the fewest orders but the highest average ticket (8.49 vs ~6), matching the 40 % airport markup built into the data. (`pct_change` = percentage change from one row to the next.)
+3. **Trend** — February dropped 20 % (28 days, and the synthetic data is uniform per day — normalise by days or compare like periods); Airport declines towards June while Downtown grows.
+4. **Items** — lattes lead everywhere: highest drink price and most frequent item.
 
-This is the workflow of most analytics tasks and the first half of any ML project; the ML Handbook's [Chapter 3](../../../ml/chapters/03-python-ml-stack/README.md) continues from a clean DataFrame to features, models and evaluation.
+This is most analytics work and the first half of any ML project; ML Handbook [Chapter 3](../../../ml/chapters/03-python-ml-stack/README.md) continues from a clean DataFrame to features, models and evaluation.
 
 ---
 
@@ -743,17 +685,19 @@ This is the workflow of most analytics tasks and the first half of any ML projec
 
 1. Why is `arr * 2` faster than a list comprehension? → One compiled loop over contiguous typed memory, no per-element Python objects.
 2. Is `m[:2, :2]` a copy? → No, a view.
-3. Result shape of `(4, 1) * (3,)`? → `(4, 3)`.
+3. Result shape of `(4, 1) * (3,)`? → `(4, 3)`. How to subtract each row's mean? → `x - x.mean(axis=1, keepdims=True)`.
 4. Better than `inv(A) @ b`? → `np.linalg.solve(A, b)`.
-5. How do you get reproducible random numbers? → `rng = np.random.default_rng(seed)`.
+5. Reproducible random numbers? → `rng = np.random.default_rng(seed)`.
 6. `df.loc[1:3]` vs `df.iloc[1:3]` with a default index? → Labels 1–3 (3 rows) vs positions 1–2 (2 rows).
-7. How do you add each row's share of its group total? → `col / df.groupby(key)[col].transform("sum")`.
-8. How do you detect keys missing from a lookup table after a merge? → `indicator=True`, look for `left_only`.
-9. Long → wide? Wide → long? → `pivot_table`; `melt`.
-10. Figure vs Axes? → The canvas vs one plot on it.
+7. What changed about chained assignment in pandas 3? → It never updates the original (Copy-on-Write).
+8. Each row's share of its group total? → `col / df.groupby(key)[col].transform("sum")`.
+9. What does `how="left"` keep, and how to detect keys missing from a lookup table? → Every left row; `indicator=True`, look for `left_only`.
+10. Long → wide? Wide → long? → `pivot_table`; `melt`.
+11. Month-end alias in pandas 3? Faster than `apply` for `qty * price`? → `"ME"`; `df["qty"] * df["price"]`.
+12. Figure vs Axes? → The canvas vs one plot on it.
 
 ## Chapter TL;DR
-- **numpy**: typed contiguous arrays; shape/dtype; slices are views; masks and fancy indexing copy; vectorise instead of looping (35× here); `axis=0` per column, `axis=1` per row; broadcasting aligns shapes from the right; `@`, `solve`, `eigh`; `default_rng(seed)`.
+- **numpy**: typed contiguous arrays; shape/dtype; slices are views; masks and fancy indexing copy; vectorise instead of looping (35× here); `axis=0` per column, `axis=1` per row; broadcasting aligns shapes from the right (equal or 1); `@`, `solve`, `eigh`; `default_rng(seed)`.
 - **pandas**: Series/DataFrame with label alignment; `read_csv`/`read_parquet`; `loc` (labels, inclusive) vs `iloc` (positions); masks with `&`/`|`; fill missing values thoughtfully; `groupby` + `agg`/`transform`; `merge` with `how`, `indicator`, `validate`; `pivot_table`/`melt`; `.dt` and `resample("ME")`.
 - **pandas 3.0**: `str` dtype for text, Copy-on-Write always on (assign with one `.loc`), microsecond datetimes, new frequency aliases.
 - **Performance**: vectorise (2,500× over `apply` here), categoricals (54× less memory here), Parquet, read less.

@@ -1,15 +1,8 @@
 # Chapter 18 — Spring Interview Questions
 
-This chapter is the review round for the whole book. It collects **168 interview questions** about Spring Framework 7.0, Spring Boot 4.1 and Spring Security 7, each with a short, correct answer and a link to the section that teaches it. After the questions come a template for the most common open question ("explain a Spring project you worked on"), and ten **debugging scenarios** in the form interviewers like: *symptom → cause → fix → how to prove it*. Five of the trickiest answers are proved by a small runnable Maven project (§18.15) — **Maven** is Java's standard build tool: it reads a `pom.xml` file, downloads the libraries (dependencies) the project needs, compiles the code and runs the tests.
+This chapter is the *teaching* round of interview questions: **168 questions** about Spring Framework 7.0, Spring Boot 4.1 and Spring Security 7. The 30–60-second answers live in the [Chapter 20 question bank](../20-interview-question-bank/README.md); each question here points to its Chapter 20 answer (**Short answer: Ch 20 Qn**), adds only the deeper details that answer leaves out, and links to the teaching section. Questions without a Chapter 20 counterpart keep their full answer here. After the questions come runnable **proofs** of five tricky answers (§18.15, a small Maven project — Maven being Java's standard build tool), a template for "explain a Spring project you worked on" (§18.16), and ten **debugging scenarios** in the form *symptom → cause → fix → how to prove it* (§18.17).
 
-**What you'll learn**
-
-- Short answers for the core container, configuration, AOP, MVC/REST, clients, data/JPA/transactions, caching, security, testing, reactive, messaging, production, Spring Cloud, Spring AI and the Boot 4 / Framework 7 changes.
-- Which details interviewers use to tell "has used Spring" from "understands Spring": proxies, scopes, rollback rules, persistence context, filter chain, context caching.
-- How to structure a project walkthrough so that it survives follow-up questions.
-- A repeatable way to debug the ten failures every Spring developer meets.
-
-Versions used in answers: Spring Boot 4.1.1 → Spring Framework 7.0, Spring Security 7.1, Spring Data 2026.0, Hibernate 7.4 (the library that maps Java objects to database tables), Jackson 3.1 (the JSON library), JUnit 6 (the test framework), Java 25 (17 minimum). When an answer depends on a version, the version is named.
+Versions: Spring Boot 4.1.1 → Spring Framework 7.0, Spring Security 7.1, Spring Data 2026.0, Hibernate 7.4, Jackson 3.1, JUnit 6, Java 25 (17 minimum). Version-dependent answers name the version.
 
 ---
 
@@ -22,172 +15,163 @@ Interviewers rarely want a definition only. A strong answer has three layers, an
 2. **How it works underneath** — "A proxy's interceptor asks the transaction manager to begin, calls the method, then commits or rolls back." (A **proxy** is a stand-in object Spring generates around your bean; callers talk to it, and it runs extra code — the *interceptor* — before and after passing the call on.)
 3. **The consequence that bites people** — "So self-invocation skips it, and a checked exception commits by default." (**Self-invocation** is a method calling another method of the same object through `this`, which bypasses the proxy; a **checked exception** is one Java forces you to declare or catch — any `Exception` that is not a `RuntimeException`.)
 
-The third layer is what makes you sound experienced. Most answers below are written in that shape.
+The third layer shows you have debugged the feature, not just read about it — it is what makes you sound experienced.
 
 ### How to study with it
-- Cover the answer, say yours out loud, then compare. If you miss the third layer, follow the link.
-- The **→ §N.M** link after each answer goes to the teaching section. Links to a chapter without a section number point to the chapter as a whole.
-- Questions marked **(Boot 4)** or **(Framework 7)** are about new features; interviewers use them to check that your knowledge is current.
-
-### Self-check
-1. What are the three layers of a good answer? → What it is, how it works, the consequence that bites.
-2. Why is layer 3 the most valuable? → It shows you have debugged the feature, not just read about it.
+- Read the question, say your answer out loud, check it against Chapter 20, then read the extra detail here. If you missed the third layer, follow the **→ §N.M** link to the teaching section (a link without a section number points to the whole chapter).
+- Questions marked **(Boot 4)** or **(Framework 7)** check that your knowledge is current.
 
 ---
 
 ## 18.2 Core container and dependency injection
 
 **Q1. What are Inversion of Control and Dependency Injection?**
-IoC means the framework, not your code, controls object creation and the flow of calls into your code. DI is the form of IoC Spring uses: an object declares what it needs (constructor parameters) and the container supplies it. The result is loose coupling — you can swap a real `PaymentGateway` for a fake in tests without changing the class that uses it. → [§2.1](../02-ioc-and-dependency-injection/README.md#21-inversion-of-control-and-dependency-injection)
+Short answer: Ch 20 [Q13](../20-interview-question-bank/README.md#ioc-container-dependency-injection-beans-and-scopes). → [§2.1](../02-ioc-and-dependency-injection/README.md#21-inversion-of-control-and-dependency-injection)
 
 **Q2. What is a bean?**
-An object whose creation, wiring and lifecycle are managed by the Spring container (the `ApplicationContext` — the object that creates, connects and holds all beans). It is described by a `BeanDefinition` (class or factory method, scope, dependencies, init/destroy callbacks), which the container turns into an instance. → [§2.3](../02-ioc-and-dependency-injection/README.md#23-defining-beans)
+Short answer: Ch 20 [Q16](../20-interview-question-bank/README.md#ioc-container-dependency-injection-beans-and-scopes). A bean is described by a `BeanDefinition` (class or factory method, scope, dependencies, init/destroy callbacks) that the container turns into an instance. → [§2.3](../02-ioc-and-dependency-injection/README.md#23-defining-beans)
 
 **Q3. `BeanFactory` vs `ApplicationContext`?**
-`BeanFactory` is the minimal container: it creates beans lazily on request. `ApplicationContext` extends it and adds eager creation of singletons at startup (so wiring errors fail fast), automatic registration of post-processors, events, the `Environment` with profiles and properties, message sources (i18n — internationalization, i.e. messages translated per language) and resource loading. Applications always use an `ApplicationContext`. → [§2.2](../02-ioc-and-dependency-injection/README.md#22-the-container-beanfactory-vs-applicationcontext)
+Short answer: Ch 20 [Q15](../20-interview-question-bank/README.md#ioc-container-dependency-injection-beans-and-scopes). → [§2.2](../02-ioc-and-dependency-injection/README.md#22-the-container-beanfactory-vs-applicationcontext)
 
 **Q4. `@Component` vs `@Bean`?**
-`@Component` (and `@Service`, `@Repository`, `@Controller`) goes on *your* class and is found by component scanning (Spring searching your packages at startup for annotated classes). `@Bean` goes on a factory method in a `@Configuration` class; use it for third-party classes you cannot annotate or when creation needs logic. `@Repository` also enables exception translation to `DataAccessException`. → [§2.3](../02-ioc-and-dependency-injection/README.md#23-defining-beans)
+Short answer: Ch 20 [Q19](../20-interview-question-bank/README.md#ioc-container-dependency-injection-beans-and-scopes). `@Repository` also enables exception translation to `DataAccessException`. → [§2.3](../02-ioc-and-dependency-injection/README.md#23-defining-beans)
 
 **Q5. What is the difference between "full" and "lite" `@Configuration`?**
-With `@Configuration` (default `proxyBeanMethods = true`) Spring subclasses the class with CGLIB (a library that generates subclasses at runtime) so that calling one `@Bean` method from another returns the existing singleton instead of a new object. With `proxyBeanMethods = false` (or `@Bean` methods in a plain `@Component`) — "lite mode" — such a call is a normal Java call and creates a second object. Boot's own auto-configurations use lite mode and pass dependencies as method parameters, which is faster and works the same in native images (apps compiled ahead of time by GraalVM into a standalone executable that needs no JVM). → [§2.3](../02-ioc-and-dependency-injection/README.md#23-defining-beans)
+Short answer: Ch 20 [Q20](../20-interview-question-bank/README.md#ioc-container-dependency-injection-beans-and-scopes). Boot's own auto-configurations use lite mode with dependencies as method parameters — faster and identical in native images. → [§2.3](../02-ioc-and-dependency-injection/README.md#23-defining-beans)
 
 **Q6. Constructor, setter or field injection — which and why?**
-Constructor injection: dependencies can be `final`, the object is complete after construction, the required dependencies are visible in the signature, tests can call `new` without Spring, and cycles fail loudly. A class with one constructor needs no `@Autowired`. Setter injection suits truly optional dependencies. Field injection hides dependencies and needs reflection (Java code reading or changing classes and private fields at runtime) to test — avoid it outside test classes. → [§2.4](../02-ioc-and-dependency-injection/README.md#24-injection-types)
+Short answer: Ch 20 [Q17](../20-interview-question-bank/README.md#ioc-container-dependency-injection-beans-and-scopes). → [§2.4](../02-ioc-and-dependency-injection/README.md#24-injection-types)
 
 **Q7. Two beans implement the same interface. How does Spring choose?**
-By type first. With several candidates: `@Qualifier` on the injection point wins; otherwise a `@Primary` bean; otherwise the one non-`@Fallback` bean (Framework 6.2); otherwise a bean whose name equals the parameter name; otherwise startup fails with `NoUniqueBeanDefinitionException`. To get all of them, inject `List<PaymentGateway>` (ordered by `@Order`) or `Map<String, PaymentGateway>` (keyed by bean name). Proved in §18.15. → [§2.5](../02-ioc-and-dependency-injection/README.md#25-how-spring-picks-a-bean)
+Short answer: Ch 20 [Q22](../20-interview-question-bank/README.md#ioc-container-dependency-injection-beans-and-scopes). To get all candidates inject `List<T>` (ordered by `@Order`) or `Map<String, T>` (keyed by bean name). Proved in §18.15. → [§2.5](../02-ioc-and-dependency-injection/README.md#25-how-spring-picks-a-bean)
 
 **Q8. `@Primary` vs `@Qualifier`?**
-`@Primary` is a default chosen by the *provider* of the beans; `@Qualifier` is an explicit choice made by the *consumer* at one injection point. When both apply, the qualifier wins. Use `@Primary` for "the usual one", `@Qualifier` (or a custom qualifier annotation) where a specific one is required. → [§2.5](../02-ioc-and-dependency-injection/README.md#25-how-spring-picks-a-bean)
+Short answer: Ch 20 [Q22](../20-interview-question-bank/README.md#ioc-container-dependency-injection-beans-and-scopes). Use `@Primary` for "the usual one", `@Qualifier` (or a custom qualifier annotation) where a specific one is required. → [§2.5](../02-ioc-and-dependency-injection/README.md#25-how-spring-picks-a-bean)
 
 **Q9. How do you inject an optional dependency?**
-`ObjectProvider<T>` (`getIfAvailable()`, `ifAvailable(...)`, also lazy), `Optional<T>`, a `@Nullable` parameter (JSpecify — a standard set of null-safety annotations — in Framework 7), or `@Autowired(required = false)` on a setter. → [§2.5](../02-ioc-and-dependency-injection/README.md#25-how-spring-picks-a-bean)
+Short answer: Ch 20 [Q25](../20-interview-question-bank/README.md#ioc-container-dependency-injection-beans-and-scopes). → [§2.5](../02-ioc-and-dependency-injection/README.md#25-how-spring-picks-a-bean)
 
 **Q10. What bean scopes exist, and what is the default?**
-`singleton` (default — one instance per container), `prototype` (a new instance every time the bean is requested), and in web apps `request`, `session`, `application` and `websocket`. Singleton does not mean thread-safe (safe to use from many threads at the same time): one instance is shared by all request threads, so keep singletons stateless (no fields that change per request) or use thread-safe state. → [§2.6](../02-ioc-and-dependency-injection/README.md#26-bean-scopes)
+Short answer: Ch 20 [Q26](../20-interview-question-bank/README.md#ioc-container-dependency-injection-beans-and-scopes). Singleton is not thread-safe: one instance serves all request threads, so keep singletons stateless or their state thread-safe. → [§2.6](../02-ioc-and-dependency-injection/README.md#26-bean-scopes)
 
 **Q11. You inject a prototype bean into a singleton. What happens?**
-The prototype is created **once**, when the singleton is created, and the singleton keeps that one instance forever — "prototype" only means new-per-*request-to-the-container*. To get a fresh one each time, inject `ObjectProvider<T>` and call `getObject()`, use a `@Lookup` method, or use a scoped proxy. Proved in §18.15. → [§2.6](../02-ioc-and-dependency-injection/README.md#26-bean-scopes)
+Short answer: Ch 20 [Q29](../20-interview-question-bank/README.md#ioc-container-dependency-injection-beans-and-scopes). "Prototype" means new per request *to the container*, not per use. Proved in §18.15. → [§2.6](../02-ioc-and-dependency-injection/README.md#26-bean-scopes)
 
 **Q12. How can a singleton use a request-scoped bean?**
-Through a **scoped proxy**: `@RequestScope` (which is `@Scope(value = "request", proxyMode = TARGET_CLASS)`) injects a proxy that, on every call, looks up the instance bound to the current request. Using it outside a request thread throws `ScopeNotActiveException`. → [§2.6](../02-ioc-and-dependency-injection/README.md#26-bean-scopes)
+Short answer: Ch 20 [Q30](../20-interview-question-bank/README.md#ioc-container-dependency-injection-beans-and-scopes). `@RequestScope` = `@Scope(value = "request", proxyMode = TARGET_CLASS)`; outside a request thread the call fails (`ScopeNotActiveException`). → [§2.6](../02-ioc-and-dependency-injection/README.md#26-bean-scopes)
 
 **Q13. Describe the bean lifecycle.**
-Instantiate → inject dependencies → `*Aware` callbacks → `BeanPostProcessor.postProcessBeforeInitialization` → `@PostConstruct` → `InitializingBean.afterPropertiesSet` → custom init method → `postProcessAfterInitialization` (where AOP proxies are created) → bean in use → on shutdown `@PreDestroy` → `DisposableBean.destroy` → custom destroy method. Spring does **not** call destroy callbacks for prototypes. For start/stop behaviour tied to the context (consumers, schedulers), implement `SmartLifecycle`. → [§2.7](../02-ioc-and-dependency-injection/README.md#27-the-bean-lifecycle)
+Short answer: Ch 20 [Q31](../20-interview-question-bank/README.md#ioc-container-dependency-injection-beans-and-scopes). Destroy callbacks are not called for prototypes. For start/stop behaviour tied to the context (consumers, schedulers) implement `SmartLifecycle`. → [§2.7](../02-ioc-and-dependency-injection/README.md#27-the-bean-lifecycle)
 
 **Q14. `BeanPostProcessor` vs `BeanFactoryPostProcessor`?**
-A `BeanFactoryPostProcessor` runs **before any bean is created** and changes bean *definitions* (for example `PropertySourcesPlaceholderConfigurer` resolves `${...}`). A `BeanPostProcessor` runs for **each bean instance** and can modify or wrap it (for example `AutowiredAnnotationBeanPostProcessor` does injection; the auto-proxy creator wraps beans for `@Transactional`). Declare BFPP `@Bean` methods `static` so they don't force their configuration class to be created early. → [§2.8](../02-ioc-and-dependency-injection/README.md#28-post-processors-the-containers-extension-points)
+Short answer: Ch 20 [Q33](../20-interview-question-bank/README.md#ioc-container-dependency-injection-beans-and-scopes). Examples: `PropertySourcesPlaceholderConfigurer` resolves `${...}` (BFPP); `AutowiredAnnotationBeanPostProcessor` does injection and the auto-proxy creator wraps beans for `@Transactional` (BPP). → [§2.8](../02-ioc-and-dependency-injection/README.md#28-post-processors-the-containers-extension-points)
 
 **Q15. How does Spring handle circular dependencies?**
-Constructor-injection cycles can never be resolved: startup fails with `BeanCurrentlyInCreationException`. Field/setter cycles *can* be resolved through early references, but Spring Boot disallows them by default since 2.6 (`spring.main.allow-circular-references=false`). The real fix is design — extract the shared logic into a third bean, or decouple with an event. `@Lazy` on one constructor parameter works as a stop-gap by injecting a lazy proxy. Proved in §18.15. → [§2.9](../02-ioc-and-dependency-injection/README.md#29-circular-dependencies)
+Short answer: Ch 20 [Q34](../20-interview-question-bank/README.md#ioc-container-dependency-injection-beans-and-scopes). Proved in §18.15. → [§2.9](../02-ioc-and-dependency-injection/README.md#29-circular-dependencies)
 
 **Q16. What does lazy initialization do, and what does it cost?**
-`@Lazy` (or `spring.main.lazy-initialization=true`) creates a bean on first use instead of at startup. Startup gets faster, but configuration errors appear at the first request instead of at deploy time, and the first request is slower. Good for development and some CLI (command-line) tools; risky for services. → [§2.10](../02-ioc-and-dependency-injection/README.md#210-lazy-initialization)
+Short answer: Ch 20 [Q35](../20-interview-question-bank/README.md#ioc-container-dependency-injection-beans-and-scopes). Good for development and some CLI tools; risky for services. → [§2.10](../02-ioc-and-dependency-injection/README.md#210-lazy-initialization)
 
 **Q17. `@Profile` vs `@Conditional`?**
-`@Profile("prod")` is a ready-made condition that registers a bean only when that profile is active. `@Conditional(MyCondition.class)` takes any `Condition` implementation (a class present, a property set, an OS...). Boot's `@ConditionalOnClass`, `@ConditionalOnProperty`, `@ConditionalOnMissingBean` are built on it. → [§2.11](../02-ioc-and-dependency-injection/README.md#211-conditional-and-profiles)
+Short answer: Ch 20 [Q54](../20-interview-question-bank/README.md#configuration-properties-profiles-auto-configuration-and-starters). Boot's `@ConditionalOnClass`, `@ConditionalOnProperty`, `@ConditionalOnMissingBean` are built on `@Conditional`. → [§2.11](../02-ioc-and-dependency-injection/README.md#211-conditional-and-profiles)
 
 **Q18. How do application events work? Are they asynchronous?**
-Publish any object with `ApplicationEventPublisher.publishEvent(...)`; methods annotated `@EventListener` receive it. By default delivery is **synchronous** (the publisher waits until every listener has finished), on the publisher's thread and inside its transaction — an exception in a listener reaches the publisher. Add `@Async` for asynchronous delivery, or `@TransactionalEventListener` to run after commit. → [§2.12](../02-ioc-and-dependency-injection/README.md#212-application-events)
+Short answer: Ch 20 [Q37](../20-interview-question-bank/README.md#ioc-container-dependency-injection-beans-and-scopes). → [§2.12](../02-ioc-and-dependency-injection/README.md#212-application-events)
 
 **Q19. (Framework 7) What is JSpecify null-safety in Spring?**
-Framework 7 annotates its APIs with JSpecify (`@NullMarked` packages, `@Nullable` for the exceptions), replacing the deprecated `org.springframework.lang` annotations. Tools like NullAway, IntelliJ and Kotlin read them, so null bugs are reported at compile time (when the code is built, before it ever runs). You can do the same in your code. → [§2.13](../02-ioc-and-dependency-injection/README.md#213-null-safety-with-jspecify-framework-7)
+Short answer: Ch 20 [Q39](../20-interview-question-bank/README.md#ioc-container-dependency-injection-beans-and-scopes). JSpecify replaces the deprecated `org.springframework.lang` annotations; Kotlin reads them too. → [§2.13](../02-ioc-and-dependency-injection/README.md#213-null-safety-with-jspecify-framework-7)
 
 **Q20. (Framework 7) What is a `BeanRegistrar`?**
-A programmatic way to register beans with a loop or condition in code (for example one bean per configured tenant — one customer organisation in a shared system), imported with `@Import`. It is friendlier to AOT (ahead-of-time: work done at build time instead of at startup)/native images than a `BeanDefinitionRegistryPostProcessor`. → [§2.14](../02-ioc-and-dependency-injection/README.md#214-programmatic-registration-with-beanregistrar-framework-7)
+Short answer: Ch 20 [Q39](../20-interview-question-bank/README.md#ioc-container-dependency-injection-beans-and-scopes). Example: one bean per configured tenant; friendlier to AOT/native images than a `BeanDefinitionRegistryPostProcessor`. → [§2.14](../02-ioc-and-dependency-injection/README.md#214-programmatic-registration-with-beanregistrar-framework-7)
 
-### Self-check
-1. Default scope, and is it thread-safe? → Singleton; no — shared across threads.
-2. What exception do you get with two candidates and no tie-breaker? → `NoUniqueBeanDefinitionException`.
-3. Which lifecycle step creates AOP proxies? → `BeanPostProcessor.postProcessAfterInitialization`.
 
 ---
 
 ## 18.3 Configuration and auto-configuration
 
 **Q21. What does `@SpringBootApplication` do?**
-It combines `@SpringBootConfiguration` (a `@Configuration`), `@EnableAutoConfiguration` and `@ComponentScan` of the main class's package and sub-packages. That is why the main class belongs in the root package: beans in sibling packages are not scanned. → [§1.8](../01-spring-ecosystem-and-first-app/README.md#18-the-main-class-and-springbootapplication)
+Short answer: Ch 20 [Q40](../20-interview-question-bank/README.md#configuration-properties-profiles-auto-configuration-and-starters). Hence the main class belongs in the root package: beans in sibling packages are not scanned. → [§1.8](../01-spring-ecosystem-and-first-app/README.md#18-the-main-class-and-springbootapplication)
 
 **Q22. What happens when you run `java -jar app.jar`?**
-The manifest (`META-INF/MANIFEST.MF`, a file inside the jar — the zip of compiled classes — that names the class to start) starts Boot's `JarLauncher`, which builds a class loader (the JVM component that finds and loads `.class` files) over `BOOT-INF/classes` and `BOOT-INF/lib` and calls your main class. `SpringApplication.run` prepares the `Environment`, creates the right `ApplicationContext` (servlet — classic blocking web, reactive — non-blocking web, see §18.10, or none), loads bean definitions and matching auto-configurations, refreshes the context (creating singletons and starting the embedded server — a web server such as Tomcat running inside your own process), then calls `ApplicationRunner`/`CommandLineRunner` beans. → [§1.9](../01-spring-ecosystem-and-first-app/README.md#19-running-the-application)
+Short answer: Ch 20 [Q5](../20-interview-question-bank/README.md#spring-and-spring-boot-fundamentals). Detail: the jar's manifest (`META-INF/MANIFEST.MF`) starts Boot's `JarLauncher`, which builds a class loader over `BOOT-INF/classes` and `BOOT-INF/lib`. → [§1.9](../01-spring-ecosystem-and-first-app/README.md#19-running-the-application)
 
 **Q23. What is a starter?**
-A dependency (a library your build declares and downloads) with (almost) no code that pulls in a tested set of libraries for one capability plus the Boot module holding its auto-configuration. In Boot 4 they are modular and some were renamed: `spring-boot-starter-webmvc` (was `-web`), `spring-boot-starter-aspectj` (was `-aop`), and each technology has a matching test starter such as `spring-boot-starter-webmvc-test`. → [§1.7](../01-spring-ecosystem-and-first-app/README.md#17-starters)
+Short answer: Ch 20 [Q46](../20-interview-question-bank/README.md#configuration-properties-profiles-auto-configuration-and-starters). → [§1.7](../01-spring-ecosystem-and-first-app/README.md#17-starters)
 
 **Q24. How does auto-configuration work?**
-Each Boot module lists its auto-configuration classes in `META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports`. `@EnableAutoConfiguration` loads that list, filters it early by class presence, sorts it (`before`/`after`), and processes it **after** your own configuration. Each class is guarded by conditions — `@ConditionalOnClass`, `@ConditionalOnProperty`, `@ConditionalOnMissingBean`… — so a `DataSource` is only created if a driver is present and you haven't defined your own. → [§3.10](../03-configuration-and-auto-configuration/README.md#310-how-auto-configuration-works)
+Short answer: Ch 20 [Q41](../20-interview-question-bank/README.md#configuration-properties-profiles-auto-configuration-and-starters). `@EnableAutoConfiguration` filters the `.imports` list early by class presence and sorts it (`before`/`after`); a `DataSource` appears only if a driver is present and you defined none. → [§3.10](../03-configuration-and-auto-configuration/README.md#310-how-auto-configuration-works)
 
 **Q25. How do you override an auto-configured bean?**
-Define your own bean of that type; `@ConditionalOnMissingBean` makes Boot back off. Often you don't need to replace it at all — set properties or declare a customizer bean (`JsonMapperBuilderCustomizer`, `RestClientCustomizer`, …). To switch one auto-configuration off: `@SpringBootApplication(exclude = …)` or `spring.autoconfigure.exclude`. → [§3.12](../03-configuration-and-auto-configuration/README.md#312-overriding-and-excluding-auto-configuration)
+Short answer: Ch 20 [Q44](../20-interview-question-bank/README.md#configuration-properties-profiles-auto-configuration-and-starters). Often you needn't replace the bean: set properties or declare a customizer bean (`JsonMapperBuilderCustomizer`, `RestClientCustomizer`, …). → [§3.12](../03-configuration-and-auto-configuration/README.md#312-overriding-and-excluding-auto-configuration)
 
 **Q26. How do you find out why a bean was (or was not) auto-configured?**
-Start with `--debug` (or `debug=true`) to print the **condition evaluation report** — positive and negative matches with the reason — or call `/actuator/conditions`. `/actuator/beans` lists what exists. → [§3.11](../03-configuration-and-auto-configuration/README.md#311-seeing-what-boot-decided)
+Short answer: Ch 20 [Q43](../20-interview-question-bank/README.md#configuration-properties-profiles-auto-configuration-and-starters). → [§3.11](../03-configuration-and-auto-configuration/README.md#311-seeing-what-boot-decided)
 
 **Q27. Name the main property sources in priority order.**
-Highest first: test properties (in tests), command-line arguments, `SPRING_APPLICATION_JSON`, Java system properties (`-Dkey=value` flags on the `java` command), OS environment variables (named values set outside the app by the shell, OS or container), `random.*`, profile-specific files (outside the jar before inside), `application.properties/yaml` (outside before inside), `@PropertySource`, defaults. The rule of thumb: the more "outside" and "later", the stronger. → [§3.3](../03-configuration-and-auto-configuration/README.md#33-precedence-which-value-wins)
+Short answer: Ch 20 [Q49](../20-interview-question-bank/README.md#configuration-properties-profiles-auto-configuration-and-starters). Full order also includes test properties (in tests, highest), `SPRING_APPLICATION_JSON`, `random.*`. Rule of thumb: the more "outside" and "later", the stronger. → [§3.3](../03-configuration-and-auto-configuration/README.md#33-precedence-which-value-wins)
 
 **Q28. How does an environment variable map to a property?**
-Relaxed binding: replace `.` with `_`, remove `-`, upper-case. `SHOP_CHECKOUTTIMEOUT` sets `shop.checkout-timeout`; list indexes use `_0_`. → [§3.4](../03-configuration-and-auto-configuration/README.md#34-environment-variables-and-relaxed-binding)
+Short answer: Ch 20 [Q50](../20-interview-question-bank/README.md#configuration-properties-profiles-auto-configuration-and-starters). Example: `SHOP_CHECKOUTTIMEOUT` sets `shop.checkout-timeout`. → [§3.4](../03-configuration-and-auto-configuration/README.md#34-environment-variables-and-relaxed-binding)
 
 **Q29. `@Value` vs `@ConfigurationProperties`?**
-`@Value("${x}")` injects one value (and supports SpEL — Spring Expression Language, small expressions inside annotation strings). `@ConfigurationProperties(prefix = "shop")` binds a whole group into a typed object (a record — Java's compact, immutable data class — is ideal), supports relaxed binding, nested objects, `Duration`/`DataSize` conversion, validation with `@Validated`, and IDE metadata (so your editor can auto-complete property names). Use `@ConfigurationProperties` for anything more than one or two values. → [§3.6](../03-configuration-and-auto-configuration/README.md#36-configurationproperties--type-safe-configuration)
+Short answer: Ch 20 [Q51](../20-interview-question-bank/README.md#configuration-properties-profiles-auto-configuration-and-starters). → [§3.6](../03-configuration-and-auto-configuration/README.md#36-configurationproperties--type-safe-configuration)
 
 **Q30. How do you make the app refuse to start with bad configuration?**
-Annotate the `@ConfigurationProperties` class with `@Validated` and add Jakarta constraints (Bean Validation annotations such as `@NotBlank`, `@Min`, `@Valid` for nested groups). Binding failures stop startup and the report names each property and where it came from. → [§3.6](../03-configuration-and-auto-configuration/README.md#36-configurationproperties--type-safe-configuration)
+Short answer: Ch 20 [Q52](../20-interview-question-bank/README.md#configuration-properties-profiles-auto-configuration-and-starters). Use `@Valid` for nested groups; the failure report names each property and where it came from. → [§3.6](../03-configuration-and-auto-configuration/README.md#36-configurationproperties--type-safe-configuration)
 
 **Q31. What are profiles and profile groups?**
-A profile is a named set of beans and config (`application-prod.yaml`, `@Profile("prod")`) activated with `spring.profiles.active`. A group activates several at once: `spring.profiles.group.prod=postgres,kafka,json-logs`. Keep profiles for *environments or capabilities*, and keep secrets out of files. → [§3.7](../03-configuration-and-auto-configuration/README.md#37-profiles-profile-specific-files-and-profile-groups)
+Short answer: Ch 20 [Q53](../20-interview-question-bank/README.md#configuration-properties-profiles-auto-configuration-and-starters). Keep profiles for *environments or capabilities*, e.g. `spring.profiles.group.prod=postgres,kafka,json-logs`. → [§3.7](../03-configuration-and-auto-configuration/README.md#37-profiles-profile-specific-files-and-profile-groups)
 
 **Q32. How do you load Kubernetes secrets or extra config files?**
-(**Kubernetes** is a platform that runs and restarts containers across many machines; a *secret* is a value such as a password that it stores and mounts into the container.) `spring.config.import=optional:configtree:/etc/secrets/` reads mounted files as properties (file name = key). `spring.config.import` also imports other files, or Config Server/Vault with the matching library. `optional:` prevents failure when absent. → [§3.8](../03-configuration-and-auto-configuration/README.md#38-importing-configuration-springconfigimport)
+Short answer: Ch 20 [Q55](../20-interview-question-bank/README.md#configuration-properties-profiles-auto-configuration-and-starters). `spring.config.import=optional:configtree:/etc/secrets/` reads each mounted file as a property (file name = key); `spring.config.import` also imports other files, Config Server or Vault; `optional:` avoids failure when absent. → [§3.8](../03-configuration-and-auto-configuration/README.md#38-importing-configuration-springconfigimport)
 
 **Q33. How do you write your own starter?**
-Two artifacts (separately published Maven modules, i.e. jars): `acme-spring-boot` with `@AutoConfiguration` classes (conditions, `@ConfigurationProperties`, `@ConditionalOnMissingBean` on every bean) listed in the `.imports` file, and `acme-spring-boot-starter`, a pom (a Maven project file with no code of its own) that depends on it and the library. Test it with `ApplicationContextRunner`. → [§3.13](../03-configuration-and-auto-configuration/README.md#313-writing-your-own-auto-configuration-and-starter)
+Short answer: Ch 20 [Q47](../20-interview-question-bank/README.md#configuration-properties-profiles-auto-configuration-and-starters). Two artifacts: `acme-spring-boot` (auto-configuration with `@ConditionalOnMissingBean` on every bean) and `acme-spring-boot-starter`, a code-free pom depending on it and the library. → [§3.13](../03-configuration-and-auto-configuration/README.md#313-writing-your-own-auto-configuration-and-starter)
 
 **Q34. (Boot 4) What does "Boot 4 modularization" mean?**
 Boot 3 kept all auto-configuration in one big `spring-boot-autoconfigure` jar. Boot 4 splits it into per-technology modules (`spring-boot-webmvc`, `spring-boot-jdbc`, `spring-boot-kafka`…) with matching starters and test starters, so the classpath (the list of jars and folders the JVM loads classes from) contains only what you use. `spring-boot-starter-classic` / `-test-classic` bring the old "everything" layout as a migration aid. → [§3.14](../03-configuration-and-auto-configuration/README.md#314-boot-4-modularization)
 
 **Q35. What does DevTools do, and is it in production?**
-Automatic restart on class changes (two class loaders), development property defaults (for example template caching off). It is excluded from the packaged jar automatically and disabled when run with `java -jar`. LiveReload is off by default in Boot 4. → [§1.10](../01-spring-ecosystem-and-first-app/README.md#110-devtools)
+Short answer: Ch 20 [Q11](../20-interview-question-bank/README.md#spring-and-spring-boot-fundamentals). → [§1.10](../01-spring-ecosystem-and-first-app/README.md#110-devtools)
 
 ---
 
 ## 18.4 AOP and proxies
 
 **Q36. What is AOP? Define aspect, advice, pointcut and join point.**
-Aspect-Oriented Programming moves *cross-cutting* concerns (logging, timing, transactions, security) out of business code. A **join point** is a point in execution (in Spring AOP: a method execution on a bean); a **pointcut** is an expression selecting join points; **advice** is the code that runs there (`@Before`, `@AfterReturning`, `@AfterThrowing`, `@After`, `@Around`); an **aspect** is a class bundling pointcuts and advice. → [§4.1](../04-aop-and-proxies/README.md#41-cross-cutting-concerns-and-the-aop-vocabulary)
+Short answer: Ch 20 [Q59](../20-interview-question-bank/README.md#aop-and-proxies). → [§4.1](../04-aop-and-proxies/README.md#41-cross-cutting-concerns-and-the-aop-vocabulary)
 
 **Q37. How does Spring AOP work at runtime?**
-With proxies. A `BeanPostProcessor` checks each bean against all pointcuts; if any match, it returns a **proxy** instead of the bean. Callers hold the proxy; the proxy runs the advice chain and then calls the real object. Nothing is changed in your bytecode (the compiled instructions in `.class` files that the JVM runs). → [§4.4](../04-aop-and-proxies/README.md#44-how-spring-aop-works-proxies)
+Short answer: Ch 20 [Q60](../20-interview-question-bank/README.md#aop-and-proxies). Nothing changes in your bytecode — the proxy runs the advice chain, then calls the real object. → [§4.4](../04-aop-and-proxies/README.md#44-how-spring-aop-works-proxies)
 
 **Q38. JDK dynamic proxy vs CGLIB?**
-A JDK (Java Development Kit) dynamic proxy implements the bean's interfaces (so you can only inject by interface). A CGLIB proxy is a generated subclass (so you can inject by class) but cannot proxy `final` classes or advise `final`/`private` methods. Spring Boot uses CGLIB for everything by default (`spring.aop.proxy-target-class=true`); plain Spring uses JDK proxies when the bean has interfaces. Framework 7 adds `@Proxyable` to choose per bean. → [§4.4](../04-aop-and-proxies/README.md#44-how-spring-aop-works-proxies)
+Short answer: Ch 20 [Q61](../20-interview-question-bank/README.md#aop-and-proxies). Framework 7 adds `@Proxyable` to choose per bean. → [§4.4](../04-aop-and-proxies/README.md#44-how-spring-aop-works-proxies)
 
 **Q39. What is the self-invocation problem?**
-A call `this.saveBatch()` inside the bean goes to the real object, not the proxy, so `@Transactional`, `@Cacheable`, `@Async`, `@Retryable` and custom aspects on the called method are silently skipped. Fixes: move the method to another bean (best), inject the bean into itself lazily (`@Lazy` self-reference / `ObjectProvider`), use `TransactionTemplate`, or switch to AspectJ weaving. Proved in §18.15. → [§4.5](../04-aop-and-proxies/README.md#45-proxy-limitations--proved)
+Short answer: Ch 20 [Q62](../20-interview-question-bank/README.md#aop-and-proxies). Proved in §18.15. → [§4.5](../04-aop-and-proxies/README.md#45-proxy-limitations--proved)
 
 **Q40. Which Spring features are built on proxies?**
-`@Transactional`, `@Cacheable`/`@CacheEvict`, `@Async`, `@Retryable`/`@ConcurrencyLimit` (Framework 7), `@PreAuthorize` and other method security, `@Validated` method validation, `@Observed`, scoped proxies, `@Lazy` injection points, full `@Configuration` classes (CGLIB), Spring Data repositories and HTTP interface clients (JDK proxies). All share the same limitations. → [§4.6](../04-aop-and-proxies/README.md#46-spring-features-built-on-proxies)
+Short answer: Ch 20 [Q63](../20-interview-question-bank/README.md#aop-and-proxies). Also HTTP interface clients (JDK proxies). All share the same limitations. → [§4.6](../04-aop-and-proxies/README.md#46-spring-features-built-on-proxies)
 
 **Q41. `@Around` vs the other advice types?**
-Only `@Around` receives a `ProceedingJoinPoint` and decides whether and how the method runs (`proceed()`), can change arguments and the return value, and can catch exceptions. Use the narrowest advice that works — `@Before` cannot forget to call `proceed()`. → [§4.2](../04-aop-and-proxies/README.md#42-writing-aspects-with-aspect)
+Short answer: Ch 20 [Q65](../20-interview-question-bank/README.md#aop-and-proxies). → [§4.2](../04-aop-and-proxies/README.md#42-writing-aspects-with-aspect)
 
 **Q42. How do you control the order of two aspects?**
-`@Order` (or `Ordered`) on the aspect class: the lower value is the *outer* layer — it runs first on the way in and last on the way out. Example: put a retry aspect outside the transaction aspect so each attempt gets a fresh transaction. → [§4.2](../04-aop-and-proxies/README.md#42-writing-aspects-with-aspect)
+Short answer: Ch 20 [Q65](../20-interview-question-bank/README.md#aop-and-proxies). The lowest `@Order` value is the *outer* layer — first in, last out. Example: put a retry aspect outside the transaction aspect so each attempt gets a fresh transaction. → [§4.2](../04-aop-and-proxies/README.md#42-writing-aspects-with-aspect)
 
 **Q43. Spring AOP vs AspectJ?**
-Spring AOP: runtime proxies, method execution on Spring beans only, no build changes. AspectJ: weaves bytecode (inserts the aspect's code directly into your compiled classes) at compile or load time, can advise any join point (constructors, field access, private methods, self-calls), but needs the AspectJ compiler or a weaving agent. Most apps need only Spring AOP. → [§4.8](../04-aop-and-proxies/README.md#48-spring-aop-vs-aspectj)
+Short answer: Ch 20 [Q66](../20-interview-question-bank/README.md#aop-and-proxies). → [§4.8](../04-aop-and-proxies/README.md#48-spring-aop-vs-aspectj)
 
 **Q44. (Framework 7) What are `@Retryable` and `@ConcurrencyLimit`?**
-Built-in resilience annotations in `spring-context`: `@Retryable` retries a method on exceptions with `maxRetries`, `delay`, `multiplier`, `jitter`, `maxDelay` (jitter = a random amount added to each wait so many clients don't retry in lockstep) and include/exclude filters (it also works for reactive return types); `@ConcurrencyLimit` caps concurrent calls (a bulkhead). They are proxy-based and need `@EnableResilientMethods` — there is no auto-configuration. Programmatic API: `RetryTemplate`/`RetryPolicy` in `spring-core`. There is no circuit breaker (a guard that stops calling a failing dependency for a while and fails fast instead); use Resilience4j, a resilience library, for that. → [§4.7](../04-aop-and-proxies/README.md#47-framework-7-core-resilience-retryable-and-concurrencylimit)
+Short answer: Ch 20 [Q67](../20-interview-question-bank/README.md#aop-and-proxies). Also `include`/`exclude` exception filters; no auto-configuration (needs `@EnableResilientMethods`); programmatic API `RetryTemplate`/`RetryPolicy` in `spring-core`; no circuit breaker — use Resilience4j. They live in `spring-context`. → [§4.7](../04-aop-and-proxies/README.md#47-framework-7-core-resilience-retryable-and-concurrencylimit)
 
 ---
 
 ## 18.5 Spring MVC, REST and HTTP clients
 
 **Q45. Walk through a request in Spring MVC.**
-Servlet filters (including Spring Security; a *servlet* is the Java standard API for handling HTTP requests, and *filters* run before and after it on every request) → `DispatcherServlet` (Spring MVC's single front servlet) → `HandlerMapping` finds the controller method (path, HTTP method, consumes/produces, API version) → interceptors' `preHandle` → `HandlerAdapter` resolves arguments (path variables, query params, body via an `HttpMessageConverter`, validation) → method runs → the return value is written by a converter chosen from the `Accept` header → exceptions go to `HandlerExceptionResolver`s (`@ExceptionHandler`, `@ControllerAdvice`) → `afterCompletion` → back through the filters. → [§5.2](../05-spring-mvc-and-rest/README.md#52-how-a-request-flows-the-dispatcherservlet)
+Short answer: Ch 20 [Q68](../20-interview-question-bank/README.md#spring-mvc-rest-and-http-clients). MVC flow (also: `HandlerMapping` matches consumes/produces and API version; the response converter is chosen from the `Accept` header): → [§5.2](../05-spring-mvc-and-rest/README.md#52-how-a-request-flows-the-dispatcherservlet)
 
 ```mermaid
 flowchart LR
@@ -204,52 +188,52 @@ flowchart LR
 ```
 
 **Q46. `@Controller` vs `@RestController`?**
-`@RestController` = `@Controller` + `@ResponseBody`: return values are written to the response body (JSON) instead of being treated as view names. → [§5.3](../05-spring-mvc-and-rest/README.md#53-controllers-and-request-mappings)
+Short answer: Ch 20 [Q69](../20-interview-question-bank/README.md#spring-mvc-rest-and-http-clients). → [§5.3](../05-spring-mvc-and-rest/README.md#53-controllers-and-request-mappings)
 
 **Q47. `@PathVariable` vs `@RequestParam` vs `@RequestBody`?**
-Path variable: part of the URL identifying a resource (`/orders/{id}`). Request param: query string (the `?key=value&...` part of the URL), usually filters/paging (`?status=NEW&page=2`), optional with `required = false` or a default. Request body: the deserialized payload (the request data turned from JSON text into a Java object, e.g. a record) of POST/PUT/PATCH. → [§5.4](../05-spring-mvc-and-rest/README.md#54-reading-input-and-writing-output)
+Short answer: Ch 20 [Q71](../20-interview-question-bank/README.md#spring-mvc-rest-and-http-clients). → [§5.4](../05-spring-mvc-and-rest/README.md#54-reading-input-and-writing-output)
 
 **Q48. Why return `ResponseEntity`?**
-To control the status code and headers as well as the body — for example `201 Created` with a `Location` header, `204 No Content`, or `304` with an `ETag` (a version fingerprint of the response that lets clients skip re-downloading unchanged data). For plain 200 responses, returning the object is enough. → [§5.4](../05-spring-mvc-and-rest/README.md#54-reading-input-and-writing-output)
+Short answer: Ch 20 [Q72](../20-interview-question-bank/README.md#spring-mvc-rest-and-http-clients). Also `304` with an `ETag` (a response-version fingerprint letting clients skip unchanged data). For plain 200 just return the object. → [§5.4](../05-spring-mvc-and-rest/README.md#54-reading-input-and-writing-output)
 
 **Q49. How do you validate a request?**
-Put Jakarta Bean Validation constraints on the DTO (Data Transfer Object — a simple class or record shaped for the API, not for the database) (`@NotBlank`, `@Positive`, `@Email`, `@Valid` for nested objects) and `@Valid` on the `@RequestBody`. A failure raises `MethodArgumentNotValidException` → 400. Since Framework 6.1, constraints directly on method parameters (`@RequestParam @Min(1) int page`) are validated built-in and raise `HandlerMethodValidationException`. Use `@Validated(Group.class)` for validation groups. → [§5.6](../05-spring-mvc-and-rest/README.md#56-validation)
+Short answer: Ch 20 [Q90](../20-interview-question-bank/README.md#validation-and-exception-handling). Use `@Validated(Group.class)` for validation groups. → [§5.6](../05-spring-mvc-and-rest/README.md#56-validation)
 
 **Q50. How do you handle errors consistently?**
-One `@RestControllerAdvice` (extending `ResponseEntityExceptionHandler` to cover Spring's own exceptions) with `@ExceptionHandler` methods that map domain exceptions to statuses and return **`ProblemDetail`** — the RFC 9457 (an RFC is a published Internet standard) `application/problem+json` format with `type`, `title`, `status`, `detail`, `instance` and your extra fields. Never leak stack traces (the list of method calls printed with an exception — it reveals internals to attackers). → [§5.7](../05-spring-mvc-and-rest/README.md#57-error-handling-and-problem-details-rfc-9457)
+Short answer: Ch 20 [Q94](../20-interview-question-bank/README.md#validation-and-exception-handling). Never leak stack traces to clients. → [§5.7](../05-spring-mvc-and-rest/README.md#57-error-handling-and-problem-details-rfc-9457)
 
 **Q51. (Boot 4) What changed with JSON?**
-Boot 4 uses **Jackson 3**: packages `tools.jackson.*` (the annotations stay in `com.fasterxml.jackson.annotation`), an immutable `JsonMapper` built with a builder, unchecked exceptions (subclasses of `RuntimeException`, which callers need not catch), and different defaults (for example dates written as ISO-8601 strings such as `2026-10-07T09:30:00Z`). Customize with `JsonMapperBuilderCustomizer`; `@JsonComponent` became `@JacksonComponent`. Jackson 2 support remains only in deprecated form. → [§5.5](../05-spring-mvc-and-rest/README.md#55-json-with-jackson-3)
+Short answer: Ch 20 [Q76](../20-interview-question-bank/README.md#spring-mvc-rest-and-http-clients). Jackson 3 also means an immutable `JsonMapper` built with a builder and unchecked exceptions; `@JsonComponent` became `@JacksonComponent`. → [§5.5](../05-spring-mvc-and-rest/README.md#55-json-with-jackson-3)
 
 **Q52. How does content negotiation work?**
-The client's `Accept` header (and `consumes`/`produces` on the mapping) decides which `HttpMessageConverter` writes the response. No converter for the requested type → 406; unsupported request `Content-Type` → 415. → [§5.8](../05-spring-mvc-and-rest/README.md#58-content-negotiation)
+Short answer: Ch 20 [Q77](../20-interview-question-bank/README.md#spring-mvc-rest-and-http-clients). → [§5.8](../05-spring-mvc-and-rest/README.md#58-content-negotiation)
 
 **Q53. (Framework 7) How do you version a REST API?**
-Framework 7 has first-class API versioning: configure how the version is read (header, query param, path segment or media-type parameter — in Boot via `spring.mvc.apiversion.*`, e.g. `spring.mvc.apiversion.use.header=X-API-Version`), a default and the supported versions, then map with `@GetMapping(path = "/orders", version = "1.1+")` ("1.1 and later"). A deprecation handler can add `Deprecation`, `Sunset` and `Link` headers. → [§5.9](../05-spring-mvc-and-rest/README.md#59-api-versioning-framework-7)
+Short answer: Ch 20 [Q78](../20-interview-question-bank/README.md#spring-mvc-rest-and-http-clients). Ranges like `version = "1.1+"` ("1.1 and later"); a deprecation handler can add `Deprecation`, `Sunset` and `Link` headers. → [§5.9](../05-spring-mvc-and-rest/README.md#59-api-versioning-framework-7)
 
 **Q54. What is CORS and where do you configure it?**
-Cross-Origin Resource Sharing is a browser rule: JavaScript from origin A (an *origin* is scheme + host + port, e.g. `https://shop.example.com:443`) may read a response from origin B only if B's response allows it (`Access-Control-Allow-Origin`); non-simple requests are preceded by an `OPTIONS` preflight. Configure it with `@CrossOrigin`/`WebMvcConfigurer.addCorsMappings` in plain MVC, or — when Spring Security is present — a `CorsConfigurationSource` bean plus `http.cors(...)`, so the preflight is answered before authentication. CORS does not protect your API from non-browser clients. → [§5.10](../05-spring-mvc-and-rest/README.md#510-cors-and-file-upload), [§10.9](../10-spring-security-1-fundamentals/README.md#109-cors)
+Short answer: Ch 20 [Q80](../20-interview-question-bank/README.md#spring-mvc-rest-and-http-clients). An *origin* is scheme + host + port. CORS doesn't protect the API from non-browser clients. → [§5.10](../05-spring-mvc-and-rest/README.md#510-cors-and-file-upload), [§10.9](../10-spring-security-1-fundamentals/README.md#109-cors)
 
 **Q55. Filter vs interceptor vs aspect?**
-A servlet **filter** sees every request (even ones that never reach Spring MVC), can wrap request/response, and knows nothing about controllers — good for security, logging, compression. A `HandlerInterceptor` runs inside the `DispatcherServlet`, knows the chosen `HandlerMethod`, and only for mapped requests — good for per-handler checks. An **aspect** works on any bean method, not HTTP. → [§5.11](../05-spring-mvc-and-rest/README.md#511-filters-vs-interceptors-vs-aop)
+Short answer: Ch 20 [Q81](../20-interview-question-bank/README.md#spring-mvc-rest-and-http-clients). A filter sees even requests that never reach Spring MVC and can wrap the request/response. → [§5.11](../05-spring-mvc-and-rest/README.md#511-filters-vs-interceptors-vs-aop)
 
 **Q56. PUT vs PATCH vs POST — which are idempotent?**
-GET, PUT and DELETE are idempotent (repeating them leaves the same state — see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)); POST is not; PATCH is not guaranteed to be. Use POST to create (`201` + `Location`), PUT to replace, PATCH for partial update. For retry-safe POSTs, accept an `Idempotency-Key` header. → [§5.1](../05-spring-mvc-and-rest/README.md#51-rest-in-one-page)
+Short answer: Ch 20 [Q73](../20-interview-question-bank/README.md#spring-mvc-rest-and-http-clients). For retry-safe POSTs accept an `Idempotency-Key` header. → [§5.1](../05-spring-mvc-and-rest/README.md#51-rest-in-one-page)
 
 **Q57. How do you paginate and document an API?**
-Accept `page`/`size`/`sort` (Spring Data's `Pageable` resolves them) and return a page DTO with the content and paging metadata rather than exposing internal classes; for very large or changing data prefer keyset (cursor) pagination ("give me the rows after the last id I saw" instead of skipping N rows). Document with OpenAPI (a standard, machine-readable description of a REST API) generated by springdoc (`/v3/api-docs`, Swagger UI — a web page that renders that description and lets you try the calls). → [§5.13](../05-spring-mvc-and-rest/README.md#513-putting-it-together-design-checklist-and-mistakes), [§5.12](../05-spring-mvc-and-rest/README.md#512-documenting-the-api-openapi-with-springdoc)
+Short answer: Ch 20 [Q79](../20-interview-question-bank/README.md#spring-mvc-rest-and-http-clients). Document with OpenAPI (a machine-readable REST API description) generated by springdoc (`/v3/api-docs`, Swagger UI). → [§5.13](../05-spring-mvc-and-rest/README.md#513-putting-it-together-design-checklist-and-mistakes), [§5.12](../05-spring-mvc-and-rest/README.md#512-documenting-the-api-openapi-with-springdoc)
 
 **Q58. Which HTTP client should a new Boot 4 service use?**
-`RestClient` (Framework 6.1+) for synchronous calls — fluent (calls chained one after another, `a().b().c()`), uses Boot's converters, timeouts and observability when you inject `RestClient.Builder` — or a declarative `@HttpExchange` interface on top of it. `WebClient` is for reactive apps. `RestTemplate` is legacy: its deprecation (official marking as "don't use, will be removed") is planned for Framework 7.1 with removal in 8.0. → [§6.1](../06-rest-clients-and-http-interfaces/README.md#61-choosing-a-client)
+Short answer: Ch 20 [Q86](../20-interview-question-bank/README.md#spring-mvc-rest-and-http-clients). Inject `RestClient.Builder` to get Boot's converters, timeouts and observability. → [§6.1](../06-rest-clients-and-http-interfaces/README.md#61-choosing-a-client)
 
 **Q59. What are HTTP service interfaces, and what does Boot 4 add?**
-You declare a Java interface with `@GetExchange`/`@PostExchange` methods; `HttpServiceProxyFactory` creates a JDK-proxy implementation that makes the calls. Boot 4 adds `@ImportHttpServices(group = "catalog", types = CatalogApi.class)` and per-group properties `spring.http.serviceclient.<group>.*` (base URL, timeouts), so you don't write factory code. → [§6.6](../06-rest-clients-and-http-interfaces/README.md#66-http-service-interfaces-httpexchange)
+Short answer: Ch 20 [Q87](../20-interview-question-bank/README.md#spring-mvc-rest-and-http-clients). `HttpServiceProxyFactory` creates the JDK-proxy implementation; Boot 4's `@ImportHttpServices(group = "catalog", types = CatalogApi.class)` removes the factory code. → [§6.6](../06-rest-clients-and-http-interfaces/README.md#66-http-service-interfaces-httpexchange)
 
 **Q60. How do you handle errors, timeouts and retries on a client?**
-`retrieve()` throws `HttpClientErrorException` (4xx) / `HttpServerErrorException` (5xx), and `ResourceAccessException` for I/O (input/output — network or disk) errors and timeouts; translate them to domain exceptions at the client edge with `onStatus`. Always set connect and read timeouts (`spring.http.clients.*`). Retry only idempotent calls and transient failures (short-lived ones that may succeed a moment later), with exponential back-off (waiting longer after each failure, e.g. 1 s, 2 s, 4 s) and jitter. → [§6.3](../06-rest-clients-and-http-interfaces/README.md#63-error-handling), [§6.4](../06-rest-clients-and-http-interfaces/README.md#64-timeouts-and-the-underlying-http-library)
+Short answer: Ch 20 [Q88](../20-interview-question-bank/README.md#spring-mvc-rest-and-http-clients). `retrieve()` throws `HttpClientErrorException` (4xx) / `HttpServerErrorException` (5xx), and `ResourceAccessException` for I/O errors and timeouts; translate them to domain exceptions at the client edge. → [§6.3](../06-rest-clients-and-http-interfaces/README.md#63-error-handling), [§6.4](../06-rest-clients-and-http-interfaces/README.md#64-timeouts-and-the-underlying-http-library)
 
 **Q61. How do you test a REST client?**
-`@RestClientTest` + `MockRestServiceServer` to check the request your client sends and how it maps responses, plus at least one test against a real stub server (a fake HTTP server returning canned responses, e.g. WireMock) to catch HTTP-level problems. → [§6.8](../06-rest-clients-and-http-interfaces/README.md#68-testing-clients)
+Short answer: Ch 20 [Q181](../20-interview-question-bank/README.md#testing). → [§6.8](../06-rest-clients-and-http-interfaces/README.md#68-testing-clients)
 
 ---
 
@@ -259,21 +243,22 @@ You declare a Java interface with `@GetExchange`/`@PostExchange` methods; `HttpS
 (JDBC — Java Database Connectivity — is Java's standard low-level API for talking to SQL databases.) A pooled `DataSource` (a *connection pool* keeps a few open database connections and lends them out, because opening a new one per query is slow; HikariCP is Boot's pool), `JdbcClient`/`JdbcTemplate` that handle connections, statements, result-set mapping and cleanup, translation of vendor (database-specific) `SQLException`s into the unchecked `DataAccessException` hierarchy (`DuplicateKeyException`, `DataIntegrityViolationException`…), and declarative transactions. → [§7.1](../07-data-access-jdbc-and-transactions/README.md#71-the-data-access-stack), [§7.5](../07-data-access-jdbc-and-transactions/README.md#75-exception-translation-dataaccessexception)
 
 **Q63. `JdbcClient` vs `JdbcTemplate`?**
-Same engine underneath. `JdbcClient` (Framework 6.1) is a fluent API — `sql(...).param(...).query(Order.class).list()` — with named or positional parameters and automatic mapping to records. `JdbcTemplate` remains for batch updates and existing code. → [§7.3](../07-data-access-jdbc-and-transactions/README.md#73-jdbcclient-and-jdbctemplate)
+Short answer: Ch 20 [Q125](../20-interview-question-bank/README.md#spring-data-jpa-and-hibernate). `JdbcTemplate` remains for batch updates and existing code. → [§7.3](../07-data-access-jdbc-and-transactions/README.md#73-jdbcclient-and-jdbctemplate)
 
 **Q64. How big should the connection pool be?**
-Small. HikariCP defaults to 10. A database can only run as many queries in parallel as it has CPU cores and disk bandwidth; more connections mean queueing inside the database instead of in the pool. Size from measurements, remember that *pool × instances* must stay under the database's `max_connections`, and watch `hikaricp.connections.pending`. → [§7.2](../07-data-access-jdbc-and-transactions/README.md#72-datasource-and-hikaricp)
+Short answer: Ch 20 [Q124](../20-interview-question-bank/README.md#spring-data-jpa-and-hibernate). Pool × instances must stay under the database's `max_connections`; watch `hikaricp.connections.pending`. → [§7.2](../07-data-access-jdbc-and-transactions/README.md#72-datasource-and-hikaricp)
 
 **Q65. How does `@Transactional` work internally?**
-The bean is proxied; the proxy's `TransactionInterceptor` asks the `PlatformTransactionManager` (`DataSourceTransactionManager`, `JpaTransactionManager`) to start a transaction, which takes a connection, sets auto-commit (every SQL statement committing on its own) off and binds it to the current **thread**. Repositories/`JdbcClient` on that thread reuse the bound connection. When the method returns, the interceptor commits; when it throws, it applies the rollback rules. → [§7.7](../07-data-access-jdbc-and-transactions/README.md#77-how-a-spring-transaction-works)
+Short answer: Ch 20 [Q127](../20-interview-question-bank/README.md#transactions). The manager turns auto-commit off on the bound connection; repositories/`JdbcClient` on that thread reuse it. → [§7.7](../07-data-access-jdbc-and-transactions/README.md#77-how-a-spring-transaction-works)
 
 **Q66. What are the default propagation and isolation?**
-Propagation (what happens when a transactional method is called while a transaction is already running) `REQUIRED` (join the current transaction or start one); isolation (how much concurrent transactions see of each other's changes) `DEFAULT`, meaning the database's own default — READ COMMITTED on PostgreSQL, REPEATABLE READ on MySQL InnoDB. → [§7.8](../07-data-access-jdbc-and-transactions/README.md#78-transactional-attributes)
+Short answer: Ch 20 [Q130](../20-interview-question-bank/README.md#transactions). Defaults: propagation `REQUIRED`; isolation `DEFAULT` = the database's (READ COMMITTED on PostgreSQL, REPEATABLE READ on MySQL InnoDB). → [§7.8](../07-data-access-jdbc-and-transactions/README.md#78-transactional-attributes)
 
 **Q67. A `@Transactional` method throws a checked exception. Commit or rollback?**
-**Commit.** By default Spring rolls back only on `RuntimeException` and `Error` (the EJB — Enterprise JavaBeans, the older Java EE component model — convention: checked exceptions are "expected business outcomes"). Change it per method with `rollbackFor = PaymentDeclinedException.class`, or globally since Framework 6.2 with `@EnableTransactionManagement(rollbackOn = RollbackOn.ALL_EXCEPTIONS)` (which the reference docs recommend). An exception caught inside the method never causes a rollback — the proxy never sees it. Proved in §18.15. → [§7.10](../07-data-access-jdbc-and-transactions/README.md#710-rollback-rules)
+Short answer: Ch 20 [Q131](../20-interview-question-bank/README.md#transactions). Rationale: the EJB convention treats checked exceptions as expected business outcomes. Since Framework 6.2, globally `@EnableTransactionManagement(rollbackOn = RollbackOn.ALL_EXCEPTIONS)` (recommended by the reference docs). Proved in §18.15. → [§7.10](../07-data-access-jdbc-and-transactions/README.md#710-rollback-rules)
 
 **Q68. Explain the propagation types.**
+Short answer: Ch 20 [Q128](../20-interview-question-bank/README.md#transactions). → [§7.9](../07-data-access-jdbc-and-transactions/README.md#79-propagation)
 
 | Propagation | Existing transaction? | None? |
 |---|---|---|
@@ -285,108 +270,108 @@ Propagation (what happens when a transactional method is called while a transact
 | `MANDATORY` | join it | throw |
 | `NEVER` | throw | run without |
 
-Typical uses: `REQUIRES_NEW` for an audit record that must survive a rollback; `NESTED` for "try this part, roll back only this part" (JDBC savepoints — markers inside a transaction you can roll back to; avoid it with JPA — the database rolls back to the savepoint but Hibernate's persistence context does not). → [§7.9](../07-data-access-jdbc-and-transactions/README.md#79-propagation)
+Typical uses: `REQUIRES_NEW` for an audit record that must survive a rollback; `NESTED` for "roll back only this part" — avoid with JPA (the database rolls back to the savepoint, Hibernate's persistence context doesn't).
 
 **Q69. What is `UnexpectedRollbackException`?**
-An inner `REQUIRED` method (same physical transaction) threw, so the interceptor marked the shared transaction *rollback-only*. The outer method caught the exception and returned normally, so Spring tried to commit — and throws `UnexpectedRollbackException` instead of silently committing. Fix: let the exception propagate, or give the inner work its own transaction (`REQUIRES_NEW`/`NESTED`) if partial success is really wanted. → [§7.9](../07-data-access-jdbc-and-transactions/README.md#79-propagation)
+Short answer: Ch 20 [Q133](../20-interview-question-bank/README.md#transactions). → [§7.9](../07-data-access-jdbc-and-transactions/README.md#79-propagation)
 
 **Q70. What does `readOnly = true` do?**
-It is a hint passed down the stack: JDBC connections are set read-only (PostgreSQL then rejects writes), Hibernate skips dirty checking and flushing (less memory and CPU; *dirty checking* compares loaded objects with their original state to find changes, *flushing* sends pending changes to the database), and a routing `DataSource` can send the call to a replica (a read-only copy of the database). It is not a security feature. → [§7.12](../07-data-access-jdbc-and-transactions/README.md#712-readonly-and-timeout)
+Short answer: Ch 20 [Q134](../20-interview-question-bank/README.md#transactions). PostgreSQL then rejects writes on the read-only connection. It is not a security feature. → [§7.12](../07-data-access-jdbc-and-transactions/README.md#712-readonly-and-timeout)
 
 **Q71. Why might `@Transactional` be silently ignored?**
-Self-invocation; the method is `private` (with CGLIB, `protected` and package-private methods work since Framework 6.0) or `final`; the object is not a Spring bean (`new`); the exception is caught inside the method; a checked exception without a rollback rule; a different transaction manager than the one your data access uses; or work done on another thread (`@Async`, `CompletableFuture`), which does not see the thread-bound transaction. → [§7.13](../07-data-access-jdbc-and-transactions/README.md#713-transaction-pitfalls)
+Short answer: Ch 20 [Q132](../20-interview-question-bank/README.md#transactions). → [§7.13](../07-data-access-jdbc-and-transactions/README.md#713-transaction-pitfalls)
 
 **Q72. On which layer does `@Transactional` belong?**
-On the service method that represents one business operation (one unit of work), not on controllers (keeps HTTP/serialization out of the transaction) and usually not only on each repository call (then two calls are two transactions). Keep remote HTTP calls out of transactions — they hold a connection while waiting. → [§7.13](../07-data-access-jdbc-and-transactions/README.md#713-transaction-pitfalls)
+Short answer: Ch 20 [Q135](../20-interview-question-bank/README.md#transactions). Keep remote HTTP calls out of transactions — they hold a connection while waiting. → [§7.13](../07-data-access-jdbc-and-transactions/README.md#713-transaction-pitfalls)
 
 **Q73. When do you use `TransactionTemplate`?**
-When the transaction boundary is smaller than a method, must be decided at runtime, or you want to avoid proxy pitfalls (self-calls, retries around a transaction): `txTemplate.execute(status -> { ... })`. → [§7.14](../07-data-access-jdbc-and-transactions/README.md#714-programmatic-transactions-transactiontemplate)
+Short answer: Ch 20 [Q138](../20-interview-question-bank/README.md#transactions). Also to avoid proxy pitfalls such as retries around a transaction. → [§7.14](../07-data-access-jdbc-and-transactions/README.md#714-programmatic-transactions-transactiontemplate)
 
 **Q74. How do you run code only after the transaction commits?**
-`@TransactionalEventListener` (default phase `AFTER_COMMIT`) on a listener for an event published inside the transaction — e.g. send the confirmation e-mail only if the order was really saved. It is not guaranteed delivery: if the process dies after commit, the event is lost; use a transactional outbox when delivery must be guaranteed. → [§7.15](../07-data-access-jdbc-and-transactions/README.md#715-transactionaleventlistener)
+Short answer: Ch 20 [Q136](../20-interview-question-bank/README.md#transactions). `@TransactionalEventListener` (default `AFTER_COMMIT`), e.g. send the confirmation e-mail only if the order was really saved. Not guaranteed delivery — if the process dies after commit the event is lost; use a transactional outbox when delivery must be guaranteed. → [§7.15](../07-data-access-jdbc-and-transactions/README.md#715-transactionaleventlistener)
 
 **Q75. How do you handle a serialization failure or deadlock?**
-(A *serialization failure* is the database aborting a transaction because it conflicts with a concurrent one; a *deadlock* is two transactions each waiting for a lock the other holds.) They surface as `ConcurrencyFailureException` subtypes (for example `CannotAcquireLockException`, `PessimisticLockingFailureException`). Retry the **whole** transaction from outside it (a retry around the transactional method, not inside), a few times with back-off. → [§7.11](../07-data-access-jdbc-and-transactions/README.md#711-isolation-levels), [SQL book 13](../../../sql/chapters/13-transactions-and-concurrency/README.md)
+Short answer: Ch 20 [Q140](../20-interview-question-bank/README.md#transactions). They surface as `ConcurrencyFailureException` subtypes (`CannotAcquireLockException`, `PessimisticLockingFailureException`). See also [SQL book 13](../../../sql/chapters/13-transactions-and-concurrency/README.md). → [§7.11](../07-data-access-jdbc-and-transactions/README.md#711-isolation-levels), [SQL book 13](../../../sql/chapters/13-transactions-and-concurrency/README.md)
 
 **Q76. JPA vs Hibernate vs Spring Data JPA?**
-JPA (Jakarta Persistence 3.2) is the specification (a written standard that several libraries can implement) — annotations and the `EntityManager` API. Hibernate (7.x in Boot 4) is the implementation. Spring Data JPA adds repositories (objects that load and save one type of entity) on top: interfaces whose implementation is generated, with derived queries, paging and auditing. → [§8.1](../08-spring-data-jpa-and-hibernate/README.md#81-jpa-hibernate-and-spring-data--who-does-what)
+Short answer: Ch 20 [Q98](../20-interview-question-bank/README.md#spring-data-jpa-and-hibernate). JPA version: Jakarta Persistence 3.2. → [§8.1](../08-spring-data-jpa-and-hibernate/README.md#81-jpa-hibernate-and-spring-data--who-does-what)
 
 **Q77. What is the persistence context? What is dirty checking?**
-The persistence context is the `EntityManager`'s first-level cache and unit of work (the set of changes that will be written together): it holds exactly one managed instance per row and a snapshot of its loaded state. At flush (before commit, or before a query that needs it) Hibernate compares each managed entity with its snapshot and issues `UPDATE`s for the changed ones — so you don't call `save()` after changing a loaded entity inside a transaction. → [§8.4](../08-spring-data-jpa-and-hibernate/README.md#84-the-persistence-context-and-dirty-checking)
+Short answer: Ch 20 [Q105](../20-interview-question-bank/README.md#spring-data-jpa-and-hibernate). Flush happens before commit, or before a query that needs it. → [§8.4](../08-spring-data-jpa-and-hibernate/README.md#84-the-persistence-context-and-dirty-checking)
 
 **Q78. What are the entity states?**
-Transient (new, not known to the context), managed (in the context; changes are tracked), detached (was managed, context closed — changes not tracked), removed (scheduled for delete at flush). → [§8.4](../08-spring-data-jpa-and-hibernate/README.md#84-the-persistence-context-and-dirty-checking)
+Short answer: Ch 20 [Q106](../20-interview-question-bank/README.md#spring-data-jpa-and-hibernate). → [§8.4](../08-spring-data-jpa-and-hibernate/README.md#84-the-persistence-context-and-dirty-checking)
 
 **Q79. How does `save()` decide between insert and update?**
-`SimpleJpaRepository.save()` calls `persist` if the entity is **new** — by default a `null` id (or a `null` wrapper-type `@Version`) — otherwise `merge`, which may `SELECT` first. Assigned ids therefore cause a merge; implement `Persistable.isNew()` or use a version field to avoid it. → [§8.8](../08-spring-data-jpa-and-hibernate/README.md#88-repositories)
+Short answer: Ch 20 [Q108](../20-interview-question-bank/README.md#spring-data-jpa-and-hibernate). Implemented in `SimpleJpaRepository.save()`. → [§8.8](../08-spring-data-jpa-and-hibernate/README.md#88-repositories)
 
 **Q80. What is the owning side of a relationship?**
-The side that holds the foreign key (a column pointing to the primary key of another table) — the `@ManyToOne` side in a 1:N (one-to-many) relationship. JPA writes the FK only from the owning side; the inverse `@OneToMany(mappedBy = "order")` is ignored for writes, so update both sides in a helper method (`addItem`). → [§8.5](../08-spring-data-jpa-and-hibernate/README.md#85-relationships)
+Short answer: Ch 20 [Q111](../20-interview-question-bank/README.md#spring-data-jpa-and-hibernate). → [§8.5](../08-spring-data-jpa-and-hibernate/README.md#85-relationships)
 
 **Q81. `CascadeType.REMOVE` vs `orphanRemoval = true`?**
-Cascade REMOVE deletes children when the *parent* is deleted. `orphanRemoval` also deletes a child when it is *removed from the parent's collection*. Use both only for true composition (order → order lines), never on `@ManyToMany`. → [§8.5](../08-spring-data-jpa-and-hibernate/README.md#85-relationships)
+Short answer: Ch 20 [Q112](../20-interview-question-bank/README.md#spring-data-jpa-and-hibernate). Use both only for true composition (order → order lines), never on `@ManyToMany`. → [§8.5](../08-spring-data-jpa-and-hibernate/README.md#85-relationships)
 
 **Q82. What are the default fetch types, and what causes `LazyInitializationException`?**
-To-one (`@ManyToOne`, `@OneToOne`): EAGER; to-many: LAZY — set everything LAZY and fetch per use case. The exception happens when you touch an uninitialized lazy proxy after its persistence context has closed (e.g. in a controller or during JSON serialization). Fix by fetching what you need in the query (`JOIN FETCH`, `@EntityGraph`) inside the transaction and returning DTOs — not by switching to EAGER or relying on Open Session in View. → [§8.6](../08-spring-data-jpa-and-hibernate/README.md#86-fetch-types-and-lazyinitializationexception)
+Short answer: Ch 20 [Q103](../20-interview-question-bank/README.md#spring-data-jpa-and-hibernate), [Q104](../20-interview-question-bank/README.md#spring-data-jpa-and-hibernate). → [§8.6](../08-spring-data-jpa-and-hibernate/README.md#86-fetch-types-and-lazyinitializationexception)
 
 **Q83. What is the N+1 problem and how do you fix it?**
-One query loads N parents, then touching each parent's lazy association runs one more query per parent: 1 + N round trips. Fixes: `JOIN FETCH` in JPQL (JPA's SQL-like query language written against entities instead of tables), `@EntityGraph(attributePaths = "books")` on the repository method, batch fetching (`hibernate.default_batch_fetch_size` / `@BatchSize` → 1 + N/size), or a DTO projection that selects only needed columns. Detect it by counting statements in tests (Hibernate statistics or a datasource proxy). → [§8.7](../08-spring-data-jpa-and-hibernate/README.md#87-the-n1-problem)
+Short answer: Ch 20 [Q102](../20-interview-question-bank/README.md#spring-data-jpa-and-hibernate). Batch fetching cuts it to 1 + N/size round trips. Detect it by counting statements in tests (Hibernate statistics or a datasource proxy). `@BatchSize` sets batch fetching per association. → [§8.7](../08-spring-data-jpa-and-hibernate/README.md#87-the-n1-problem)
 
 **Q84. Derived query vs `@Query` vs native query?**
-Derived (`findByStatusAndCreatedAtAfter`) for short conditions; `@Query` JPQL when the name gets long or you need joins/fetches; `nativeQuery = true` for database-specific SQL (window functions — calculations across related rows such as running totals; JSONB — PostgreSQL's binary JSON column type). Updates need `@Modifying` (plus `clearAutomatically = true` if managed entities may be stale). → [§8.9](../08-spring-data-jpa-and-hibernate/README.md#89-derived-queries), [§8.10](../08-spring-data-jpa-and-hibernate/README.md#810-query-jpql-native-sql-and-modifying)
+Short answer: Ch 20 [Q101](../20-interview-question-bank/README.md#spring-data-jpa-and-hibernate). Updates need `@Modifying` (plus `clearAutomatically = true` if managed entities may be stale). → [§8.9](../08-spring-data-jpa-and-hibernate/README.md#89-derived-queries), [§8.10](../08-spring-data-jpa-and-hibernate/README.md#810-query-jpql-native-sql-and-modifying)
 
 **Q85. `Page` vs `Slice`?**
-`Page` runs an extra `COUNT` query and knows the total; `Slice` fetches `size + 1` rows to know only whether a next slice exists — cheaper for infinite scrolling. Never combine `JOIN FETCH` of a collection with paging without checking the SQL (Hibernate may page in memory). → [§8.11](../08-spring-data-jpa-and-hibernate/README.md#811-pagination-and-sorting)
+Short answer: Ch 20 [Q114](../20-interview-question-bank/README.md#spring-data-jpa-and-hibernate). Never combine `JOIN FETCH` of a collection with paging without checking the SQL (Hibernate may page in memory). → [§8.11](../08-spring-data-jpa-and-hibernate/README.md#811-pagination-and-sorting)
 
 **Q86. What are projections?**
-Reading only some columns into a smaller type: an interface projection (Spring creates a proxy), a record/class DTO projection (constructor expression), or dynamic projections (`<T> List<T> findBy(..., Class<T> type)`). They avoid loading and tracking full entities for read-only screens. → [§8.12](../08-spring-data-jpa-and-hibernate/README.md#812-projections)
+Short answer: Ch 20 [Q113](../20-interview-question-bank/README.md#spring-data-jpa-and-hibernate). → [§8.12](../08-spring-data-jpa-and-hibernate/README.md#812-projections)
 
 **Q87. How does optimistic locking work?**
-Add a `@Version` column. Every update runs `... WHERE id = ? AND version = ?` and increments it; if 0 rows match, someone else changed the row and Spring throws `ObjectOptimisticLockingFailureException`. Return 409 (Conflict) or retry the read-modify-write. Pessimistic locking (`@Lock(PESSIMISTIC_WRITE)` → `SELECT ... FOR UPDATE`) blocks instead; use it for short, highly contended updates. → [§8.14](../08-spring-data-jpa-and-hibernate/README.md#814-locking-optimistic-and-pessimistic)
+Short answer: Ch 20 [Q116](../20-interview-question-bank/README.md#spring-data-jpa-and-hibernate). → [§8.14](../08-spring-data-jpa-and-hibernate/README.md#814-locking-optimistic-and-pessimistic)
 
 **Q88. What is Open Session in View and should you disable it?**
-`spring.jpa.open-in-view` (default `true`, with a startup warning) keeps the persistence context open until the web response is written, so lazy loading works in controllers and serialization. It hides N+1 queries, holds a connection longer, and moves database access outside your service layer. Disable it for APIs and fetch what you need in the service. → [§8.15](../08-spring-data-jpa-and-hibernate/README.md#815-open-session-in-view)
+Short answer: Ch 20 [Q117](../20-interview-question-bank/README.md#spring-data-jpa-and-hibernate). Default `true`, with a startup warning. → [§8.15](../08-spring-data-jpa-and-hibernate/README.md#815-open-session-in-view)
 
 **Q89. How is the schema managed in production?**
-With migrations (numbered SQL scripts that change the schema step by step; Flyway or Liquibase run them) versioned in the repository and applied at startup or in the pipeline (the automated build-and-deploy process); `spring.jpa.hibernate.ddl-auto=validate` (or `none`). In Boot 4 add `spring-boot-starter-flyway` — `flyway-core` alone is not auto-configured. → [§8.16](../08-spring-data-jpa-and-hibernate/README.md#816-schema-migrations-with-flyway)
+Short answer: Ch 20 [Q118](../20-interview-question-bank/README.md#spring-data-jpa-and-hibernate). In Boot 4 add `spring-boot-starter-flyway` — `flyway-core` alone is not auto-configured. → [§8.16](../08-spring-data-jpa-and-hibernate/README.md#816-schema-migrations-with-flyway)
 
 **Q90. How should an entity implement `equals`/`hashCode`?**
-Not with Lombok (a library that generates getters, `equals` and similar boilerplate at compile time) `@Data` over all fields (lazy fields, changing values, recursion through relationships). Either use a natural business key that never changes, or compare by id when it is non-null with a constant `hashCode` (e.g. the class's hash) so the value doesn't change when the id is assigned on persist. → [§8.3](../08-spring-data-jpa-and-hibernate/README.md#83-entities-and-ids)
+Short answer: Ch 20 [Q119](../20-interview-question-bank/README.md#spring-data-jpa-and-hibernate). → [§8.3](../08-spring-data-jpa-and-hibernate/README.md#83-entities-and-ids)
 
 **Q91. Spring Data JDBC vs Spring Data JPA?**
-Spring Data JDBC maps aggregates (DDD — Domain-Driven Design — style: a cluster of objects always loaded and saved as one unit) with plain SQL: no persistence context, no lazy loading, no dirty checking — `save()` writes the whole aggregate. Simpler and more predictable; less automatic. JPA offers caching, lazy loading and rich mapping at the cost of more hidden behaviour. → [§9.2](../09-spring-data-beyond-jpa-and-caching/README.md#92-spring-data-jdbc-and-aggregates)
+Short answer: Ch 20 [Q125](../20-interview-question-bank/README.md#spring-data-jpa-and-hibernate). Spring Data JDBC maps DDD aggregates (clusters always loaded and saved as one unit): no persistence context, lazy loading or dirty checking — `save()` writes the whole aggregate. Simpler and predictable vs JPA's caching, lazy loading and rich mapping with more hidden behaviour. → [§9.2](../09-spring-data-beyond-jpa-and-caching/README.md#92-spring-data-jdbc-and-aggregates)
 
 ---
 
 ## 18.7 Caching
 
 **Q92. How does Spring's cache abstraction work?**
-`@EnableCaching` activates a proxy-based interceptor. (A **cache** keeps recent results in fast storage so repeated requests skip the slow work — see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md).) `@Cacheable("products")` checks the cache by key before running the method and stores the result after; `@CachePut` always runs and updates; `@CacheEvict` removes entries (`allEntries = true` to clear). The storage is pluggable through a `CacheManager` (Caffeine — an in-process Java cache library; Redis — an in-memory key-value store running as a separate server; …); Boot auto-configures one from the classpath, falling back to a simple `ConcurrentHashMap`-based cache. → [§9.8](../09-spring-data-beyond-jpa-and-caching/README.md#98-the-caching-abstraction)
+Short answer: Ch 20 [Q142](../20-interview-question-bank/README.md#caching). → [§9.8](../09-spring-data-beyond-jpa-and-caching/README.md#98-the-caching-abstraction)
 
 **Q93. How is the cache key built?**
-By default from all method arguments (`SimpleKeyGenerator`: no args → `SimpleKey.EMPTY`, one arg → the arg, several → a `SimpleKey` of all). Customize with SpEL (`key = "#id"`, `key = "#req.customerId"`) or a `KeyGenerator` bean. Arguments must have proper `equals`/`hashCode`. → [§9.8](../09-spring-data-beyond-jpa-and-caching/README.md#98-the-caching-abstraction)
+Short answer: Ch 20 [Q143](../20-interview-question-bank/README.md#caching). Default generator: `SimpleKeyGenerator`. → [§9.8](../09-spring-data-beyond-jpa-and-caching/README.md#98-the-caching-abstraction)
 
 **Q94. `condition` vs `unless`?**
-`condition` is evaluated *before* the call on the arguments (don't even look in the cache if false); `unless` is evaluated *after* on `#result` (don't store it if true — e.g. `unless = "#result == null"`). → [§9.8](../09-spring-data-beyond-jpa-and-caching/README.md#98-the-caching-abstraction)
+Short answer: Ch 20 [Q143](../20-interview-question-bank/README.md#caching). → [§9.8](../09-spring-data-beyond-jpa-and-caching/README.md#98-the-caching-abstraction)
 
 **Q95. Why doesn't my `@Cacheable` work?**
-Missing `@EnableCaching`, self-invocation, a method that isn't public on a proxied bean, keys that don't match (different argument objects without `equals`), or the method is called in a way that bypasses the proxy. → [§4.6](../04-aop-and-proxies/README.md#46-spring-features-built-on-proxies), [§9.8](../09-spring-data-beyond-jpa-and-caching/README.md#98-the-caching-abstraction)
+Short answer: Ch 20 [Q144](../20-interview-question-bank/README.md#caching). → [§4.6](../04-aop-and-proxies/README.md#46-spring-features-built-on-proxies), [§9.8](../09-spring-data-beyond-jpa-and-caching/README.md#98-the-caching-abstraction)
 
 **Q96. Local cache (Caffeine) vs distributed cache (Redis)?**
-Local: nanosecond reads, no network, but each instance has its own copy — stale data across instances and memory per instance. Distributed: one shared copy and survives restarts, but a network hop, serialization, and another system to operate. Common choice: Caffeine for small, rarely changing reference data with a short TTL (time to live — how long an entry stays before it expires); Redis for shared session-like or expensive data. → [§9.8](../09-spring-data-beyond-jpa-and-caching/README.md#98-the-caching-abstraction)
+Short answer: Ch 20 [Q145](../20-interview-question-bank/README.md#caching). Common choice: Caffeine for small, rarely changing reference data with a short TTL (time to live); Redis for shared session-like or expensive data. → [§9.8](../09-spring-data-beyond-jpa-and-caching/README.md#98-the-caching-abstraction)
 
 **Q97. What cache problems should you plan for?**
-Staleness (set TTLs, evict on write), stampede (many requests recomputing the same value at once) when a hot key expires (`@Cacheable(sync = true)` lets one caller compute per key — but only per instance, and it cannot be combined with `unless`), unbounded growth (set a maximum size), caching mutable objects that callers then modify, caching per-user data under a shared key, and forgetting to measure the hit rate — the share of lookups answered from the cache (Micrometer — Spring's metrics library — `cache.gets` metrics; for Caffeine only with `recordStats()`). → [§9.8](../09-spring-data-beyond-jpa-and-caching/README.md#98-the-caching-abstraction)
+Short answer: Ch 20 [Q146](../20-interview-question-bank/README.md#caching). `sync = true` works only per instance and can't be combined with `unless`. Also: caching mutable objects callers then modify, per-user data under a shared key, and not measuring the hit rate (Micrometer `cache.gets`; Caffeine only with `recordStats()`). → [§9.8](../09-spring-data-beyond-jpa-and-caching/README.md#98-the-caching-abstraction)
 
 ---
 
 ## 18.8 Security
 
 **Q98. What happens when you add `spring-boot-starter-security` and nothing else?**
-Every endpoint requires authentication (proving who the caller is); form login and HTTP Basic (username and password sent in a header on every request) are enabled; one in-memory user `user` gets a random password printed in the log ("Using generated security password"); CSRF protection (see Q106), security headers and session fixation protection (a new session id after login, so an attacker can't plant one beforehand) are on. As soon as you declare your own `SecurityFilterChain` bean, Boot's default chain backs off. → [§10.1](../10-spring-security-1-fundamentals/README.md#101-vocabulary-and-what-the-starter-does-by-default)
+Short answer: Ch 20 [Q148](../20-interview-question-bank/README.md#spring-security-filter-chain-authentication-jwt-and-oauth2). → [§10.1](../10-spring-security-1-fundamentals/README.md#101-vocabulary-and-what-the-starter-does-by-default)
 
 **Q99. Explain the filter chain architecture.**
-The servlet container (the web server, e.g. Tomcat, that runs servlets) calls `DelegatingFilterProxy`, which delegates to the `FilterChainProxy` bean. It chooses the **first** `SecurityFilterChain` whose `securityMatcher` matches the request and runs its filters in a fixed order: security context loading, headers, CORS, CSRF, the authentication filters (form, Basic, bearer token), anonymous authentication, `ExceptionTranslationFilter`, and finally `AuthorizationFilter`. Several chains (e.g. `/api/**` stateless — no server-side session — with JWT, a signed JSON token the client sends on every call, see Q107; the rest with form login) are ordered with `@Order`. → [§10.2](../10-spring-security-1-fundamentals/README.md#102-architecture-the-filter-chain)
+Short answer: Ch 20 [Q149](../20-interview-question-bank/README.md#spring-security-filter-chain-authentication-jwt-and-oauth2). Chain order also includes security-context loading, headers and anonymous authentication. Several chains (e.g. stateless `/api/**` with JWT, the rest with form login) are ordered with `@Order`. → [§10.2](../10-spring-security-1-fundamentals/README.md#102-architecture-the-filter-chain)
 
 ```mermaid
 flowchart LR
@@ -403,83 +388,83 @@ flowchart LR
 ```
 
 **Q100. (Security 7) How do you configure a chain today?**
-Declare a `SecurityFilterChain` `@Bean` using the lambda DSL (domain-specific language — here, configuration written as chained method calls taking lambdas, i.e. short inline functions `a -> ...`) only: `http.authorizeHttpRequests(a -> a.requestMatchers("/admin/**").hasRole("ADMIN").anyRequest().authenticated()).httpBasic(withDefaults())`. Security 7 removed `and()` chaining, `authorizeRequests` and the Ant/MVC request matchers (paths use `PathPatternRequestMatcher`); `WebSecurityConfigurerAdapter` has been gone since 6.0. Rules are checked top-down — put specific ones first and end with `anyRequest()`. → [§10.3](../10-spring-security-1-fundamentals/README.md#103-configuring-a-chain-the-lambda-dsl-in-spring-security-7)
+Short answer: Ch 20 [Q150](../20-interview-question-bank/README.md#spring-security-filter-chain-authentication-jwt-and-oauth2). Security 7 also removed the Ant/MVC request matchers (paths use `PathPatternRequestMatcher`). → [§10.3](../10-spring-security-1-fundamentals/README.md#103-configuring-a-chain-the-lambda-dsl-in-spring-security-7)
 
 **Q101. How does authentication work internally?**
-An authentication filter builds an unauthenticated `Authentication` (e.g. username + password) and passes it to the `AuthenticationManager` (a `ProviderManager`), which asks each `AuthenticationProvider`. `DaoAuthenticationProvider` loads the user via your `UserDetailsService` and checks the password with the `PasswordEncoder`. On success, the authenticated `Authentication` (principal — the user's identity — plus authorities — the permissions granted) is stored in the `SecurityContextHolder` (thread-local: a variable holding a separate value for each thread) and, for session-based apps, in the HTTP session. → [§10.4](../10-spring-security-1-fundamentals/README.md#104-authentication-users-providers-form-login-and-basic)
+Short answer: Ch 20 [Q152](../20-interview-question-bank/README.md#spring-security-filter-chain-authentication-jwt-and-oauth2). → [§10.4](../10-spring-security-1-fundamentals/README.md#104-authentication-users-providers-form-login-and-basic)
 
 **Q102. How should passwords be stored?**
-Hashed (turned by a one-way function into a fingerprint that can't be reversed) with a slow, salted (a random value mixed in per user, so equal passwords give different hashes), adaptive (its cost can be raised as hardware gets faster) function via `PasswordEncoderFactories.createDelegatingPasswordEncoder()`: bcrypt by default, Argon2id/scrypt/PBKDF2 also available; the `{bcrypt}` prefix records the algorithm so you can upgrade later (re-hash on login via `UserDetailsPasswordService`). Never encrypt passwords reversibly, never use MD5/SHA-256 alone. → [§10.5](../10-spring-security-1-fundamentals/README.md#105-password-storage-hashing-with-delegatingpasswordencoder)
+Short answer: Ch 20 [Q154](../20-interview-question-bank/README.md#spring-security-filter-chain-authentication-jwt-and-oauth2). Never encrypt passwords reversibly. Implement `UserDetailsPasswordService` to re-hash on login. → [§10.5](../10-spring-security-1-fundamentals/README.md#105-password-storage-hashing-with-delegatingpasswordencoder)
 
 **Q103. Role vs authority? `hasRole` vs `hasAuthority`?**
-An authority is any granted permission string (`orders:write`, `SCOPE_orders.read`). A role is an authority with the `ROLE_` prefix. `hasRole("ADMIN")` checks the authority `ROLE_ADMIN`; `hasAuthority("ROLE_ADMIN")` is the same check spelled out. Mixing them up (`hasRole("ROLE_ADMIN")` or granting `ADMIN` without prefix) is a classic 403. → [§10.6](../10-spring-security-1-fundamentals/README.md#106-authorizing-requests-roles-authorities-401-vs-403)
+Short answer: Ch 20 [Q155](../20-interview-question-bank/README.md#spring-security-filter-chain-authentication-jwt-and-oauth2). `hasAuthority("ROLE_ADMIN")` = `hasRole("ADMIN")` spelled out. Mixing them up (`hasRole("ROLE_ADMIN")`, or granting `ADMIN` without prefix) is a classic 403. → [§10.6](../10-spring-security-1-fundamentals/README.md#106-authorizing-requests-roles-authorities-401-vs-403)
 
 **Q104. 401 vs 403?**
-401 Unauthorized really means *unauthenticated*: no or invalid credentials — "who are you?" (sent with `WWW-Authenticate`, or a redirect to the login page for browsers). 403 Forbidden means the caller is known but lacks the permission — "I know you; no." `ExceptionTranslationFilter` decides: denied + anonymous → the `AuthenticationEntryPoint` (401/redirect); denied + authenticated → the `AccessDeniedHandler` (403). A missing CSRF token also gives 403. → [§10.6](../10-spring-security-1-fundamentals/README.md#106-authorizing-requests-roles-authorities-401-vs-403)
+Short answer: Ch 20 [Q156](../20-interview-question-bank/README.md#spring-security-filter-chain-authentication-jwt-and-oauth2). `ExceptionTranslationFilter` decides: denied + anonymous → `AuthenticationEntryPoint` (401 with `WWW-Authenticate`, or a login redirect for browsers); denied + authenticated → `AccessDeniedHandler` (403). → [§10.6](../10-spring-security-1-fundamentals/README.md#106-authorizing-requests-roles-authorities-401-vs-403)
 
 **Q105. What is method security?**
-Authorization on service methods with `@PreAuthorize("hasRole('ADMIN')")`, `@PostAuthorize("returnObject.owner == authentication.name")`, `@PreFilter`/`@PostFilter`, enabled with `@EnableMethodSecurity`. It is proxy-based (self-invocation again) and lets you express ownership rules that URL patterns can't. → [§10.7](../10-spring-security-1-fundamentals/README.md#107-method-security)
+Short answer: Ch 20 [Q157](../20-interview-question-bank/README.md#spring-security-filter-chain-authentication-jwt-and-oauth2). Also `@PreFilter`/`@PostFilter`; lets you express ownership rules (`returnObject.owner == authentication.name`) that URL patterns can't. → [§10.7](../10-spring-security-1-fundamentals/README.md#107-method-security)
 
 **Q106. What is CSRF and when can you disable protection?**
-Cross-Site Request Forgery: a malicious site makes the victim's browser send a state-changing request, and the browser adds the victim's cookies automatically. Spring requires a secret token on unsafe methods (POST, PUT, PATCH, DELETE). Disable it only for chains that never authenticate with browser-automatic credentials — e.g. a stateless API using `Authorization: Bearer` headers. SPAs using cookies should keep it (`csrf.spa()` in Security 7). → [§10.8](../10-spring-security-1-fundamentals/README.md#108-csrf-protection)
+Short answer: Ch 20 [Q158](../20-interview-question-bank/README.md#spring-security-filter-chain-authentication-jwt-and-oauth2). → [§10.8](../10-spring-security-1-fundamentals/README.md#108-csrf-protection)
 
 **Q107. Sessions or tokens?**
-Sessions: the server stores the login and the browser holds a `JSESSIONID` cookie (a small value the browser stores and sends back automatically on every request to that site) — simple, instant logout, needs CSRF protection and shared session storage when scaled (Spring Session with Redis/JDBC). Tokens (JWT): the client sends a signed token on every call; services validate it locally without shared state — good for APIs and service-to-service, but revocation is harder, so lifetimes are short. → [§10.10](../10-spring-security-1-fundamentals/README.md#1010-sessions-the-security-context-and-logout), [§11.1](../11-spring-security-2-tokens-and-oauth2/README.md#111-from-sessions-to-tokens-bearer-tokens-and-jwt)
+Short answer: Ch 20 [Q162](../20-interview-question-bank/README.md#spring-security-filter-chain-authentication-jwt-and-oauth2). Scaled sessions need shared storage (Spring Session with Redis/JDBC). The session id lives in the `JSESSIONID` cookie. → [§10.10](../10-spring-security-1-fundamentals/README.md#1010-sessions-the-security-context-and-logout), [§11.1](../11-spring-security-2-tokens-and-oauth2/README.md#111-from-sessions-to-tokens-bearer-tokens-and-jwt)
 
 **Q108. How does a Spring resource server validate a JWT?**
-(A *resource server* is an API that accepts access tokens.) `BearerTokenAuthenticationFilter` extracts the token; the `JwtDecoder` (Nimbus) fetches the issuer's public keys (JWK Set — the JSON list of keys the token issuer publishes, found via `spring.security.oauth2.resourceserver.jwt.issuer-uri`), selects the key by `kid`, verifies the signature, then validators check the claims (fields inside the token) `exp`/`nbf` (expiry / not-before time, with 60 s clock skew allowed), `iss` (issuer) and — if you configure it — `aud` (audience: who the token is for). `JwtAuthenticationConverter` maps the `scope` claim to `SCOPE_*` authorities. Invalid token → 401; missing scope → 403. → [§11.3](../11-spring-security-2-tokens-and-oauth2/README.md#113-a-jwt-resource-server-in-spring), [§11.5](../11-spring-security-2-tokens-and-oauth2/README.md#115-mapping-claims-to-authorities)
+Short answer: Ch 20 [Q160](../20-interview-question-bank/README.md#spring-security-filter-chain-authentication-jwt-and-oauth2). Detail: the `JwtDecoder` (Nimbus) fetches the issuer's JWK Set, picks the key by `kid`, verifies the signature; validators check `exp`/`nbf` (60 s clock skew), `iss` and, if configured, `aud`; `scope` → `SCOPE_*` authorities. Invalid token → 401; missing scope → 403. → [§11.3](../11-spring-security-2-tokens-and-oauth2/README.md#113-a-jwt-resource-server-in-spring), [§11.5](../11-spring-security-2-tokens-and-oauth2/README.md#115-mapping-claims-to-authorities)
 
 **Q109. OAuth 2.0 vs OpenID Connect?**
-OAuth 2.0 is *delegated authorization*: a client gets an access token to call an API on the user's behalf. OIDC is an identity layer on top: it adds the ID token (a JWT about the user) and the UserInfo endpoint, so it answers "who logged in". "Sign in with Google" is OIDC using the authorization code flow with PKCE (Proof Key for Code Exchange — a one-time secret that stops a stolen authorization code from being used). → [§11.2](../11-spring-security-2-tokens-and-oauth2/README.md#112-oauth-20-and-openid-connect-in-one-picture)
+Short answer: Ch 20 [Q164](../20-interview-question-bank/README.md#spring-security-filter-chain-authentication-jwt-and-oauth2). → [§11.2](../11-spring-security-2-tokens-and-oauth2/README.md#112-oauth-20-and-openid-connect-in-one-picture)
 
 **Q110. JWT vs opaque tokens?**
-A JWT is self-contained and validated locally (fast, no call per request) but cannot be revoked before expiry and exposes its claims. An opaque token is a random reference checked by calling the authorization server's introspection endpoint — instant revocation, at the cost of a network call (cache it briefly). → [§11.7](../11-spring-security-2-tokens-and-oauth2/README.md#117-opaque-tokens-and-introspection)
+Short answer: Ch 20 [Q159](../20-interview-question-bank/README.md#spring-security-filter-chain-authentication-jwt-and-oauth2), [Q166](../20-interview-question-bank/README.md#spring-security-filter-chain-authentication-jwt-and-oauth2). → [§11.7](../11-spring-security-2-tokens-and-oauth2/README.md#117-opaque-tokens-and-introspection)
 
 **Q111. How does one service call another securely?**
-With the client credentials grant: `OAuth2AuthorizedClientManager` obtains and caches a token for the service itself, and an `OAuth2ClientHttpRequestInterceptor` adds it to `RestClient` calls. When the *user's* identity matters downstream, relay or exchange the user's token. Inside a service mesh (an infrastructure layer of proxies that handles traffic between services), mTLS (mutual TLS — both sides prove their identity with certificates) may also be used. → [§11.10](../11-spring-security-2-tokens-and-oauth2/README.md#1110-calling-other-services-client-credentials-and-token-relay)
+Short answer: Ch 20 [Q167](../20-interview-question-bank/README.md#spring-security-filter-chain-authentication-jwt-and-oauth2). Mechanics: `OAuth2AuthorizedClientManager` obtains and caches the service's token. → [§11.10](../11-spring-security-2-tokens-and-oauth2/README.md#1110-calling-other-services-client-credentials-and-token-relay)
 
 **Q112. Where should a browser SPA keep tokens?**
-(An SPA — single-page application — is a browser app built with a framework such as React that calls APIs from JavaScript.) Preferably nowhere: the **BFF (backend-for-frontend)** pattern keeps tokens server-side and gives the SPA an `HttpOnly`, `Secure`, `SameSite` session cookie (plus CSRF protection). Tokens in `localStorage` (browser storage readable by any script on the page) can be stolen by any XSS (cross-site scripting: attacker-injected JavaScript running in your page). → [§11.12](../11-spring-security-2-tokens-and-oauth2/README.md#1112-where-should-a-browser-keep-tokens-the-bff-pattern)
+Short answer: Ch 20 [Q168](../20-interview-question-bank/README.md#spring-security-filter-chain-authentication-jwt-and-oauth2). Tokens in `localStorage` (readable by any script on the page) are stolen by any XSS. → [§11.12](../11-spring-security-2-tokens-and-oauth2/README.md#1112-where-should-a-browser-keep-tokens-the-bff-pattern)
 
 **Q113. Is the security context available in `@Async` methods or new threads?**
-Not by default — `SecurityContextHolder` uses a `ThreadLocal`. Wrap the executor (the thread pool that runs submitted tasks) in `DelegatingSecurityContextAsyncTaskExecutor` (or use `DelegatingSecurityContextRunnable`) to copy the context. In WebFlux, the context lives in the Reactor `Context` (`ReactiveSecurityContextHolder`) instead. → [§10.10](../10-spring-security-1-fundamentals/README.md#1010-sessions-the-security-context-and-logout)
+Short answer: Ch 20 [Q153](../20-interview-question-bank/README.md#spring-security-filter-chain-authentication-jwt-and-oauth2). Wrap the executor in `DelegatingSecurityContextAsyncTaskExecutor` (or use `DelegatingSecurityContextRunnable`). In WebFlux the context lives in the Reactor `Context` (`ReactiveSecurityContextHolder`). → [§10.10](../10-spring-security-1-fundamentals/README.md#1010-sessions-the-security-context-and-logout)
 
 **Q114. (Security 7) What is new?**
-Lambda DSL only, `authorizeRequests` and Ant/MVC matchers removed, built-in multi-factor authentication (login that needs two proofs, e.g. password plus a one-time code) (`FACTOR_*` authorities), `csrf.spa()`, Password4j-based encoders, PKCE sent by default by OAuth2 clients, the password grant removed, and Spring Authorization Server moved into the Spring Security project. → [§10.14](../10-spring-security-1-fundamentals/README.md#1014-in-the-interview), [§11.14](../11-spring-security-2-tokens-and-oauth2/README.md#1114-spring-authorization-server)
+Short answer: Ch 20 [Q172](../20-interview-question-bank/README.md#spring-security-filter-chain-authentication-jwt-and-oauth2). Also built-in MFA via `FACTOR_*` authorities and Password4j-based encoders. → [§10.14](../10-spring-security-1-fundamentals/README.md#1014-in-the-interview), [§11.14](../11-spring-security-2-tokens-and-oauth2/README.md#1114-spring-authorization-server)
 
 ---
 
 ## 18.9 Testing
 
 **Q115. How do you structure tests in a Spring Boot app?**
-A pyramid: many plain unit tests (tests of one class in isolation; no Spring — `new` the class with fakes/mocks, i.e. stand-in objects that return programmed answers and record calls), a layer of **slice tests** (`@WebMvcTest`, `@DataJpaTest`, `@JsonTest`, `@RestClientTest`) that start only the beans for one layer, and a few `@SpringBootTest` integration tests (tests of several real parts working together) of whole flows, ideally against real infrastructure via Testcontainers (a library that starts real databases and brokers in Docker containers for the test run). → [§12.2](../12-testing-spring-apps/README.md#122-the-test-pyramid-in-a-spring-app)
+Short answer: Ch 20 [Q173](../20-interview-question-bank/README.md#testing). Other slices: `@JsonTest`, `@RestClientTest`. → [§12.2](../12-testing-spring-apps/README.md#122-the-test-pyramid-in-a-spring-app)
 
 **Q116. `@SpringBootTest` vs `@WebMvcTest`?**
-`@SpringBootTest` loads the whole application context (all your beans and auto-configuration); with `webEnvironment = RANDOM_PORT` it starts a real server. `@WebMvcTest(OrderController.class)` loads only the MVC layer — controllers, `@ControllerAdvice`, converters, filters, security — and you mock the services with `@MockitoBean`. It is much faster and pinpoints web-layer bugs. → [§1.12](../01-spring-ecosystem-and-first-app/README.md#112-testing-the-first-app), [§12.6](../12-testing-spring-apps/README.md#126-springboottest-the-whole-application), [§12.7](../12-testing-spring-apps/README.md#127-test-slices)
+Short answer: Ch 20 [Q174](../20-interview-question-bank/README.md#testing). → [§1.12](../01-spring-ecosystem-and-first-app/README.md#112-testing-the-first-app), [§12.6](../12-testing-spring-apps/README.md#126-springboottest-the-whole-application), [§12.7](../12-testing-spring-apps/README.md#127-test-slices)
 
 **Q117. (Boot 4) `@MockBean` doesn't compile any more. Why?**
-Boot's `@MockBean`/`@SpyBean` were deprecated in 3.4 and **removed in Boot 4.0**. Use Spring Framework's `@MockitoBean` / `@MockitoSpyBean` (since 6.2), which replace or wrap a bean in the test context. → [§12.10](../12-testing-spring-apps/README.md#1210-mockitobean-and-mockitospybean)
+Short answer: Ch 20 [Q175](../20-interview-question-bank/README.md#testing). → [§12.10](../12-testing-spring-apps/README.md#1210-mockitobean-and-mockitospybean)
 
 **Q118. `MockMvcTester`, `RestTestClient`, `WebTestClient` — which when?**
-`MockMvcTester` (Framework 6.2) drives the `DispatcherServlet` in memory with AssertJ (a fluent assertion library: `assertThat(x).isEqualTo(y)`) assertions — no server; use it in `@WebMvcTest` (with `@SpringBootTest` you must add `@AutoConfigureMockMvc` — in Boot 4 `@SpringBootTest` alone no longer provides MockMvc). `RestTestClient` (Framework 7) is a fluent client for Spring MVC apps that can target MockMvc or a running server with the same test code; Boot 4 injects it only with `@AutoConfigureRestTestClient` (even in `@WebMvcTest`). `WebTestClient` does the same for WebFlux (automatic in `@WebFluxTest`, `@AutoConfigureWebTestClient` in `@SpringBootTest`). `TestRestTemplate` still exists but needs `@AutoConfigureTestRestTemplate` in Boot 4. → [§12.8](../12-testing-spring-apps/README.md#128-mockmvctester-assertj-style-mockmvc), [§12.9](../12-testing-spring-apps/README.md#129-resttestclient-framework-70)
+Short answer: Ch 20 [Q176](../20-interview-question-bank/README.md#testing). Boot 4 specifics: `MockMvcTester` in `@SpringBootTest` needs `@AutoConfigureMockMvc`; `RestTestClient` (MockMvc or a running server, same test code) needs `@AutoConfigureRestTestClient` even in `@WebMvcTest`; `WebTestClient` is automatic in `@WebFluxTest`, `@AutoConfigureWebTestClient` in `@SpringBootTest`; `TestRestTemplate` needs `@AutoConfigureTestRestTemplate`. → [§12.8](../12-testing-spring-apps/README.md#128-mockmvctester-assertj-style-mockmvc), [§12.9](../12-testing-spring-apps/README.md#129-resttestclient-framework-70)
 
 **Q119. What is test context caching, and what breaks it?**
-The TestContext framework caches each application context by its configuration "key" (configuration classes, active profiles, properties, context customizers such as `@MockitoBean` definitions) and reuses it across test classes in the same JVM (Java Virtual Machine — the running Java process). Every different combination — a new `@MockitoBean`, a different `@TestPropertySource`, `@ActiveProfiles` — creates a new context, and `@DirtiesContext` throws one away. Many variants make the suite slow; standardize on a few base configurations. The cache holds at most 32 contexts (LRU — least recently used: the context unused for longest is evicted first). In Framework 7, when the tests switch to a different context the inactive one is **paused** by default (its `Lifecycle`/`SmartLifecycle` beans — schedulers, listener containers — stopped) and restarted when reused. → [§12.11](../12-testing-spring-apps/README.md#1211-test-context-caching)
+Short answer: Ch 20 [Q177](../20-interview-question-bank/README.md#testing). Cache key = configuration classes, profiles, properties, context customizers. At most 32 contexts (LRU eviction). Framework 7 **pauses** an inactive context by default (its `Lifecycle`/`SmartLifecycle` beans — schedulers, listener containers — stopped) and restarts it on reuse. → [§12.11](../12-testing-spring-apps/README.md#1211-test-context-caching)
 
 **Q120. Does `@Transactional` on a test roll back?**
-Yes: the test-managed transaction is rolled back after each test method by default (`@Commit` to keep it); `@DataJpaTest` is transactional out of the box. But with `@SpringBootTest(webEnvironment = RANDOM_PORT)` the request is handled on a server thread, in a different transaction, so data written by the request is **not** rolled back. → [§8.17](../08-spring-data-jpa-and-hibernate/README.md#817-testing-jpa-code), [§12.6](../12-testing-spring-apps/README.md#126-springboottest-the-whole-application)
+Short answer: Ch 20 [Q178](../20-interview-question-bank/README.md#testing). `@DataJpaTest` is transactional out of the box. → [§8.17](../08-spring-data-jpa-and-hibernate/README.md#817-testing-jpa-code), [§12.6](../12-testing-spring-apps/README.md#126-springboottest-the-whole-application)
 
 **Q121. What does `@DataJpaTest` configure?**
-JPA entities, repositories, a `DataSource` (replaced by an embedded database — by default `Replace.NON_TEST`, so a Testcontainers `@ServiceConnection` database is kept; `replace = NONE` always keeps yours), `TestEntityManager`, transactions rolled back per test — and no web layer or services. → [§8.17](../08-spring-data-jpa-and-hibernate/README.md#817-testing-jpa-code), [§12.7](../12-testing-spring-apps/README.md#127-test-slices)
+Short answer: Ch 20 [Q174](../20-interview-question-bank/README.md#testing). Embedded DB by default `Replace.NON_TEST` (a Testcontainers `@ServiceConnection` database is kept; `replace = NONE` always keeps yours); `TestEntityManager`; no web layer or services. → [§8.17](../08-spring-data-jpa-and-hibernate/README.md#817-testing-jpa-code), [§12.7](../12-testing-spring-apps/README.md#127-test-slices)
 
 **Q122. How do you test against a real database or broker?**
-Testcontainers starts a Docker container (a lightweight, isolated process packaged with everything it needs, e.g. a PostgreSQL server) per test class or suite; `@ServiceConnection` (Boot 3.1) on the container field registers the connection details automatically, and `@DynamicPropertySource` covers anything else. Prefer this to H2 (a small in-memory Java database) when you rely on database-specific SQL or behaviour. → [§12.14](../12-testing-spring-apps/README.md#1214-testcontainers-and-serviceconnection)
+Short answer: Ch 20 [Q179](../20-interview-question-bank/README.md#testing). `@ServiceConnection` dates from Boot 3.1. → [§12.14](../12-testing-spring-apps/README.md#1214-testcontainers-and-serviceconnection)
 
 **Q123. How do you test secured endpoints?**
-With `spring-security-test`: `@WithMockUser(roles = "ADMIN")` for a fake user; request post-processors `user(...)`, `httpBasic(...)`, `jwt().authorities(...)` for token-based APIs; `csrf()` for unsafe methods on session-based chains. Always test both the allowed path and the 401/403 paths. → [§10.12](../10-spring-security-1-fundamentals/README.md#1012-testing-security-with-spring-security-test), [§11.6](../11-spring-security-2-tokens-and-oauth2/README.md#116-testing-token-security)
+Short answer: Ch 20 [Q180](../20-interview-question-bank/README.md#testing). → [§10.12](../10-spring-security-1-fundamentals/README.md#1012-testing-security-with-spring-security-test), [§11.6](../11-spring-security-2-tokens-and-oauth2/README.md#116-testing-token-security)
 
 **Q124. How do you test a custom auto-configuration or conditional beans quickly?**
-`ApplicationContextRunner` (or `WebApplicationContextRunner`) builds a tiny context in milliseconds with chosen configurations and properties, and AssertJ checks like `assertThat(ctx).hasSingleBean(X.class)` or `hasFailed()`. The proofs in §18.15 use it. → [§3.13](../03-configuration-and-auto-configuration/README.md#313-writing-your-own-auto-configuration-and-starter)
+Short answer: Ch 20 [Q183](../20-interview-question-bank/README.md#testing). The proofs in §18.15 use it. `WebApplicationContextRunner` for web conditions; assertions like `hasSingleBean(X.class)` or `hasFailed()`. → [§3.13](../03-configuration-and-auto-configuration/README.md#313-writing-your-own-auto-configuration-and-starter)
 
 **Q125. (Framework 7) What changed for testing?**
 JUnit 6 (Jupiter 6 — the JUnit programming model — with a Java 17 baseline, i.e. minimum) via the Boot test starters; JUnit 4 support (`SpringRunner`) deprecated; `RestTestClient`; context pausing; `@MockitoBean` on non-singleton beans; `SpringExtension` uses a test-method-scoped extension context by default, which makes `@Nested` classes behave consistently. Boot 4 adds a test starter per technology (`spring-boot-starter-webmvc-test`, `-data-jpa-test`, …), moves the slice annotations to per-module packages, removes `@MockBean`, and requires explicit `@AutoConfigure…` annotations for test clients in `@SpringBootTest`. → [§12.3](../12-testing-spring-apps/README.md#123-test-dependencies-in-boot-4), [§12.17](../12-testing-spring-apps/README.md#1217-in-the-interview), [§17.14](../17-spring-ai-and-whats-new/README.md#1714-spring-framework-6--7)
@@ -489,121 +474,121 @@ JUnit 6 (Jupiter 6 — the JUnit programming model — with a Java 17 baseline, 
 ## 18.10 Reactive and WebFlux
 
 **Q126. What is reactive programming, and what is Reactive Streams?**
-A style where you describe a pipeline of asynchronous (arriving later, without the caller waiting) data and the framework pushes items through it without blocking threads. Reactive Streams is the small standard behind it — `Publisher`, `Subscriber`, `Subscription`, `Processor` (also in the JDK as `java.util.concurrent.Flow`) — whose key idea is **backpressure**: the subscriber asks for `request(n)` items, so a fast producer cannot overwhelm a slow consumer. → [§13.2](../13-reactive-and-webflux/README.md#132-reactive-streams-the-contract)
+Short answer: Ch 20 [Q185](../20-interview-question-bank/README.md#webflux-async-scheduling-and-messaging). → [§13.2](../13-reactive-and-webflux/README.md#132-reactive-streams-the-contract)
 
 **Q127. `Mono` vs `Flux`?**
-Project Reactor's (the reactive library under WebFlux) publishers: `Mono<T>` emits 0 or 1 item then completes (or errors); `Flux<T>` emits 0..N items. Both are lazy — **nothing happens until someone subscribes** (in WebFlux the framework subscribes for you). → [§13.3](../13-reactive-and-webflux/README.md#133-project-reactor-mono-and-flux)
+Short answer: Ch 20 [Q186](../20-interview-question-bank/README.md#webflux-async-scheduling-and-messaging). → [§13.3](../13-reactive-and-webflux/README.md#133-project-reactor-mono-and-flux)
 
 **Q128. `map` vs `flatMap` (vs `concatMap`)?**
-`map` applies a synchronous function to each item. `flatMap` applies a function that returns another publisher (an async call) and merges the results — concurrently, so order is not preserved. `concatMap` does the same one at a time, preserving order; `flatMapSequential` runs concurrently but re-orders the output. → [§13.4](../13-reactive-and-webflux/README.md#134-operators)
+Short answer: Ch 20 [Q187](../20-interview-question-bank/README.md#webflux-async-scheduling-and-messaging). `flatMapSequential` runs concurrently but re-orders the output to the source order. → [§13.4](../13-reactive-and-webflux/README.md#134-operators)
 
 **Q129. What happens if you block inside a WebFlux handler?**
-WebFlux on Netty (a non-blocking network server library) runs on a few event-loop threads (about one per core) — threads that each juggle many connections and must never wait. A blocking call (JDBC, `Thread.sleep`, `block()`) stalls one of them, and every request on it waits — throughput collapses (in §13.15 a 100 ms `Thread.sleep` cut WebFlux from ~8,000 to ~100 req/s). Reactor refuses `block()` on its non-blocking threads with an `IllegalStateException`. If you must call blocking code, move it to `Schedulers.boundedElastic()` with `subscribeOn`; better, use non-blocking drivers (R2DBC — Reactive Relational Database Connectivity, `WebClient`). → [§13.8](../13-reactive-and-webflux/README.md#138-schedulers-and-threads), [§13.15](../13-reactive-and-webflux/README.md#1315-virtual-threads-vs-webflux-a-measured-comparison)
+Short answer: Ch 20 [Q188](../20-interview-question-bank/README.md#webflux-async-scheduling-and-messaging). Reactor refuses `block()` on its non-blocking threads (`IllegalStateException`). Measured in §13.15: a 100 ms `Thread.sleep` cut WebFlux from ~8,000 to ~100 req/s. → [§13.8](../13-reactive-and-webflux/README.md#138-schedulers-and-threads), [§13.15](../13-reactive-and-webflux/README.md#1315-virtual-threads-vs-webflux-a-measured-comparison)
 
 **Q130. `publishOn` vs `subscribeOn`?**
-`subscribeOn` chooses the scheduler on which the subscription — and therefore the source — runs, wherever it appears in the chain. `publishOn` switches the thread for the operators *after* it. → [§13.8](../13-reactive-and-webflux/README.md#138-schedulers-and-threads)
+Short answer: Ch 20 [Q189](../20-interview-question-bank/README.md#webflux-async-scheduling-and-messaging). → [§13.8](../13-reactive-and-webflux/README.md#138-schedulers-and-threads)
 
 **Q131. WebFlux or Spring MVC with virtual threads?**
-Since Java 21 and Boot 3.2 (`spring.threads.virtual.enabled=true`), MVC can handle each request on a cheap virtual thread (a lightweight thread managed by the JVM that frees its underlying OS thread while it waits on I/O), so simple blocking code scales to many concurrent I/O-bound requests (requests that spend most time waiting for the network or disk, not computing). Choose WebFlux when you need streaming (SSE — Server-Sent Events, a one-way stream from server to browser; WebSockets — a two-way connection kept open; with backpressure), a fully non-blocking stack end to end, or heavy fan-out composition; choose MVC + virtual threads for typical CRUD (Create, Read, Update, Delete) services with JDBC/JPA — simpler code, stack traces and debugging (measured in §13.15: at 1,000 concurrent clients on a 100 ms I/O endpoint, MVC on virtual threads and WebFlux both reached ~8,000 req/s vs ~1,900 on 200 platform threads — ordinary threads, each backed by an OS thread). Either way the database pool is still the real limit. → [§13.15](../13-reactive-and-webflux/README.md#1315-virtual-threads-vs-webflux-a-measured-comparison), [Java 15.4](../../../java/chapters/15-concurrency-2-modern/README.md#154-virtual-threads)
+Short answer: Ch 20 [Q184](../20-interview-question-bank/README.md#webflux-async-scheduling-and-messaging). Measured in §13.15 (1,000 concurrent clients, 100 ms I/O endpoint): MVC on virtual threads and WebFlux both ~8,000 req/s vs ~1,900 on 200 platform threads. Choose WebFlux for streaming (SSE, WebSockets with backpressure), a fully non-blocking stack or heavy fan-out; MVC + virtual threads for typical CRUD with JDBC/JPA. Either way the database pool is the real limit. See also [Java 15.4](../../../java/chapters/15-concurrency-2-modern/README.md#154-virtual-threads). → [§13.15](../13-reactive-and-webflux/README.md#1315-virtual-threads-vs-webflux-a-measured-comparison), [Java 15.4](../../../java/chapters/15-concurrency-2-modern/README.md#154-virtual-threads)
 
 **Q132. How do you test reactive code, and how do transactions and security work there?**
-`StepVerifier` subscribes and asserts the emitted items, errors and completion (with virtual time — a fake clock the test can fast-forward — for delays); `WebTestClient` tests endpoints. Since there is no one thread per request, reactive transactions (`ReactiveTransactionManager`, R2DBC) and the security context (`ReactiveSecurityContextHolder`) are carried in the Reactor `Context`, not in `ThreadLocal`s. JPA/JDBC are blocking — use R2DBC for a reactive database. Note that `@DataR2dbcTest` does **not** roll back like `@DataJpaTest`. → [§13.5](../13-reactive-and-webflux/README.md#135-testing-with-stepverifier-and-virtual-time), [§13.14](../13-reactive-and-webflux/README.md#1314-r2dbc-reactive-sql)
+Short answer: Ch 20 [Q186](../20-interview-question-bank/README.md#webflux-async-scheduling-and-messaging). Reactive transactions (`ReactiveTransactionManager`, R2DBC) and the security context (`ReactiveSecurityContextHolder`) live in the Reactor `Context`, not `ThreadLocal`s. JPA/JDBC are blocking — use R2DBC. `@DataR2dbcTest` does **not** roll back like `@DataJpaTest`. → [§13.5](../13-reactive-and-webflux/README.md#135-testing-with-stepverifier-and-virtual-time), [§13.14](../13-reactive-and-webflux/README.md#1314-r2dbc-reactive-sql)
 
 ---
 
 ## 18.11 Messaging, async and scheduling
 
 **Q133. How does `@Async` work, and what are its pitfalls?**
-With `@EnableAsync`, calls to `@Async` methods go through a proxy that submits them to an executor and returns immediately (`void` or `CompletableFuture<T>` — a handle to a result that will arrive later). Boot auto-configures the `applicationTaskExecutor` (a `ThreadPoolTaskExecutor`, tuned by `spring.task.execution.*`, or virtual threads when enabled). Pitfalls: self-invocation, exceptions from `void` methods only reach an `AsyncUncaughtExceptionHandler`, the default pool's queue is unbounded, and the caller's transaction and security context are not propagated. → [§14.4](../14-messaging-async-and-scheduling/README.md#144-async-and-executors), [§14.6](../14-messaging-async-and-scheduling/README.md#146-exceptions-in-async-methods)
+Short answer: Ch 20 [Q192](../20-interview-question-bank/README.md#webflux-async-scheduling-and-messaging). Boot's `applicationTaskExecutor` is a `ThreadPoolTaskExecutor` tuned by `spring.task.execution.*` (virtual threads when enabled). → [§14.4](../14-messaging-async-and-scheduling/README.md#144-async-and-executors), [§14.6](../14-messaging-async-and-scheduling/README.md#146-exceptions-in-async-methods)
 
 **Q134. `fixedRate` vs `fixedDelay` vs `cron` in `@Scheduled`?**
-`fixedRate` starts runs at a fixed interval from start to start; `fixedDelay` waits a fixed time after the previous run *finished*; `cron` uses a calendar expression (the classic Unix scheduling syntax, e.g. `0 0 3 * * *` = 03:00 every day) (Spring's 6 fields including seconds, plus `zone`). Needs `@EnableScheduling`. Boot's scheduler has **one thread** by default (`spring.task.scheduling.pool.size`), so a slow job delays the others. → [§14.7](../14-messaging-async-and-scheduling/README.md#147-scheduling-with-scheduled)
+Short answer: Ch 20 [Q194](../20-interview-question-bank/README.md#webflux-async-scheduling-and-messaging). → [§14.7](../14-messaging-async-and-scheduling/README.md#147-scheduling-with-scheduled)
 
 **Q135. A `@Scheduled` job runs on every instance. How do you run it once?**
-Scheduling is per JVM. Use a distributed lock (a lock shared by all instances, held in a database or Redis — ShedLock with a database table, or a Redis lock), leader election (the instances agree on one "leader" that does the work), or move the job to a single scheduler (Kubernetes CronJob, Quartz in clustered mode). Make the job idempotent anyway. → [§14.7](../14-messaging-async-and-scheduling/README.md#147-scheduling-with-scheduled)
+Short answer: Ch 20 [Q195](../20-interview-question-bank/README.md#webflux-async-scheduling-and-messaging). Leader election and Quartz in clustered mode are further options. → [§14.7](../14-messaging-async-and-scheduling/README.md#147-scheduling-with-scheduled)
 
 **Q136. How do you produce and consume Kafka messages with Spring?**
-(**Kafka** is a distributed event-streaming platform: producers append messages to named *topics*, each split into ordered *partitions*, and consumers read them.) Boot 4 has `spring-boot-starter-kafka`. Produce with `KafkaTemplate.send(topic, key, value)`, which returns a `CompletableFuture<SendResult>`; consume with `@KafkaListener(topics = "orders", groupId = "billing")`. The key decides the partition, and Kafka guarantees order only **within a partition** — so key by the entity (order id) whose events must stay ordered. Consumers in one group (a consumer group — instances of the same service that split the work) share the partitions. → [§14.11](../14-messaging-async-and-scheduling/README.md#1411-producing-kafkatemplate-keys-and-partitions), [§14.12](../14-messaging-async-and-scheduling/README.md#1412-consuming-kafkalistener-concurrency-and-consumer-groups)
+Short answer: Ch 20 [Q196](../20-interview-question-bank/README.md#webflux-async-scheduling-and-messaging). Kafka orders only **within a partition**; consumers in one group share the partitions. `send` returns a `CompletableFuture<SendResult>`. → [§14.11](../14-messaging-async-and-scheduling/README.md#1411-producing-kafkatemplate-keys-and-partitions), [§14.12](../14-messaging-async-and-scheduling/README.md#1412-consuming-kafkalistener-concurrency-and-consumer-groups)
 
 **Q137. What delivery guarantee does a Spring Kafka listener give, and how do you handle duplicates?**
-At-least-once (every message is processed, but possibly more than once) by default: spring-kafka turns off Kafka's auto-commit and commits offsets (the position number of the last processed record in a partition) after the listener succeeds (ack mode `BATCH`: after the whole polled batch), so a crash before the commit redelivers the record. Make consumers **idempotent** (store processed message ids, use upserts or natural keys). The producer side has idempotence enabled by default in modern Kafka clients, which prevents duplicates caused by producer retries — not duplicates caused by consumer redelivery. → [§14.8](../14-messaging-async-and-scheduling/README.md#148-messaging-concepts-you-need-first), [§14.16](../14-messaging-async-and-scheduling/README.md#1416-producer-guarantees-idempotence-and-transactions)
+Short answer: Ch 20 [Q197](../20-interview-question-bank/README.md#webflux-async-scheduling-and-messaging). spring-kafka turns off Kafka's auto-commit and commits offsets after the listener succeeds (ack mode `BATCH`: after the polled batch). Producer idempotence (default in modern clients) prevents duplicates from producer retries — not from consumer redelivery. → [§14.8](../14-messaging-async-and-scheduling/README.md#148-messaging-concepts-you-need-first), [§14.16](../14-messaging-async-and-scheduling/README.md#1416-producer-guarantees-idempotence-and-transactions)
 
 **Q138. How do you handle a message that keeps failing?**
-Configure the listener container's `DefaultErrorHandler` with a back-off (limited retries) and a `DeadLetterPublishingRecoverer` that sends the record to a dead-letter topic (a side topic where messages that keep failing are parked for later inspection) after the last attempt (default name `<topic>-dlt` since spring-kafka 3.3; older articles show `<topic>.DLT`), on the same partition number; mark non-retryable exceptions (validation, deserialization — turning the received bytes back into an object — use `ErrorHandlingDeserializer`) so they go straight to the DLT. For long waits without blocking the partition, use non-blocking retry topics (`@RetryableTopic`). → [§14.14](../14-messaging-async-and-scheduling/README.md#1414-error-handling-defaulterrorhandler-and-the-dead-letter-topic), [§14.15](../14-messaging-async-and-scheduling/README.md#1415-non-blocking-retries-with-retryabletopic)
+Short answer: Ch 20 [Q198](../20-interview-question-bank/README.md#webflux-async-scheduling-and-messaging). DLT default name is `<topic>-dlt` since spring-kafka 3.3 (older articles show `<topic>.DLT`), same partition number; use `ErrorHandlingDeserializer` for deserialization failures. → [§14.14](../14-messaging-async-and-scheduling/README.md#1414-error-handling-defaulterrorhandler-and-the-dead-letter-topic), [§14.15](../14-messaging-async-and-scheduling/README.md#1415-non-blocking-retries-with-retryabletopic)
 
 **Q139. How do you update the database and publish an event reliably?**
-You can't make a database commit and a Kafka send atomic (all-or-nothing) with a normal transaction (the dual-write problem). Use the **transactional outbox**: write the event to an `outbox` table in the same database transaction as the business change, and let a relay (a poller or CDC — Change Data Capture, reading the database's own change log — such as Debezium) publish it; consumers deduplicate. → [§14.17](../14-messaging-async-and-scheduling/README.md#1417-the-transactional-outbox), [event-driven notes](../../../microservices-patterns/chapters/11-event-driven/README.md)
+Short answer: Ch 20 [Q199](../20-interview-question-bank/README.md#webflux-async-scheduling-and-messaging). → [§14.17](../14-messaging-async-and-scheduling/README.md#1417-the-transactional-outbox), [event-driven notes](../../../microservices-patterns/chapters/11-event-driven/README.md)
 
 **Q140. Kafka vs RabbitMQ?**
-Kafka is a partitioned, replicated (copied to several servers) **log**: messages are kept for a retention period, consumers track offsets and can replay, very high throughput, ordering per partition — good for event streaming. RabbitMQ is a **broker with queues** (a message broker is a server that receives messages and hands them to consumers): flexible routing (exchanges — routers that receive messages — and bindings — rules that connect them to queues), per-message acknowledgement, messages removed when consumed — good for task queues and complex routing. With Spring AMQP (Advanced Message Queuing Protocol, RabbitMQ's protocol), blocking listener retries are `spring.rabbitmq.listener.simple.retry.*` (Boot 4 replaced `max-attempts`, which counted the first attempt, with `max-retries`, which does not), and rejected messages go to the queue's dead-letter exchange when `default-requeue-rejected=false`. → [§14.18](../14-messaging-async-and-scheduling/README.md#1418-rabbitmq-with-spring-amqp-configuration-not-run)
+Short answer: Ch 20 [Q200](../20-interview-question-bank/README.md#webflux-async-scheduling-and-messaging). Spring AMQP specifics: blocking listener retries are `spring.rabbitmq.listener.simple.retry.*` (Boot 4 replaced `max-attempts`, which counted the first attempt, with `max-retries`); rejected messages go to the queue's dead-letter exchange when `default-requeue-rejected=false`. → [§14.18](../14-messaging-async-and-scheduling/README.md#1418-rabbitmq-with-spring-amqp-configuration-not-run)
 
 ---
 
 ## 18.12 Production and observability
 
 **Q141. What is Spring Boot Actuator, and how do you expose it safely?**
-Production endpoints under `/actuator`: `health`, `info`, `metrics`, `prometheus` (metrics in the format of Prometheus, a monitoring system that scrapes and stores them), `loggers` (change log levels at runtime), `env`, `configprops`, `beans`, `conditions`, `threaddump`, `heapdump`… Over HTTP only `health` is exposed by default; add more with `management.endpoints.web.exposure.include`. Protect everything except health with Spring Security, or move it to a separate `management.server.port` not reachable from outside. `env`/`configprops` values are masked by default; `heapdump` (a file with every object in JVM memory) can contain secrets. → [§15.2](../15-observability-and-production/README.md#152-spring-boot-actuator)
+Short answer: Ch 20 [Q202](../20-interview-question-bank/README.md#actuator-observability-production-and-performance). `env`/`configprops` values are masked by default. → [§15.2](../15-observability-and-production/README.md#152-spring-boot-actuator)
 
 **Q142. Liveness vs readiness probes?**
-Liveness answers "is the process broken beyond repair?" — if it fails, Kubernetes restarts the pod (the smallest unit Kubernetes runs: one or more containers). Readiness answers "can it take traffic now?" — if it fails, the pod is removed from load balancing (spreading requests over instances — see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)) but not restarted (during startup, shutdown or a lost dependency). Boot exposes `/actuator/health/liveness` and `/readiness`; in Boot 4 these probes are enabled by default. Never put the database check into liveness: a database outage would restart every pod and make things worse. → [§15.3](../15-observability-and-production/README.md#153-health-health-groups-and-kubernetes-probes)
+Short answer: Ch 20 [Q204](../20-interview-question-bank/README.md#actuator-observability-production-and-performance). → [§15.3](../15-observability-and-production/README.md#153-health-health-groups-and-kubernetes-probes)
 
 **Q143. What is Micrometer? Name the meter types.**
-A vendor-neutral metrics facade (one API in front of many back ends — "SLF4J for metrics", SLF4J being the standard Java logging facade): code records to a `MeterRegistry`, and registries export to Prometheus, OTLP (OpenTelemetry Protocol), Datadog, etc. Types: `Counter` (only increases), `Gauge` (current value), `Timer` (count + total + max + optional percentiles/histograms of durations — e.g. p99, the time 99% of calls beat), `DistributionSummary` (same for sizes), `LongTaskTimer`. Keep **tag cardinality** (the number of distinct tag values — each one creates a separate time series) low — never tag with user id or raw URL. → [§15.5](../15-observability-and-production/README.md#155-metrics-with-micrometer)
+Short answer: Ch 20 [Q205](../20-interview-question-bank/README.md#actuator-observability-production-and-performance). Keep **tag cardinality** low — never tag with user id or raw URL. `Timer` can add percentiles/histograms (e.g. p99). Code records to a `MeterRegistry`; registries export to the backends. → [§15.5](../15-observability-and-production/README.md#155-metrics-with-micrometer)
 
 **Q144. What is the Observation API?**
-Micrometer's "instrument once" API: you wrap an operation in an `Observation` (or annotate with `@Observed`), and registered handlers turn it into a timer metric, a trace span (one timed step of a request, see Q145) and log correlation at the same time. Spring MVC, `RestClient`, JDBC, Kafka and others are instrumented this way already. → [§15.6](../15-observability-and-production/README.md#156-the-observation-api-and-observed)
+Short answer: Ch 20 [Q207](../20-interview-question-bank/README.md#actuator-observability-production-and-performance). → [§15.6](../15-observability-and-production/README.md#156-the-observation-api-and-observed)
 
 **Q145. How does distributed tracing work in Boot?**
-Micrometer Tracing (the successor of Spring Cloud Sleuth since Boot 3) with an OpenTelemetry (the vendor-neutral standard for traces, metrics and logs) or Brave bridge creates spans for incoming and outgoing calls and propagates the context (the trace id) in W3C `traceparent` headers (and in Kafka headers). Spans are exported (OTLP → Tempo/Jaeger/Zipkin, tools that store and display traces); `traceId`/`spanId` appear in log lines for correlation. The default sampling probability (share of requests that are traced) is 10% (`management.tracing.sampling.probability`). Boot 4 adds `spring-boot-starter-opentelemetry` for OTLP export of metrics and traces (Brave/Zipkin: `spring-boot-starter-zipkin`). → [§15.7](../15-observability-and-production/README.md#157-distributed-tracing)
+Short answer: Ch 20 [Q206](../20-interview-question-bank/README.md#actuator-observability-production-and-performance). Default sampling probability 10% (`management.tracing.sampling.probability`); context also travels in Kafka headers; Boot 4 adds `spring-boot-starter-opentelemetry` for OTLP export (Brave/Zipkin: `spring-boot-starter-zipkin`). → [§15.7](../15-observability-and-production/README.md#157-distributed-tracing)
 
 **Q146. What is structured logging in Boot?**
 Since Boot 3.4, `logging.structured.format.console=ecs` (or `logstash`, `gelf`) writes each log event as one JSON object — machine-parseable, with MDC (Mapped Diagnostic Context — per-thread key-values added to every log line) fields and trace ids — instead of formatting text you later have to parse with regexes (regular expressions, text-matching patterns). → [§15.8](../15-observability-and-production/README.md#158-structured-logging)
 
 **Q147. What does graceful shutdown do?**
-On `SIGTERM` (the signal the OS or Kubernetes sends to ask a process to stop politely), the web server stops accepting new requests, in-flight requests (already being processed) may finish within `spring.lifecycle.timeout-per-shutdown-phase` (30 s default), then the context closes and `@PreDestroy`/`SmartLifecycle.stop` run. It is the default since Boot 3.4. In Kubernetes, readiness turns to "refusing traffic" first; add a short `preStop` sleep (a Kubernetes hook that runs before the stop signal) so the load balancer stops routing before the app stops. → [§15.9](../15-observability-and-production/README.md#159-graceful-shutdown)
+Short answer: Ch 20 [Q208](../20-interview-question-bank/README.md#actuator-observability-production-and-performance). Then `@PreDestroy`/`SmartLifecycle.stop` run. → [§15.9](../15-observability-and-production/README.md#159-graceful-shutdown)
 
 **Q148. What does `spring.threads.virtual.enabled=true` change?**
-(Boot 3.2+, Java 21+.) Tomcat handles requests on virtual threads, `@Async` and the task scheduler use virtual-thread executors, and some clients and listener containers use them too. Blocking I/O no longer ties up a scarce platform thread. It does not make CPU-bound work (work limited by computation, not waiting) faster, and the connection pool still limits database concurrency — protect downstream systems with limits such as `@ConcurrencyLimit`. Java 24 (JEP 491 — a JDK Enhancement Proposal) removed most pinning (a virtual thread stuck to its OS thread, losing the benefit) caused by `synchronized`. → [§15.10](../15-observability-and-production/README.md#1510-virtual-threads), [§14.5](../14-messaging-async-and-scheduling/README.md#145-async-on-virtual-threads), [§4.7](../04-aop-and-proxies/README.md#47-framework-7-core-resilience-retryable-and-concurrencylimit)
+Short answer: Ch 20 [Q191](../20-interview-question-bank/README.md#webflux-async-scheduling-and-messaging). → [§15.10](../15-observability-and-production/README.md#1510-virtual-threads), [§14.5](../14-messaging-async-and-scheduling/README.md#145-async-on-virtual-threads), [§4.7](../04-aop-and-proxies/README.md#47-framework-7-core-resilience-retryable-and-concurrencylimit)
 
 **Q149. What are AOT processing and GraalVM native images? Trade-offs?**
-Spring AOT runs at build time: it evaluates the configuration and generates source code for the bean definitions plus reflection/proxy "hints". GraalVM then compiles the app into a native executable under a closed-world assumption (every class the program can ever use must be known at build time). Result: startup in tens of milliseconds and less memory — good for scale-to-zero (running no instances while there is no traffic) and CLIs. Costs: long builds, conditions and profiles fixed at build time, reflection-heavy libraries need hints, and peak throughput may be lower than a warmed-up JIT (Just-In-Time compiler — turns frequently run code into machine code while the app runs). → [§15.11](../15-observability-and-production/README.md#1511-faster-startup-extracted-jars-cds-aot-cache-native-images)
+Short answer: Ch 20 [Q209](../20-interview-question-bank/README.md#actuator-observability-production-and-performance), [Q210](../20-interview-question-bank/README.md#actuator-observability-production-and-performance). → [§15.11](../15-observability-and-production/README.md#1511-faster-startup-extracted-jars-cds-aot-cache-native-images)
 
 **Q150. How can a normal JVM app start faster without native images?**
-Class Data Sharing (CDS — a file of pre-parsed classes the JVM maps at startup) and the JDK's **AOT cache** (JEP 483, Java 24; simplified by JEP 514 in Java 25): do a training run that loads and links classes (Boot supports `-Dspring.context.exit=onRefresh` for this), store the result, then start with it — often a large reduction in startup time, with the full JIT still available. Also: lazy init where acceptable, fewer auto-configurations, and not scanning huge packages. → [§15.11](../15-observability-and-production/README.md#1511-faster-startup-extracted-jars-cds-aot-cache-native-images)
+Short answer: Ch 20 [Q209](../20-interview-question-bank/README.md#actuator-observability-production-and-performance). Training run via `-Dspring.context.exit=onRefresh`; JEP 514 simplified it in Java 25; the full JIT stays available. Also: lazy init where acceptable, fewer auto-configurations, no scanning of huge packages. → [§15.11](../15-observability-and-production/README.md#1511-faster-startup-extracted-jars-cds-aot-cache-native-images)
 
 **Q151. How do you package a Boot app as a container image?**
-`mvn spring-boot:build-image` builds an OCI image (the standard container image format) with Cloud Native Buildpacks (tools that turn source or a jar into an image automatically — no Dockerfile, the hand-written image recipe); or a Dockerfile that extracts the jar into layers (`java -Djarmode=tools -jar app.jar extract --layers`) so dependencies are cached separately from your code. Run as non-root (not the all-powerful admin user), and size the heap (the JVM memory area for objects) relative to the container limit (`-XX:MaxRAMPercentage`). → [§15.11](../15-observability-and-production/README.md#1511-faster-startup-extracted-jars-cds-aot-cache-native-images)
+Short answer: Ch 20 [Q211](../20-interview-question-bank/README.md#actuator-observability-production-and-performance). Size the heap relative to the container limit (`-XX:MaxRAMPercentage`). → [§15.11](../15-observability-and-production/README.md#1511-faster-startup-extracted-jars-cds-aot-cache-native-images)
 
 **Q152. What is your production configuration checklist?**
-Secrets from the environment/vault (a secret store such as HashiCorp Vault), not files in the jar; `ddl-auto=validate` + migrations; `spring.jpa.open-in-view=false`; timeouts on every client; right-sized pools; actuator exposure limited and secured; structured logs; tracing and metrics exported; graceful shutdown with probes; JVM memory flags for containers; `server.forward-headers-strategy` set when behind a proxy (here a reverse proxy or load balancer in front of the app that adds `X-Forwarded-*` headers). → [§15.12](../15-observability-and-production/README.md#1512-production-configuration-checklist)
+Short answer: Ch 20 [Q214](../20-interview-question-bank/README.md#actuator-observability-production-and-performance). Also `server.forward-headers-strategy` when behind a reverse proxy adding `X-Forwarded-*` headers. → [§15.12](../15-observability-and-production/README.md#1512-production-configuration-checklist)
 
 ---
 
 ## 18.13 Microservices and Spring Cloud
 
 **Q153. Which Spring Cloud version works with Boot 4?**
-The **2025.1.x "Oakwood"** release train (a set of project versions released and tested together; GA — general availability, the first production-ready release — in November 2025) is built on Framework 7 / Boot 4; its projects moved to 5.0.x. Boot 4.1 is supported from 2025.1.2 (2025.1.3 was the latest service release when this book was written). Always import the `spring-cloud-dependencies` BOM (Bill of Materials — a Maven file that pins compatible versions of many libraries) matching your Boot version. → [§16.2](../16-spring-cloud-and-microservices/README.md#162-release-trains-and-versions)
+Short answer: Ch 20 [Q216](../20-interview-question-bank/README.md#microservices-and-spring-cloud). GA November 2025; projects at 5.0.x; 2025.1.3 was the latest service release when written. Import the matching `spring-cloud-dependencies` BOM. → [§16.2](../16-spring-cloud-and-microservices/README.md#162-release-trains-and-versions)
 
 **Q154. What does Spring Cloud Config do, and how are changes picked up?**
-A Config Server serves configuration from Git (the version-control system; or Vault, a database…) to all services; clients load it with `spring.config.import=configserver:`. Beans in `@RefreshScope` (and `@ConfigurationProperties` beans) are rebuilt on `POST /actuator/refresh`, or for all instances via Spring Cloud Bus. On Kubernetes, ConfigMaps/Secrets (Kubernetes objects holding configuration and secret values) mounted as files (`configtree:`) often replace it. → [§16.3](../16-spring-cloud-and-microservices/README.md#163-centralized-configuration-spring-cloud-config), [config notes](../../../microservices-patterns/chapters/13-config-externalization/README.md)
+Short answer: Ch 20 [Q222](../20-interview-question-bank/README.md#microservices-and-spring-cloud). → [§16.3](../16-spring-cloud-and-microservices/README.md#163-centralized-configuration-spring-cloud-config), [config notes](../../../microservices-patterns/chapters/13-config-externalization/README.md)
 
 **Q155. Eureka or Kubernetes for service discovery?**
-Eureka is a registry (a directory of which instances of each service are running and where) that services register with and query, used with client-side load balancing (the caller itself picks one instance from the list) (Spring Cloud LoadBalancer + a `@LoadBalanced` `RestClient.Builder`). On Kubernetes, the platform already provides discovery (Service DNS names — DNS is the system that turns names into network addresses) and load balancing, so Eureka is usually unnecessary. → [§16.4](../16-spring-cloud-and-microservices/README.md#164-service-discovery-eureka-consul-kubernetes), [discovery notes](../../../microservices-patterns/chapters/05-service-discovery/README.md)
+Short answer: Ch 20 [Q217](../20-interview-question-bank/README.md#microservices-and-spring-cloud). → [§16.4](../16-spring-cloud-and-microservices/README.md#164-service-discovery-eureka-consul-kubernetes), [discovery notes](../../../microservices-patterns/chapters/05-service-discovery/README.md)
 
 **Q156. What does an API gateway do, and how does Spring Cloud Gateway work?**
-A single entry point that routes requests to services and handles cross-cutting edge concerns: authentication/token relay, rate limiting (capping how many requests a client may make per time window), CORS, retries, request/response rewriting. Spring Cloud Gateway defines **routes** (id, URI), **predicates** (conditions a request must match: path, host, header…) and **filters**; it exists in a reactive variant (`spring-cloud-starter-gateway-server-webflux`, Netty) and a servlet variant (`spring-cloud-starter-gateway-server-webmvc`, pairs well with virtual threads). In Gateway 5.0 (Spring Cloud 2025.1) the MVC `http(String)`/`http(URI)` handler overloads are gone — use `http()` with `before(uri(...))`. → [§16.7](../16-spring-cloud-and-microservices/README.md#167-api-gateway-spring-cloud-gateway), [gateway notes](../../../microservices-patterns/chapters/03-api-gateway/README.md)
+Short answer: Ch 20 [Q218](../20-interview-question-bank/README.md#microservices-and-spring-cloud). Gateway 5.0 (Spring Cloud 2025.1) removed the MVC `http(String)`/`http(URI)` overloads — use `http()` with `before(uri(...))`. Starters: `spring-cloud-starter-gateway-server-webflux` (Netty) and `spring-cloud-starter-gateway-server-webmvc` (pairs well with virtual threads). → [§16.7](../16-spring-cloud-and-microservices/README.md#167-api-gateway-spring-cloud-gateway), [gateway notes](../../../microservices-patterns/chapters/03-api-gateway/README.md)
 
 **Q157. How do you make service-to-service calls resilient?**
-Timeouts first; retries with back-off and jitter for idempotent calls (Framework 7 `@Retryable` or Resilience4j); a **circuit breaker** (Resilience4j via Spring Cloud CircuitBreaker) that fails fast when a dependency is unhealthy; a **bulkhead** (`@ConcurrencyLimit` or Resilience4j) so one slow dependency cannot use all threads; fallbacks (a default answer returned when the call fails) where acceptable. Order matters: in Resilience4j's default aspect order, retry wraps the circuit breaker. → [§16.8](../16-spring-cloud-and-microservices/README.md#168-resilience-circuit-breaker-retry-rate-limiter), [circuit breaker notes](../../../microservices-patterns/chapters/06-circuit-breaker/README.md)
+Short answer: Ch 20 [Q219](../20-interview-question-bank/README.md#microservices-and-spring-cloud). Timeouts first; a **bulkhead** (`@ConcurrencyLimit` or Resilience4j) so one slow dependency can't take all threads. In Resilience4j's default aspect order, retry wraps the circuit breaker. → [§16.8](../16-spring-cloud-and-microservices/README.md#168-resilience-circuit-breaker-retry-rate-limiter), [circuit breaker notes](../../../microservices-patterns/chapters/06-circuit-breaker/README.md)
 
 **Q158. How do you keep data consistent across services?**
-Not with distributed (2PC/XA — two-phase commit, a protocol that coordinates one commit across several databases) transactions in practice. Each service owns its database; use a **saga** — a sequence of local transactions with compensating actions (steps that undo earlier ones), orchestrated (one coordinator tells each service what to do) or choreographed (each service reacts to the others' events) through events — plus the transactional outbox and idempotent consumers. Accept eventual consistency (all services agree after a short delay, not instantly) and design the UI for it. → [saga notes](../../../microservices-patterns/chapters/10-saga/README.md)
+Short answer: Ch 20 [Q141](../20-interview-question-bank/README.md#transactions), [Q223](../20-interview-question-bank/README.md#microservices-and-spring-cloud). Accept eventual consistency and design the UI for it. →
 
 **Q159. How do you test contracts between services?**
-Consumer-driven contract tests: the consumer's expectations are written as contracts, the provider's build verifies them, and the consumer tests against generated stubs (fake versions of the provider built from the contracts). This catches breaking API changes before deployment without full end-to-end environments (a copy of the whole system with every service running). Today the usual tool is **Pact** (polyglot, with a broker and a `can-i-deploy` gate). **Spring Cloud Contract** is no longer in the 2025.1.3 BOM and its repository is archived, so don't start new work on it. → [§16.10](../16-spring-cloud-and-microservices/README.md#1610-contract-testing)
+Short answer: Ch 20 [Q227](../20-interview-question-bank/README.md#microservices-and-spring-cloud). Prefer **Pact** (polyglot, broker, `can-i-deploy` gate): **Spring Cloud Contract** is no longer in the 2025.1.3 BOM and its repository is archived. → [§16.10](../16-spring-cloud-and-microservices/README.md#1610-contract-testing)
 
 **Q160. Feign or HTTP interfaces?**
-Spring Cloud OpenFeign (an older declarative HTTP client library) is feature-complete (maintenance only). New code should use Spring's own `@HttpExchange` interfaces, which Boot 4 auto-configures, with Spring Cloud LoadBalancer when you need client-side discovery. → [§6.6](../06-rest-clients-and-http-interfaces/README.md#66-http-service-interfaces-httpexchange), [§16.6](../16-spring-cloud-and-microservices/README.md#166-declarative-clients-openfeign-vs-http-interface-clients)
+Short answer: Ch 20 [Q87](../20-interview-question-bank/README.md#spring-mvc-rest-and-http-clients). Pair HTTP interfaces with Spring Cloud LoadBalancer for client-side discovery. → [§6.6](../06-rest-clients-and-http-interfaces/README.md#66-http-service-interfaces-httpexchange), [§16.6](../16-spring-cloud-and-microservices/README.md#166-declarative-clients-openfeign-vs-http-interface-clients)
 
 ---
 
@@ -625,20 +610,20 @@ Tools are your methods annotated with `@Tool` that the model may ask to call (lo
 (An LLM — large language model — is the text-generating AI model behind a chat API.) Unit-test your logic with a stub `ChatModel` that returns fixed responses (fast, deterministic — same result every run, no API key — the secret that authorizes calls to the provider); keep a smaller set of evaluation tests against the real model that check properties of the answer (relevance, grounding, format) rather than exact strings (Spring AI ships `RelevancyEvaluator` and `FactCheckingEvaluator`). → [§17.2](../17-spring-ai-and-whats-new/README.md#172-setting-up-a-project)
 
 **Q166. What changed from Boot 3 to Boot 4?**
-Framework 7 / Jakarta EE 11 (the enterprise Java standards, formerly Java EE: Servlet 6.1, Tomcat 11, Jetty 12.1 — Tomcat, Jetty and Undertow are embedded web servers; **Undertow removed**); modular auto-configuration with renamed starters and per-technology test starters; Jackson 3; JUnit 6; JSpecify null-safety; auto-configuration for API versioning and HTTP service clients; `RestTestClient`; OpenTelemetry starter; liveness/readiness probes on by default; `@MockBean`/`@SpyBean` and embedded launch scripts removed (Spock — a Groovy-based test framework — support was dropped in 4.0 and is back in 4.1); `@SpringBootTest` no longer sets up MockMvc, `RestTestClient`, `WebTestClient` or `TestRestTemplate` without the matching `@AutoConfigure…` annotation; `WebClient.Builder` needs `spring-boot-starter-webclient`. Java 17 is still the minimum. → [§3.14](../03-configuration-and-auto-configuration/README.md#314-boot-4-modularization), [§17.13](../17-spring-ai-and-whats-new/README.md#1713-spring-boot-3x--4x-migration-table)
+Short answer: Ch 20 [Q12](../20-interview-question-bank/README.md#spring-and-spring-boot-fundamentals). Also: embedded launch scripts removed; Spock dropped in 4.0, back in 4.1; `@SpringBootTest` needs the matching `@AutoConfigure…` for MockMvc, `RestTestClient`, `WebTestClient`, `TestRestTemplate`; `WebClient.Builder` needs `spring-boot-starter-webclient`; probes on by default. → [§3.14](../03-configuration-and-auto-configuration/README.md#314-boot-4-modularization), [§17.13](../17-spring-ai-and-whats-new/README.md#1713-spring-boot-3x--4x-migration-table)
 
 **Q167. What changed from Framework 6 to 7?**
 JSpecify annotations (the `org.springframework.lang` ones deprecated); API versioning; HTTP service groups; `BeanRegistrar`; core resilience (`@Retryable`, `@ConcurrencyLimit`, `RetryTemplate`); `@Proxyable`; `RestTestClient` and test context pausing; Jackson 3 support (Jackson 2 deprecated); JUnit 4 support deprecated; `javax.annotation`/`javax.inject` support removed; `spring-jcl` replaced by Apache Commons Logging 1.3; `RestTemplate` deprecation planned for 7.1. → [§17.14](../17-spring-ai-and-whats-new/README.md#1714-spring-framework-6--7)
 
 **Q168. How would you migrate a Boot 3 app to Boot 4?**
-First upgrade to the latest Boot 3.5.x and remove every deprecation warning; make sure you are on Java 17+ and Jakarta (no `javax`). Then switch the parent to 4.x, rename starters (or use the `-classic` starters temporarily), fix Jackson 3 imports and customizers, replace `@MockBean`, add the per-technology test starters and `@AutoConfigureMockMvc` where needed, update Spring Cloud to 2025.1.x (2025.1.2+ for Boot 4.1) and Spring AI to 2.0.x, rename changed properties (e.g. RabbitMQ `retry.max-attempts` → `retry.max-retries`), run the test suite and compare the condition report and `/actuator` output. OpenRewrite recipes (scripted, automated source-code refactorings) automate much of the mechanical work. → [§17.13](../17-spring-ai-and-whats-new/README.md#1713-spring-boot-3x--4x-migration-table)
+Short answer: Ch 20 [Q247](../20-interview-question-bank/README.md#scenario-troubleshooting-and-coding-questions). Also update Spring AI to 2.0.x, rename changed properties (e.g. RabbitMQ `retry.max-attempts` → `retry.max-retries`), and compare the condition report and `/actuator` output. → [§17.13](../17-spring-ai-and-whats-new/README.md#1713-spring-boot-3x--4x-migration-table)
 
 ---
 
 ## 18.15 Proofs: five tricky answers, run
 
 ### What it is
-Five answers that candidates often get wrong, each proved by a test in `code/interview-proofs/` (Boot 4.1.1 parent, Java 25, `spring-boot-starter-jdbc` + H2 + `spring-boot-starter-test`). Every test builds a tiny context with Boot's `ApplicationContextRunner`, so each scenario — including the ones that *fail* to start — is isolated. Run it with `mvn -q -B -ntp verify` (or `bash tools_run_spring.sh spring '18-*'` from the repository root).
+Five answers candidates often get wrong, each proved by a test in `code/interview-proofs/` (Boot 4.1.1 parent, Java 25, `spring-boot-starter-jdbc` + H2 + `spring-boot-starter-test`). Each test builds a tiny context with Boot's `ApplicationContextRunner` instead of `@SpringBootTest`, so every scenario — including those that *fail* to start — is isolated and the runner captures the failure instead of failing the test class. Run with `mvn -q -B -ntp verify` (or `bash tools_run_spring.sh spring '18-*'` from the repository root).
 
 | Test class | Proves the answer to |
 |---|---|
@@ -692,7 +677,7 @@ context failed: NoUniqueBeanDefinitionException
   No qualifying bean of type 'ch18.proofs.BeanResolutionTests$PaymentGateway' available: expected single matching bean but found 2: stripe,paypal
 ```
 
-Parameter-name matching works because the Boot parent compiles with `-parameters` (a compiler flag that keeps parameter names in the bytecode); do not rely on it for important choices — a rename silently changes which bean is used.
+Parameter-name matching works because the Boot parent compiles with `-parameters` (keeps parameter names in the bytecode); don't rely on it for important choices — a rename silently changes the bean.
 
 ### Proof 3 — circular dependencies
 
@@ -714,7 +699,7 @@ field cycle, circular refs allowed -> started: true
 cycle with @Lazy       -> started: true
 ```
 
-The log line for the constructor case shows the path Spring followed — read it when debugging: `Error creating bean with name '...OrderService': ... '...InvoiceService': ... '...OrderService': Requested bean is currently in creation: Is there an unresolvable circular reference ...`
+The constructor-case log shows the path Spring followed — read it when debugging: `Error creating bean with name '...OrderService': ... '...InvoiceService': ... '...OrderService': Requested bean is currently in creation: Is there an unresolvable circular reference ...`
 
 ### Proof 4 — a checked exception commits
 
@@ -737,7 +722,7 @@ checked exception, rollbackFor    -> row 2 kept?  false
 RuntimeException, default rules   -> row 3 kept?  false
 ```
 
-All three methods threw, yet row 1 was committed: that is the default rollback rule, not a bug in Spring.
+All three threw, yet row 1 was committed — the default rollback rule, not a Spring bug.
 
 ### Proof 5 — self-invocation skips the transaction
 
@@ -764,18 +749,15 @@ self-invocation (svc.importAll() -> this.saveBatch()):
   rows after failure: 1  (NOT rolled back - no transaction)
 ```
 
-The bean class name shows the CGLIB proxy. `TransactionSynchronizationManager.isActualTransactionActive()` is the quickest way to *prove* whether a transaction exists at a given line — use it in any debugging session.
+The bean class name shows the CGLIB proxy. `TransactionSynchronizationManager.isActualTransactionActive()` is the quickest one-liner to *prove* whether a transaction exists at a given line.
 
-### Self-check
-1. Why does the test use `ApplicationContextRunner` instead of `@SpringBootTest`? → Each scenario needs its own small context, and some must fail to start; the runner captures the failure instead of failing the test class.
-2. What one-liner proves a transaction is active? → `TransactionSynchronizationManager.isActualTransactionActive()`.
 
 ---
 
 ## 18.16 "Explain your Spring project" — a walkthrough template
 
 ### Why it matters
-"Tell me about a project you built with Spring" is asked in almost every interview. The interviewer is checking whether you understand *why* the pieces are there, and they will dig into whatever you mention. A structured five-minute answer lets you steer that digging toward topics you know.
+"Tell me about a project you built with Spring" comes up in almost every interview. The interviewer checks whether you understand *why* the pieces are there and digs into whatever you mention; a structured five-minute answer steers that digging toward topics you know.
 
 ### The template (about 5 minutes)
 
@@ -839,7 +821,7 @@ Purpose → scale → picture → stack with reasons → one request end to end 
 
 ## 18.17 Debugging scenarios
 
-Interviewers increasingly ask "this is happening in production — what do you do?" A good answer follows the same four steps every time: **symptom** (what exactly you see), **cause** (the mechanism, not a guess), **fix** (the smallest correct change) and **proof** (how you show the cause and the fix with evidence — a log line, a test, a metric). Always read the *root cause* (the original exception, shown as the last "Caused by") at the bottom of a Spring stack trace; the top lines are just the chain of beans that were being created.
+"This is happening in production — what do you do?" Answer in four steps: **symptom** (exactly what you see), **cause** (the mechanism, not a guess), **fix** (the smallest correct change), **proof** (evidence for cause and fix — a log line, a test, a metric). Always read the *root cause* — the last "Caused by" at the bottom of a Spring stack trace; the top lines are just the chain of beans being created.
 
 ### Scenario 1 — "No qualifying bean" / `NoUniqueBeanDefinitionException`
 

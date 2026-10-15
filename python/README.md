@@ -42,7 +42,7 @@ flowchart LR
 ## What's in here
 | Path | Purpose |
 |---|---|
-| `Python-Handbook.pdf` | The whole book as one PDF, with a cover and a table of contents. |
+| `Python-Handbook-Vol1.pdf`, `Python-Handbook-Vol2.pdf` | The whole book in two PDFs (each under 350 pages), with cover and clickable contents. Vol 1: the language — types, control flow, strings, collections, functions, modules, errors and files, OOP, iterators and generators (Ch 1–11). Vol 2: decorators, type hints, standard library, testing, concurrency, internals, data stack, coding interviews, idioms, cheat sheet, question bank (Ch 12–22). |
 | `interview/Python-Interview-Edition.pdf` + `interview/INTERVIEW.md` | Interview Edition: a ~40-page fast-revision version of Ch 1–20 (must-know facts, tables, top questions, gotchas, a pattern table for coding rounds) to re-read before an interview. |
 | `capstones/CAPSTONES.md` + `capstones/Python-Capstone-Projects.pdf` | **Capstone Projects**: 40 build-it-yourself design briefs, beginner to advanced (todo CLI to free-threaded pipelines, an interpreter and a vector search engine), each with requirements, architecture, data model, milestones, hard parts, testing, trade-offs and interview Q&A. |
 | `chapters/NN-name/README.md` + `ChapterNN-Notes.pdf` | One chapter (Markdown source and its PDF). |
@@ -118,7 +118,7 @@ Timings in the outputs (benchmarks, GIL and asyncio demos) depend on the machine
 Requires Node 18+ and Google Chrome (the path is set in `tools/md2pdf.mjs`).
 
 ```bash
-bash tools/regen_pdfs.sh      # every ChapterNN-Notes.pdf + Python-Handbook.pdf (cover title "Python Handbook")
+bash tools/regen_pdfs.sh      # every ChapterNN-Notes.pdf + Python-Handbook-Vol1.pdf + Python-Handbook-Vol2.pdf (cover title "Python Handbook")
 
 # one chapter only
 node tools/md2pdf.mjs chapters/19-python-for-coding-interviews/Chapter19-Notes.pdf chapters/19-python-for-coding-interviews/README.md

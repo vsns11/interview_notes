@@ -1,34 +1,18 @@
 # Chapter 13 — Reactive Programming and Spring WebFlux
 
-Most Spring applications spend their time **waiting**: for the database, for another HTTP service, for a **message broker** (a server such as Kafka or RabbitMQ that stores messages between the programs that send and receive them). In the classic model (Spring MVC on Tomcat, the default Java web server) each request holds one **thread** (an independent path of execution that the CPU runs; each has its own stack of method calls) from start to finish, including all that waiting. **Reactive programming** takes the opposite approach: no thread ever waits. Work is described as a pipeline of steps, and a small number of threads run each step when its data arrives. **Spring WebFlux** is Spring's web framework built on that model, using **Project Reactor**.
+Most Spring applications spend their time **waiting** — for the database, another HTTP service, a **message broker** (Kafka, RabbitMQ: a server storing messages between producers and consumers). In the classic model (Spring MVC on Tomcat) each request holds one **thread** (an independent execution path with its own call stack) from start to finish, waiting included. **Reactive programming** does the opposite: no thread ever waits; work is a pipeline of steps, and a few threads run each step when its data arrives. **Spring WebFlux** is Spring's web framework on that model, using **Project Reactor**. Since Java 21 a second route to the same **scalability** exists: **virtual threads** (lightweight JVM-managed threads) make waiting cheap instead of avoiding it. This chapter teaches the reactive model, then **measures** blocking MVC on virtual threads against WebFlux.
 
-Since Java 21 there is a second way to get the same **scalability** (the ability to handle more load by adding resources): **virtual threads** (very lightweight threads managed by the JVM instead of the operating system), which make waiting cheap instead of avoiding it. This chapter teaches the reactive model properly, then **measures** blocking MVC on virtual threads against WebFlux, so you can choose between them with numbers rather than opinions.
-
-**What you'll learn**
-
-1. Why blocking I/O limits a thread-per-request server, and how an event loop avoids it.
-2. The **Reactive Streams** contract: `Publisher`, `Subscriber`, `Subscription`, demand (`request(n)`).
-3. **Project Reactor**: `Mono` and `Flux`, laziness, cold vs hot, the core operators.
-4. Testing reactive code with **`StepVerifier`** and **virtual time**.
-5. Error handling: fallbacks, retry with backoff, timeouts.
-6. **Backpressure** in practice: demand, `limitRate`, drop/latest/buffer strategies.
-7. **Schedulers**: `publishOn` vs `subscribeOn`, and how to wrap blocking calls.
-8. **WebFlux**: annotated controllers, functional routes, Server-Sent Events, tested with **`WebTestClient`**.
-9. **`WebClient`** against a real local server: timeouts, retries, concurrent calls.
-10. **R2DBC**: reactive SQL with Spring Data R2DBC on H2, and reactive transactions.
-11. **Virtual threads vs WebFlux**: a measured comparison for an I/O-bound endpoint, and when to choose which.
-
-All code is in [`code/`](code/). Spring Boot **4.1.1** (Framework 7.0, Reactor 3.8 from the Reactor 2025.0 release train — a set of library versions released together, Reactor Netty — a non-blocking network server built on the Netty library, R2DBC H2 1.1), Java 25:
+All code is in [`code/`](code/). Spring Boot **4.1.1** (Framework 7.0, Reactor 3.8 from the Reactor 2025.0 release train — library versions released together, Reactor Netty — a non-blocking server on Netty, R2DBC H2 1.1), Java 25:
 
 | Project | Shows |
 |---|---|
 | [`reactor-basics`](code/reactor-basics/) | Reactor only (no Spring context): creation, operators, errors, virtual time, backpressure, schedulers, sinks, context — all as `StepVerifier` tests |
 | [`webflux-app`](code/webflux-app/) | a book API: annotated controller, functional routes, SSE, `WebClient`, R2DBC repository + `DatabaseClient` + reactive transaction |
-| [`load-mvc`](code/load-mvc/), [`load-webflux`](code/load-webflux/) | the same I/O-bound endpoint (one that spends its time waiting for input/output rather than computing) under load: MVC on platform threads (ordinary OS threads), MVC on virtual threads, WebFlux |
+| [`load-mvc`](code/load-mvc/), [`load-webflux`](code/load-webflux/) | the same I/O-bound endpoint (spends its time waiting on I/O, not computing) under load: MVC on platform threads (ordinary OS threads), MVC on virtual threads, WebFlux |
 
-Output blocks are real `mvn -q -B -ntp verify` output, with Spring log lines trimmed to `...`. **All timings are machine-dependent** (14-core Apple M4 Pro, load generator — the program that fires test requests — in the same JVM as the server).
+Output blocks are real `mvn -q -B -ntp verify` output (Spring log lines trimmed to `...`). **All timings are machine-dependent** (14-core Apple M4 Pro, load generator in the same JVM as the server).
 
-> **Prerequisites and links.** If you know JavaScript, the mental model is the same as Node's: see the JavaScript handbook, [Chapter 12 — Asynchronous JavaScript](../../../javascript/chapters/12-asynchronous-javascript/README.md), especially "The event loop" and "Promises". A `Mono` is roughly a lazy, cancellable Promise (JavaScript's object for a value that will arrive later), and a `Flux` a lazy async stream. Virtual threads and `CompletableFuture` (Java's equivalent of a Promise) are in the Java handbook, [Chapter 15](../../../java/chapters/15-concurrency-2-modern/README.md). Spring MVC is [Chapter 5](../05-spring-mvc-and-rest/README.md), the blocking `RestClient` is [Chapter 6](../06-rest-clients-and-http-interfaces/README.md), and general Spring testing is [Chapter 12](../12-testing-spring-apps/README.md).
+> **Prerequisites and links.** The mental model is Node's: JavaScript handbook [Chapter 12 — Asynchronous JavaScript](../../../javascript/chapters/12-asynchronous-javascript/README.md) ("The event loop", "Promises"). A `Mono` is roughly a lazy, cancellable Promise; a `Flux` a lazy async stream. Virtual threads and `CompletableFuture` (Java's Promise): Java handbook [Chapter 15](../../../java/chapters/15-concurrency-2-modern/README.md). Spring MVC: [Chapter 5](../05-spring-mvc-and-rest/README.md); blocking `RestClient`: [Chapter 6](../06-rest-clients-and-http-interfaces/README.md); Spring testing: [Chapter 12](../12-testing-spring-apps/README.md).
 
 ---
 
@@ -36,19 +20,17 @@ Output blocks are real `mvn -q -B -ntp verify` output, with Spring log lines tri
 
 ### The problem it solves
 
-In Spring MVC, a request is served by **one thread from start to finish** (*thread-per-request*). Suppose the handler calls a database that answers in 100 ms. For those 100 ms the thread does nothing but wait, yet it is not available to anybody else. Tomcat's worker pool (the fixed set of threads that handle requests) has **200 threads** by default. So at most 200 requests can be *in progress* at once, and with 100 ms of waiting each, the server tops out around **200 / 0.1 s = 2,000 requests per second**, however idle the CPU is. More platform threads cost memory (each has a **stack**, the memory that holds its chain of method calls, typically reserving up to 1 MB) and scheduling overhead (the OS's work of switching between threads), so "just add threads" stops working at a few thousand.
+In Spring MVC a request is served by **one thread from start to finish** (*thread-per-request*). If the handler waits 100 ms for the database, the thread is unavailable to anyone else for those 100 ms. Tomcat's worker pool has **200 threads** by default, so at most 200 requests are *in progress* (in flight) at once, and with 100 ms of waiting each the server tops out near **200 / 0.1 s = 2,000 requests per second**, however idle the CPU. More platform threads cost memory (each **stack** reserves up to ~1 MB) and OS scheduling overhead, so "just add threads" stops working at a few thousand.
 
 ### What reactive does instead
 
-**I/O** (input/output) means reading or writing outside the program: network, disk, database. **Blocking** I/O makes the calling thread stop until the data is there; reactive (non-blocking) I/O never parks a thread on a **socket** (an open network connection):
+**I/O** is reading or writing outside the program (network, disk, database). **Blocking** I/O stops the calling thread until data arrives; non-blocking I/O never parks a thread on a **socket** (an open network connection):
 
-1. The handler starts the database or HTTP call and registers **what to do when the answer arrives**.
-2. The thread immediately returns to the **event loop** and picks up other work.
-3. When the operating system reports that the answer has arrived (via epoll/kqueue, the Linux and macOS mechanisms that tell a program which sockets have data ready), an event-loop thread runs the next step of the pipeline.
+1. The handler starts the call and registers **what to do when the answer arrives**.
+2. The thread immediately returns to the **event loop** for other work.
+3. When the OS reports data ready (epoll/kqueue on Linux/macOS), an event-loop thread runs the next pipeline step.
 
-A handful of event-loop threads (by default one per CPU core in Reactor Netty) can then keep thousands of requests in progress. **Analogy:** a waiter who takes an order, hands it to the kitchen, and serves other tables until the bell rings, instead of standing at the kitchen door until the dish is ready.
-
-This is exactly how Node.js works. Everything in the [JavaScript event-loop chapter](../../../javascript/chapters/12-asynchronous-javascript/README.md) (never block the loop, **callbacks** — functions you hand over to be called later — run when I/O completes, one slow **synchronous** function — one that does all its work before returning — freezes everyone) applies to WebFlux's event loop too.
+A handful of event-loop threads (one per core by default in Reactor Netty) keep thousands of requests in progress — like a waiter who hands the order to the kitchen and serves other tables until the bell rings. This is exactly Node.js: the [JavaScript event-loop](../../../javascript/chapters/12-asynchronous-javascript/README.md) rules (never block the loop; **callbacks** run when I/O completes; one slow **synchronous** function freezes everyone) apply to WebFlux too.
 
 ```mermaid
 flowchart LR
@@ -66,14 +48,9 @@ flowchart LR
 
 ### The price
 
-- Code becomes a **pipeline of operators** instead of plain statements. Stack traces, debugging and `ThreadLocal`-based libraries (a `ThreadLocal` is a variable with a separate value per thread; MDC logging — the Mapped Diagnostic Context that adds fields like a request id to every log line, security context, transactions) need reactive-aware replacements.
-- **Everything** on the request path must be non-blocking: web server, HTTP client, database driver (the library that speaks a database's network protocol). One blocking call on an event loop stalls every request that loop serves ([§13.15](#1315-virtual-threads-vs-webflux-a-measured-comparison) measures this).
-- Since Java 21, **virtual threads** remove the thread-count limit for ordinary blocking code, which removes the main *performance* reason to go reactive for many apps.
-
-### Self-check
-
-1. Why does a 200-thread Tomcat cap out near 2,000 req/s for a 100 ms I/O call? → Each in-flight (started but not finished) request holds a thread while it waits; 200 threads × 10 requests/s each.
-2. What does an event-loop thread do while a database call is in progress? → Other work. The continuation runs when the OS signals that data has arrived.
+- Code becomes a **pipeline of operators**. Stack traces, debugging and `ThreadLocal`-based libraries (per-thread variables: MDC logging — the Mapped Diagnostic Context adding fields like a request id to log lines — security context, transactions) need reactive-aware replacements.
+- **Everything** on the request path must be non-blocking: server, HTTP client, database driver. One blocking call on an event loop stalls every request that loop serves ([§13.15](#1315-virtual-threads-vs-webflux-a-measured-comparison) measures this).
+- Since Java 21, **virtual threads** remove the thread-count limit for ordinary blocking code — removing the main *performance* reason to go reactive for many apps.
 
 ---
 
@@ -81,7 +58,7 @@ flowchart LR
 
 ### What it is
 
-**Reactive Streams** (version 1.0, 2015) is a small specification for **asynchronous stream processing with non-blocking backpressure** (*asynchronous* = the caller does not wait; the result is delivered later). It is four interfaces, copied into the JDK in Java 9 as `java.util.concurrent.Flow`:
+**Reactive Streams** (1.0, 2015) is a small specification for **asynchronous stream processing with non-blocking backpressure** (*asynchronous*: the caller doesn't wait; the result comes later). Four interfaces, copied into Java 9 as `java.util.concurrent.Flow`:
 
 | Interface | Role | Methods |
 |---|---|---|
@@ -90,7 +67,7 @@ flowchart LR
 | `Subscription` | the link between the two | `request(long n)`, `cancel()` |
 | `Processor<T,R>` | both a subscriber and a publisher | — |
 
-**Backpressure** means the **consumer controls the flow rate**: the publisher may send at most as many items as the subscriber has requested. A slow consumer is never flooded.
+**Backpressure**: the **consumer controls the flow rate** — the publisher sends at most as many items as requested, so a slow consumer is never flooded.
 
 ### How it works
 
@@ -98,7 +75,7 @@ flowchart LR
 2. The publisher calls `subscriber.onSubscribe(subscription)`.
 3. The subscriber calls `subscription.request(n)`, meaning "I can take n more".
 4. The publisher sends up to n `onNext` signals, then waits for more demand.
-5. The stream ends with exactly one `onComplete` **or** `onError`, or the subscriber calls `cancel()`.
+5. The stream ends with at most one terminal signal — `onComplete` **or** `onError` (none if cancelled or infinite) — or the subscriber calls `cancel()`.
 
 ```mermaid
 sequenceDiagram
@@ -115,12 +92,7 @@ sequenceDiagram
     P->>S: onComplete()
 ```
 
-You rarely implement these interfaces yourself. Libraries do: **Project Reactor** (Spring's choice), RxJava, Mutiny, Akka Streams, and drivers such as R2DBC. Because they share the contract they interoperate.
-
-### Self-check
-
-1. What does `request(n)` mean? → The subscriber can accept n more items; the publisher must not send more than the outstanding demand.
-2. How many terminal signals (signals that end the stream) can a stream send? → At most one: `onComplete` or `onError` (none if cancelled or infinite).
+You rarely implement these yourself: **Project Reactor** (Spring's choice), RxJava, Mutiny, Akka Streams and drivers such as R2DBC do, and interoperate through the shared contract.
 
 ---
 
@@ -135,7 +107,7 @@ You rarely implement these interfaces yourself. Libraries do: **Project Reactor*
 | `Mono<T>` | 0 or 1 item, then complete (or an error) | a lazy `CompletableFuture<Optional<T>>` / a lazy Promise | find by id, save, an HTTP response |
 | `Flux<T>` | 0..N items (possibly infinite), then complete (or an error) | a lazy async `Stream<T>` / async iterator | query results, SSE events, Kafka records |
 
-An **operator** (`map`, `filter`, `flatMap`, ...) returns a *new* publisher that wraps the previous one. Chaining operators **assembles a pipeline**. Nothing runs until something **subscribes**.
+An **operator** (`map`, `filter`, `flatMap`, ...) returns a *new* publisher wrapping the previous one; chaining **assembles a pipeline**. Nothing runs until something **subscribes**.
 
 ### Creating publishers — `CreationAndLazinessTest`
 
@@ -148,7 +120,7 @@ StepVerifier.create(Flux.error(new IllegalStateException("boom")))
         .expectErrorMessage("boom").verify();
 ```
 
-Other factories you'll meet: `Mono.fromCallable(() -> ...)` (wrap a computation), `Mono.fromFuture(cf)`, `Flux.interval(Duration)` (a tick every period, on the parallel scheduler — a **scheduler** decides which threads run the work, §13.8), `Flux.create(sink -> ...)` (bridge callback APIs), `Mono.delay(Duration)`.
+Other factories: `Mono.fromCallable(() -> ...)` (wrap a computation), `Mono.fromFuture(cf)`, `Flux.interval(Duration)` (ticks on the parallel scheduler — a **scheduler** decides which threads run work, §13.8), `Flux.create(sink -> ...)` (bridge callback APIs), `Mono.delay(Duration)`.
 
 ### Nothing happens until you subscribe
 
@@ -190,20 +162,13 @@ hits after building both monos: 1
 hits after 2x eager + 2x lazy subscribe: 3
 ```
 
-Lessons:
-
-- **Assembly vs subscription.** Building the chain does nothing. Subscribing runs it. In WebFlux **the framework subscribes** to the `Mono`/`Flux` your controller returns. If you build a pipeline and neither return it nor subscribe to it, it never runs (a classic bug: a `repo.save(x)` whose result is ignored saves nothing).
-- **Cold publishers** replay the whole pipeline for every subscriber: two subscribers = two database queries.
-- **`Mono.just(expr)` evaluates `expr` immediately**, at assembly time, even if nobody ever subscribes. Use `Mono.defer(() -> ...)` or `Mono.fromCallable(...)` for work that should happen per subscription (and only when subscribed).
+- **Assembly vs subscription.** Building the chain does nothing; subscribing runs it. In WebFlux **the framework subscribes** to the `Mono`/`Flux` your controller returns. A pipeline neither returned nor subscribed never runs — the classic bug: a controller calls `repo.save(book);` and returns `Mono.just(book)`, saving nothing. Return `repo.save(book)`.
+- **Cold publishers** replay the whole pipeline per subscriber: two subscribers = two database queries.
+- **`Mono.just(expr)` evaluates `expr` immediately** at assembly, even if nobody subscribes. Use `Mono.defer(() -> ...)` or `Mono.fromCallable(...)` for per-subscription work.
 
 ### `block()`
 
-`block()` subscribes and **waits** for the result. It is fine in tests, in `main` methods and at the boundary of a non-reactive app. Inside a reactive pipeline or on an event-loop thread it is a bug: Reactor throws `IllegalStateException("block()/blockFirst()/blockLast() are blocking, which is not supported in thread reactor-http-nio-...")`.
-
-### Self-check
-
-1. A controller method calls `repo.save(book);` and returns `Mono.just(book)`. What's wrong? → The `save` Mono is never subscribed, so nothing is saved. Return `repo.save(book)` instead.
-2. `Mono.just(expensive())` vs `Mono.fromCallable(this::expensive)`? → The first runs `expensive()` immediately, once; the second runs it on each subscription.
+`block()` subscribes and **waits**. Fine in tests, `main` methods and at the edge of a non-reactive app; inside a pipeline or on an event-loop thread it is a bug: Reactor throws `IllegalStateException("block()/blockFirst()/blockLast() are blocking, which is not supported in thread reactor-http-nio-...")`.
 
 ---
 
@@ -275,10 +240,10 @@ flatMapSequential : [u1-a, u1-b, u2-a, u2-b, u3-a, u3-b]
 concatMap needs 12 virtual s, flatMap 6 virtual s; real time: 0 ms and 0 ms
 ```
 
-- **`flatMap`** subscribes to all inner publishers at once (up to a `concurrency` limit, default 256) and emits results **as they arrive**: fastest, order lost.
-- **`concatMap`** waits for each inner publisher to finish before starting the next: order kept, total time = sum (12 s).
-- **`flatMapSequential`** runs concurrently like `flatMap` (6 s) but re-orders the output to match the source.
-- Limit fan-out (one item triggering many parallel calls) against a fragile service with `flatMap(fn, 8)`: at most 8 calls in flight.
+- **`flatMap`** subscribes to all inner publishers at once (up to `concurrency`, default 256) and emits **as results arrive**: fastest (time of the slowest, 6 s), order lost.
+- **`concatMap`** finishes each inner publisher before starting the next: order kept, time = sum (12 s).
+- **`flatMapSequential`** runs concurrently (6 s) but re-orders output to the source order.
+- Limit fan-out against a fragile service with `flatMap(fn, 8)`: at most 8 calls in flight (e.g. 1,000 ids, 10 at a time: `Flux.fromIterable(ids).flatMap(this::call, 10)`).
 
 ### Combining
 
@@ -298,19 +263,14 @@ StepVerifier.create(Flux.range(1, 7).buffer(3))
         .expectNext(List.of(1, 2, 3), List.of(4, 5, 6), List.of(7)).verifyComplete();
 ```
 
-`Mono.zip(a, b, c)` is the reactive "call three services in parallel and combine", the equivalent of `Promise.all` in [JavaScript](../../../javascript/chapters/12-asynchronous-javascript/README.md) or `CompletableFuture.allOf` in [Java](../../../java/chapters/15-concurrency-2-modern/README.md).
+`Mono.zip(a, b, c)` is the reactive "call three services in parallel and combine" — `Promise.all` in [JavaScript](../../../javascript/chapters/12-asynchronous-javascript/README.md), `CompletableFuture.allOf` in [Java](../../../java/chapters/15-concurrency-2-modern/README.md).
 
 ### Common mistakes
 
-- **`map` with an async call**: `flux.map(id -> repo.findById(id))` produces a `Flux<Mono<Book>>` whose inner Monos are never subscribed. Use `flatMap`.
-- **`flatMap` when order matters**, such as applying events in sequence. Use `concatMap`.
-- **Unbounded `flatMap` against a rate-limited API.** Pass a concurrency limit.
-- **Business logic in `doOnNext`.** It's for side effects. An exception thrown there becomes an error signal, and it's easy to forget the call isn't part of the data flow.
-
-### Self-check
-
-1. You need to call a service for each of 1,000 ids, at most 10 at a time, order irrelevant. → `Flux.fromIterable(ids).flatMap(this::call, 10)`.
-2. Why did `flatMap` finish in 6 s and `concatMap` in 12 s? → `flatMap` ran the three inner calls concurrently (time of the slowest); `concatMap` ran them one after another (sum).
+- **`map` with an async call**: `flux.map(id -> repo.findById(id))` yields a `Flux<Mono<Book>>` whose inner Monos never run. Use `flatMap`.
+- **`flatMap` when order matters** (applying events in sequence) — use `concatMap`.
+- **Unbounded `flatMap` against a rate-limited API** — pass a concurrency limit.
+- **Business logic in `doOnNext`** — it's for side effects; an exception there becomes an error signal, and it's easy to forget it isn't part of the data flow.
 
 ---
 
@@ -318,19 +278,19 @@ StepVerifier.create(Flux.range(1, 7).buffer(3))
 
 ### What it is
 
-**`StepVerifier`** (in `reactor-test`) subscribes to a publisher and checks, step by step, the signals it emits: `expectNext(...)`, `expectNextCount(n)`, `assertNext(v -> ...)`, `expectError(Type)`, `expectComplete()`, `thenRequest(n)`, `thenCancel()`. A script ends with `verify()` (or `verifyComplete()` / `verifyError()`), which **runs** the subscription and **blocks** until the script is done. It returns the time it took.
+**`StepVerifier`** (in `reactor-test`) subscribes to a publisher and checks its signals step by step: `expectNext(...)`, `expectNextCount(n)`, `assertNext(v -> ...)`, `expectError(Type)`, `expectComplete()`, `thenRequest(n)`, `thenCancel()`. `verify()` (or `verifyComplete()` / `verifyError()`) **runs** the subscription, **blocks** until the script is done, and returns the time taken.
 
-**Virtual time** replaces Reactor's time-based schedulers with a `VirtualTimeScheduler` whose clock only moves when the test says so (`thenAwait(Duration)`), or jumps when it's idle. A test of a one-hour interval or a retry with **exponential backoff** (waiting longer after each failure: 1 s, 2 s, 4 s, ...) runs in milliseconds and is **deterministic** (gives the same result every run).
+**Virtual time** replaces Reactor's time-based schedulers with a `VirtualTimeScheduler` whose clock moves only when told (`thenAwait(Duration)`) or jumps when idle. A one-hour interval or a retry with **exponential backoff** (1 s, 2 s, 4 s, ...) is tested in milliseconds, **deterministically**.
 
 ### How to use virtual time
 
-1. Build the publisher **inside the supplier**: `StepVerifier.withVirtualTime(() -> Flux.interval(...))`. The virtual scheduler must be installed *before* the operators capture a scheduler. A publisher created outside the lambda keeps using real time.
+1. Build the publisher **inside the supplier**: `StepVerifier.withVirtualTime(() -> Flux.interval(...))`, so its time-based operators pick up the virtual scheduler; a publisher created outside keeps real time.
 2. Use `expectSubscription()` first, then `expectNoEvent(d)` to assert that nothing happened for a period (it also advances the clock).
 3. Use `thenAwait(d)` to move the clock forward, then `expectNext(...)`.
 
 ### The trap: a test that waits forever
 
-If the script expects a signal that only comes after virtual time passes, but never calls `thenAwait`, `verify()` waits **forever**. This chapter's first attempt at `howLongDoTheyTake` did exactly that and hung the build until an external alarm killed it. Two defences:
+If the script expects a signal that only comes after virtual time passes but never calls `thenAwait`, `verify()` waits **forever** — this chapter's first `howLongDoTheyTake` hung the build until an external alarm killed it. Two defences:
 
 ```properties
 # src/test/resources/junit-platform.properties
@@ -340,10 +300,7 @@ junit.jupiter.execution.timeout.default=30 s
 
 and `verify(Duration.ofSeconds(5))` on real-time scripts (used throughout `webflux-app`).
 
-### Self-check
-
-1. Why must the publisher be created inside `withVirtualTime(() -> ...)`? → So its time-based operators pick up the virtual scheduler.
-2. What does `StepVerifier.create(flux, 0)` do? → Subscribes with initial demand 0, so you control demand with `thenRequest(n)` ([§13.7](#137-backpressure-in-practice)).
+`StepVerifier.create(flux, 0)` subscribes with initial demand 0, so you drive demand with `thenRequest(n)` ([§13.7](#137-backpressure-in-practice)).
 
 ---
 
@@ -351,7 +308,7 @@ and `verify(Duration.ofSeconds(5))` on real-time scripts (used throughout `webfl
 
 ### How errors flow
 
-An exception inside an operator becomes an **`onError` signal**. It travels down the pipeline, skipping `map`/`filter`, until an error operator handles it or it reaches the subscriber. **An error terminates the sequence**: items after it are never processed. This is like a rejected Promise, not like a `try/catch` inside a loop.
+An exception inside an operator becomes an **`onError` signal** that travels down, skipping `map`/`filter`, until an error operator handles it or it reaches the subscriber. **An error terminates the sequence** — later items are never processed (like a rejected Promise, not a `try/catch` inside a loop).
 
 ```java
 @Test
@@ -424,15 +381,15 @@ timeout(2s) on a 5 s call -> fallback / TimeoutException
 onErrorReturn / onErrorResume / onErrorMap verified
 ```
 
-The first attempt runs at 0. The retries wait 1 s, 2 s and 4 s, so they run at 1,000, 3,000 and 7,000 ms. After 3 retries the error becomes `Retries exhausted: 3/3`. Real systems keep the default **jitter** (random ±50 % here) so that many clients don't retry in lockstep; `jitter(0)` is only for the deterministic test. Retry and circuit-breaker (a guard that stops calling a failing service for a while) design in general: [microservices notes — retry](../../../microservices-patterns/chapters/08-retry/README.md).
+Attempt 1 runs at 0; retries wait 1 s, 2 s, 4 s (1,000, 3,000, 7,000 ms); then `Retries exhausted: 3/3`. Real systems keep the default **jitter** (random ±50 % here) so clients don't retry in lockstep; `jitter(0)` is for the deterministic test. Retry and circuit-breaker (stop calling a failing service for a while) design: [microservices notes — retry](../../../microservices-patterns/chapters/08-retry/README.md).
 
-**Retry re-subscribes.** That only repeats the work if the source is lazy. `Mono.defer(...)`, `fromCallable` and `WebClient` calls are lazy. A `Mono.just(valueComputedEarlier)` would just replay the same value.
+**Retry re-subscribes**, which repeats work only for a lazy source (`Mono.defer(...)`, `fromCallable`, `WebClient` calls); `Mono.just(valueComputedEarlier)` just replays the value.
 
 ### Common mistakes
 
-- **Retrying non-idempotent calls** (an *idempotent* call has the same effect whether it runs once or many times; a `POST` that charges a card is not) without an idempotency key (a unique id the server uses to spot and ignore duplicates; see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)).
-- **Retrying on 4xx** (client-error status codes, which will fail again). Filter to transient errors (temporary ones, such as a 503, that may succeed on a later try): `Retry.backoff(...).filter(e -> e instanceof ServiceUnavailable)`.
-- **`try/catch` around a reactive chain.** It only catches assembly-time errors, not errors that happen later when the pipeline runs.
+- **Retrying non-idempotent calls** (*idempotent*: same effect once or many times; a card-charging `POST` is not) without an idempotency key (a unique id the server uses to ignore duplicates; [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)).
+- **Retrying on 4xx** (client errors fail again). Filter to transient errors (e.g. 503): `Retry.backoff(...).filter(e -> e instanceof ServiceUnavailable)`.
+- **`try/catch` around a reactive chain** catches only assembly-time errors, not those raised when the pipeline runs.
 
 ---
 
@@ -440,7 +397,7 @@ The first attempt runs at 0. The retries wait 1 s, 2 s and 4 s, so they run at 1
 
 ### What it is
 
-**Backpressure** = the consumer tells the producer how much it can handle, through `request(n)`. In Reactor most operators pass demand **upstream** (towards the source; *downstream* is towards the subscriber) automatically. A subscriber like `block()` or WebFlux's HTTP writer requests in batches.
+**Backpressure** = the consumer tells the producer how much it can handle via `request(n)`. Most Reactor operators pass demand **upstream** (towards the source; *downstream* is towards the subscriber) automatically; `block()` or WebFlux's HTTP writer request in batches.
 
 ### Demand you can see — `BackpressureTest`
 
@@ -492,13 +449,12 @@ requests = [2, 2, 2, 2, 2, 2]
 received = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 ```
 
-- The source sent exactly as many items as requested, 2 at a time.
-- `limitRate(10)` turns a downstream "give me everything" (`Long.MAX_VALUE`) into bounded requests. It first asks for 10, then **re-requests 8 when 75 % have been consumed** (the default "low tide"), so the next batch is already on its way before the buffer runs dry. Use it to protect a source that fetches in pages (a database cursor — a pointer that walks through query results a batch at a time, a paged API).
-- With demand 0, a well-behaved publisher sends nothing.
+- The source sent exactly as many items as requested, 2 at a time; with demand 0 a well-behaved publisher sends nothing.
+- `limitRate(10)` turns a downstream "everything" (`Long.MAX_VALUE`) into bounded requests: 10 first, then **8 more when 75 % are consumed** (default "low tide"), so the next batch is in flight before the buffer runs dry. Use it to protect paged sources (a database cursor walking results in batches, a paged API).
 
 ### When the source can't slow down: overflow strategies
 
-Some sources **ignore demand**: UI events, sensor readings, a price ticker, a hot message stream. For them you choose what happens to the excess. The test's `ticker()` pushes 1..20 at once through `Flux.create(..., OverflowStrategy.IGNORE)`, while the consumer asks for only 5:
+Some sources **ignore demand** (UI events, sensors, a price ticker, a hot message stream); you choose what happens to the excess. The test's `ticker()` pushes 1..20 at once through `Flux.create(..., OverflowStrategy.IGNORE)` while the consumer asks for 5:
 
 ```java
 static Flux<Integer> ticker() {
@@ -529,23 +485,17 @@ BUFFER(10): [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15] error: The recei
 
 | Strategy | What happens to excess | Use for |
 |---|---|---|
-| `onBackpressureDrop` | discarded (optional callback to count/log them) | metrics samples, mouse moves |
-| `onBackpressureLatest` | keep only the newest waiting item | "current price", UI state |
+| `onBackpressureLatest` | keep only the newest waiting item | "current price" (a feed faster than the UI renders), UI state |
 | `onBackpressureBuffer(n)` | queue up to n, then **error** (or a chosen overflow action) | short bursts that must not be lost |
-| `onBackpressureBuffer()` (unbounded) | queue everything | risky: memory grows until `OutOfMemoryError` |
+| `onBackpressureBuffer()` (unbounded) | queue everything | risky: a consumer slower than the producer grows it until `OutOfMemoryError` |
+| `onBackpressureError` | fail immediately | when overflow is a bug |
 | `onBackpressureError` | fail immediately | when overflow is a bug |
 
 `Flux.create` accepts the same choices directly (`OverflowStrategy.DROP/LATEST/BUFFER/ERROR`).
 
 ### Backpressure across the network
 
-Inside one JVM, demand is exact. Across HTTP it becomes **TCP flow control** (TCP, the protocol under HTTP, stops the sender when the receiver's buffer is full; see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)). When a WebFlux server writes a `Flux` to a slow client, the socket's send buffer fills, Netty stops requesting, and the demand stops at the source (for example the R2DBC cursor). Between services, HTTP/1.1 has no message-level backpressure. Protocols like RSocket or gRPC (binary service-to-service protocols with built-in flow control), or a message broker in between, provide it.
-
-### Self-check
-
-1. What does `limitRate(10)` change? → Upstream never receives a request larger than 10; replenishes in batches of 8 (75 %).
-2. A price feed pushes faster than your UI can render. Which strategy? → `onBackpressureLatest`: only the newest price matters.
-3. Why is an unbounded buffer dangerous? → A consumer that stays slower than the producer makes the buffer grow until memory runs out.
+Inside one JVM demand is exact; across HTTP it becomes **TCP flow control** (TCP stops the sender when the receiver's buffer is full; [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)). When WebFlux writes a `Flux` to a slow client, the socket send buffer fills, Netty stops requesting, and demand stops at the source (e.g. the R2DBC cursor). Between services HTTP/1.1 has no message-level backpressure; RSocket or gRPC (binary protocols with flow control), or a broker in between, provide it.
 
 ---
 
@@ -553,18 +503,18 @@ Inside one JVM, demand is exact. Across HTTP it becomes **TCP flow control** (TC
 
 ### What it is
 
-Reactor is **concurrency-agnostic** (it does not pick threads for you): by default, each signal runs on whatever thread emitted it (the subscribing thread, a Netty event loop, a timer thread). **Schedulers** move work onto specific thread pools:
+Reactor is **concurrency-agnostic**: each signal runs on whatever thread emitted it (subscriber, Netty event loop, timer). **Schedulers** move work onto specific pools:
 
 | Scheduler | Threads | For |
 |---|---|---|
-| `Schedulers.parallel()` | one per CPU core | CPU-bound work (limited by computation, not waiting), timers (`interval`, `delayElements`) |
-| `Schedulers.boundedElastic()` | grows on demand up to 10 × cores (default), idle threads reclaimed | **wrapping blocking calls** (JDBC, legacy SDKs — older vendor client libraries, file I/O) |
+| `Schedulers.parallel()` | one per CPU core | CPU-bound work, timers (`interval`, `delayElements`) |
+| `Schedulers.boundedElastic()` | grows on demand up to 10 × cores (default), idle threads reclaimed | **wrapping blocking calls** (JDBC, legacy SDKs, file I/O) |
 | `Schedulers.single()` | one reusable thread | low-latency one-off tasks |
 | `Schedulers.immediate()` | the current thread | tests, defaults |
 | Reactor Netty event loops (`reactor-http-nio-N`) | one per core (min 4) | network I/O — **never block these** |
 
 - **`publishOn(s)`** switches the thread for everything **after** it in the chain.
-- **`subscribeOn(s)`** chooses the thread on which the **subscription happens**, which moves the **source** (and everything up to the first `publishOn`). Its position in the chain doesn't matter.
+- **`subscribeOn(s)`** chooses the thread on which the **subscription happens**, moving the **source** (and everything up to the first `publishOn`); its position in the chain doesn't matter.
 
 ```java
 @Test
@@ -599,9 +549,7 @@ source    on boundedElastic-N
 after pub on parallel-N
 ```
 
-The **`Mono.fromCallable(blocking).subscribeOn(Schedulers.boundedElastic())`** pattern is how you call unavoidable blocking code from a reactive app. It keeps the event loops free, at the cost of a thread per concurrent call, exactly the cost reactive was meant to avoid. If most calls are blocking, a reactive stack buys you nothing.
-
-`BlockHound`, a Java agent (a plug-in that instruments classes as the JVM loads them) from the Reactor team, detects blocking calls on non-blocking threads during tests.
+**`Mono.fromCallable(blocking).subscribeOn(Schedulers.boundedElastic())`** is how to call unavoidable blocking code from a reactive app: event loops stay free, at the cost of a thread per concurrent call — exactly what reactive meant to avoid. If most calls block, a reactive stack buys nothing. **`BlockHound`** (a Java agent from the Reactor team) detects blocking calls on non-blocking threads in tests.
 
 ---
 
@@ -609,10 +557,10 @@ The **`Mono.fromCallable(blocking).subscribeOn(Schedulers.boundedElastic())`** p
 
 ### Cold vs hot
 
-- **Cold** (the default): each subscriber gets its own run from the start. Examples: a database query, a `WebClient` call, `Flux.range`.
-- **Hot**: data is produced whether or not anyone listens, and late subscribers **miss** what was emitted earlier. Examples: stock ticks, mouse events, a chat room.
+- **Cold** (default): each subscriber gets its own run from the start (a query, a `WebClient` call, `Flux.range`).
+- **Hot**: data is produced whether or not anyone listens; late subscribers **miss** earlier items (stock ticks, mouse events, a chat room).
 
-**Sinks** (`Sinks.many()`, `Sinks.one()`) are the safe way to push values into a `Flux` from **imperative** code (ordinary step-by-step statements), for example to broadcast events to all SSE clients:
+**Sinks** (`Sinks.many()`, `Sinks.one()`) are the safe way to push values into a `Flux` from **imperative** code, e.g. broadcasting events to all SSE clients:
 
 ```java
 Sinks.Many<String> prices = Sinks.many().multicast().directBestEffort();
@@ -629,11 +577,11 @@ Output:
 early subscriber: [p1, p2], late subscriber: [p2]
 ```
 
-Other sinks: `Sinks.many().replay().limit(n)` (late subscribers get the last n), `unicast()` (one subscriber, buffers). Turn a cold publisher hot with `share()`, `publish().autoConnect()`, or `cache()` (replay to later subscribers).
+Other sinks: `Sinks.many().replay().limit(n)` (late subscribers get the last n), `unicast()` (one subscriber, buffers). Make a cold publisher hot with `share()`, `publish().autoConnect()`, or `cache()` (replays to later subscribers).
 
 ### Context: the reactive replacement for `ThreadLocal`
 
-A pipeline may hop between threads, so `ThreadLocal` values (request id in the logging MDC, the security context, the current transaction) get lost. Reactor's **`Context`** is an immutable (cannot be changed after creation) key/value map attached to the **subscription**. You write it at the bottom with `contextWrite` and read it anywhere above with `deferContextual`:
+A pipeline may hop threads, so `ThreadLocal` values (MDC request id, security context, current transaction) get lost. Reactor's **`Context`** is an immutable key/value map attached to the **subscription**: written at the bottom with `contextWrite`, read anywhere above with `deferContextual`:
 
 ```java
 Mono<String> greeting = Mono.deferContextual(ctx -> Mono.just("request " + ctx.get("requestId")));
@@ -647,7 +595,7 @@ Output:
 context value read inside the pipeline: r-42
 ```
 
-Spring uses it for you: reactive Spring Security stores the `SecurityContext` there, and reactive transactions keep the connection there. For logging MDC and **tracing** (following one request across threads and services, Chapter 15), Boot can bridge `ThreadLocal`s and the Reactor `Context` through Micrometer's context-propagation library (`spring.reactor.context-propagation=auto`).
+Spring uses it for you: reactive Spring Security stores the `SecurityContext` there, reactive transactions keep the connection there. For MDC and **tracing** (following a request across threads and services, Chapter 15), Boot bridges `ThreadLocal`s and the Reactor `Context` via Micrometer's context-propagation library (`spring.reactor.context-propagation=auto`).
 
 ---
 
@@ -655,7 +603,7 @@ Spring uses it for you: reactive Spring Security stores the `SecurityContext` th
 
 ### What it is
 
-**Spring WebFlux** (Framework 5.0+) is the reactive counterpart of Spring MVC. It runs on **Reactor Netty** by default (Tomcat and Jetty also work, through the Servlet non-blocking I/O API). The request flow mirrors MVC: `HttpHandler` → `WebFilter`s → **`DispatcherHandler`** → `HandlerMapping` → `HandlerAdapter` → your handler → `HttpMessageWriter` (Jackson 3 **codecs**: encoders/decoders between bytes and Java objects). Every step is non-blocking.
+**Spring WebFlux** (Framework 5.0+) is the reactive counterpart of Spring MVC, on **Reactor Netty** by default (Tomcat and Jetty work via the Servlet non-blocking I/O API). The flow mirrors MVC: `HttpHandler` → `WebFilter`s → **`DispatcherHandler`** → `HandlerMapping` → `HandlerAdapter` → your handler → `HttpMessageWriter` (Jackson 3 **codecs**: byte ↔ object encoders/decoders), all non-blocking.
 
 | | Spring MVC | Spring WebFlux |
 |---|---|---|
@@ -719,10 +667,10 @@ public class BookController {
 }
 ```
 
-- `Flux<Book>` is written as a JSON array (or streamed as NDJSON — newline-delimited JSON, one object per line — / SSE when the client asks for `application/x-ndjson` / `text/event-stream`).
-- An empty `Mono` would produce `200` with an empty body, so `switchIfEmpty(Mono.error(...))` turns "not found" into a 404.
-- `@RequestBody Mono<Book>` makes even body parsing non-blocking. A plain `@RequestBody Book` also works.
-- **You return the pipeline, the framework subscribes.** Nothing in this class calls `subscribe()` or `block()`.
+- `Flux<Book>` is written as a JSON array (or streamed as NDJSON — one JSON object per line — / SSE when the client asks for `application/x-ndjson` / `text/event-stream`).
+- An empty `Mono` would give `200` with an empty body; `switchIfEmpty(Mono.error(...))` makes "not found" a 404.
+- `@RequestBody Mono<Book>` makes even body parsing non-blocking (plain `@RequestBody Book` also works).
+- **You return the pipeline, the framework subscribes** — no `subscribe()` or `block()` anywhere.
 
 ### Testing it — `@WebFluxTest` + `WebTestClient`
 
@@ -778,9 +726,9 @@ GET /api/books/99 -> 404 {"timestamp":"2026-09-29T00:24:18.499Z","path":"/api/bo
 GET /api/books -> 200 [Domain-Driven Design]
 ```
 
-- `@WebFluxTest` is the WebFlux slice ([ch12 §12.7](../12-testing-spring-apps/README.md#127-test-slices)). Unlike `@SpringBootTest`, it provides a `WebTestClient` without an extra annotation.
-- The mock returns `Mono`/`Flux`: mocks of reactive repositories must never return `null` (that causes a `NullPointerException` inside the framework).
-- The 404 body is Boot's default reactive error format. For RFC 9457 Problem Details set `spring.webflux.problemdetails.enabled=true` or add a `@RestControllerAdvice` returning `ProblemDetail`, exactly as in MVC.
+- `@WebFluxTest` is the WebFlux slice ([ch12 §12.7](../12-testing-spring-apps/README.md#127-test-slices)); unlike `@SpringBootTest` it provides a `WebTestClient` without an extra annotation.
+- Mocked reactive repositories must return `Mono`/`Flux`, never `null` (→ `NullPointerException` inside the framework).
+- The 404 body is Boot's default reactive error format; for RFC 9457 Problem Details set `spring.webflux.problemdetails.enabled=true` or add a `@RestControllerAdvice` returning `ProblemDetail`, as in MVC.
 
 ---
 
@@ -788,7 +736,7 @@ GET /api/books -> 200 [Domain-Driven Design]
 
 ### What it is
 
-WebFlux (and MVC, via `RouterFunctions` in `spring-webmvc`) offers a second programming model: routes are **code**, a `RouterFunction<ServerResponse>` bean, and handlers are plain functions `ServerRequest → Mono<ServerResponse>`. No annotations, no reflection, so routing is explicit and easy to unit-test.
+A second model (also in MVC via `RouterFunctions` in `spring-webmvc`): routes are **code** — a `RouterFunction<ServerResponse>` bean — and handlers are plain functions `ServerRequest → Mono<ServerResponse>`. No annotations or reflection: explicit, easily unit-tested routing.
 
 ```java
 @Configuration(proxyBeanMethods = false)
@@ -827,11 +775,11 @@ public class BookRoutes {
 }
 ```
 
-A detail found while testing: the first version of the filter changed the headers of the returned `ServerResponse` (`res.headers().add(...)`). That failed with `UnsupportedOperationException` and a 500, because a built `ServerResponse` is immutable. Add headers through the exchange (as above) or build a new response.
+Found while testing: the first filter changed the returned `ServerResponse`'s headers (`res.headers().add(...)`) and failed with `UnsupportedOperationException` (500) — a built `ServerResponse` is immutable. Add headers through the exchange (as above) or build a new response.
 
 ### Testing without Spring
 
-Routes are plain objects, so `WebTestClient` can bind straight to them. No context, no server:
+Routes are plain objects, so `WebTestClient` binds straight to them — no context, no server:
 
 ```java
 class FunctionalRoutesTest {
@@ -869,7 +817,7 @@ GET /fn/books?author=Evans -> 200 [1 book], /fn/books -> 400 author is required
 | Routing | annotations, discovered by scanning | explicit code, composable |
 | Argument binding / validation | automatic (`@PathVariable`, `@Valid`) | manual (`req.pathVariable`, `req.bodyToMono`, call a `Validator`) |
 | Familiar to most Spring devs | yes | less |
-| Good for | most CRUD (create, read, update, delete) APIs | small services, dynamic routes, tight control, GraalVM-friendly code (GraalVM compiles Java ahead of time into a native executable) |
+| Good for | most CRUD APIs | small services, dynamic routes, tight control, GraalVM-friendly code (ahead-of-time native executables) |
 
 Both can live in one app (as here).
 
@@ -879,9 +827,7 @@ Both can live in one app (as here).
 
 ### Server-Sent Events
 
-**Server-Sent Events (SSE)** is a simple standard for a server to **push** a stream of text events over one long-lived HTTP response (`Content-Type: text/event-stream`). Browsers consume it with `EventSource` and reconnect automatically. It's one-way (server → client). For two-way messaging use WebSockets (a protocol that upgrades an HTTP connection into a long-lived, two-way channel).
-
-In WebFlux an SSE endpoint is just a `Flux` with the right media type:
+**Server-Sent Events (SSE)** is a simple standard for a server to **push** text events over one long-lived HTTP response (`Content-Type: text/event-stream`); browsers consume it with `EventSource`, reconnecting automatically. One-way (server → client); for two-way use WebSockets (an HTTP connection upgraded to a long-lived two-way channel). In WebFlux an SSE endpoint is just a `Flux` with that media type:
 
 ```java
 /** Server-Sent Events: one "tick" per interval, pushed over a single open HTTP response. */
@@ -891,7 +837,7 @@ public Flux<String> ticks(@RequestParam(defaultValue = "1000") long everyMs) {
 }
 ```
 
-Each element is written as `data:tick 0` plus a blank line. For event names, ids or retry hints, return `Flux<ServerSentEvent<T>>`. When the client disconnects, the subscription is **cancelled** and `Flux.interval` stops: no leaked timers. (Spring MVC offers the same with `SseEmitter`, or by returning a `Flux` from an MVC controller, but each open stream then holds a servlet async request.)
+Each element is written as `data:tick 0` plus a blank line; for event names, ids or retry hints return `Flux<ServerSentEvent<T>>`. When the client disconnects the subscription is **cancelled** and `Flux.interval` stops — no leaked timers. (Spring MVC offers `SseEmitter` or returning a `Flux`, but each open stream then holds a servlet async request.)
 
 ### The full-stack test
 
@@ -937,8 +883,8 @@ GET /api/books?q=reactive -> [{"id":2,"title":"Hands-On Reactive Programming in 
 SSE received: tick 0, tick 1, tick 2 (then cancelled)
 ```
 
-- In Boot 4, `WebTestClient` in a `@SpringBootTest` needs **`@AutoConfigureWebTestClient`** (from `spring-boot-starter-webflux-test`). It is then bound to the random-port server.
-- `returnResult(String.class).getResponseBody()` gives the **live stream**. Combining `WebTestClient` with `StepVerifier` is the standard way to test infinite or streaming endpoints: take a few items, then cancel.
+- In Boot 4, `WebTestClient` in a `@SpringBootTest` needs **`@AutoConfigureWebTestClient`** (from `spring-boot-starter-webflux-test`); it is then bound to the random-port server.
+- `returnResult(String.class).getResponseBody()` gives the **live stream**; `WebTestClient` + `StepVerifier` (take a few items, cancel) is the standard way to test infinite/streaming endpoints.
 
 ---
 
@@ -946,7 +892,7 @@ SSE received: tick 0, tick 1, tick 2 (then cancelled)
 
 ### What it is
 
-**`WebClient`** is the non-blocking, reactive HTTP client (Framework 5.0+). Boot auto-configures a `WebClient.Builder` with its codecs and observability (metrics and tracing for each call, Chapter 15) (from `spring-boot-starter-webclient` in Boot 4). Its API mirrors `RestClient` ([Chapter 6](../06-rest-clients-and-http-interfaces/README.md)) but returns `Mono`/`Flux`.
+**`WebClient`** is the non-blocking reactive HTTP client (Framework 5.0+). Boot auto-configures a `WebClient.Builder` with codecs and observability (per-call metrics and tracing, Chapter 15) — from `spring-boot-starter-webclient` in Boot 4. Its API mirrors `RestClient` ([Chapter 6](../06-rest-clients-and-http-interfaces/README.md)) but returns `Mono`/`Flux`.
 
 ```java
 @Component
@@ -980,13 +926,13 @@ public class InventoryClient {
 }
 ```
 
-- `retrieve()` + `bodyToMono` is the simple path. 4xx/5xx responses become `WebClientResponseException` unless you map them with `onStatus`.
-- The `timeout` sits **before** `retryWhen`, so it limits **each attempt**. Put it after `retryWhen` to limit the whole operation.
-- Only `InventoryUnavailable` (5xx) is retried. A 404 is not.
+- `retrieve()` + `bodyToMono` is the simple path; 4xx/5xx become `WebClientResponseException` unless mapped with `onStatus`.
+- `timeout` **before** `retryWhen` limits **each attempt**; after it, the whole operation.
+- Only `InventoryUnavailable` (5xx) is retried, not a 404.
 
 ### Tested against a real local server
 
-Instead of a mock, the test starts a real **Reactor Netty HTTP server** on a random port, scripted to be fast, slow, flaky or down. `@DynamicPropertySource` points the client at it:
+The test starts a real **Reactor Netty HTTP server** on a random port, scripted to be fast, slow, flaky or down; `@DynamicPropertySource` points the client at it:
 
 ```java
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
@@ -1052,14 +998,14 @@ slow (2 s) -> TimeoutException after the 500 ms timeout
 flaky: 503, 503, 200 -> success after 3 calls; down: gave up after 3 calls
 ```
 
-Five 300 ms calls finished in **322 ms**, not 1,500 ms, because `flatMap` ran them concurrently and no thread waited on any of them. (With `RestClient` you'd get the same wall time by running the calls on virtual threads. [§13.15](#1315-virtual-threads-vs-webflux-a-measured-comparison) compares the two approaches.)
+Five 300 ms calls finished in **322 ms**, not 1,500 ms: `flatMap` ran them concurrently and no thread waited. (`RestClient` on virtual threads gets the same wall time — compared in [§13.15](#1315-virtual-threads-vs-webflux-a-measured-comparison).)
 
 ### Common mistakes
 
-- **`.block()` on a `WebClient` call inside a WebFlux handler** → `IllegalStateException` (blocking on a non-blocking thread). Return the `Mono`.
-- **A new `WebClient.create()` per call** → no shared **connection pool** (a set of open connections that are reused instead of opened per call), no Boot customisation. Build once from the injected builder.
-- **Ignoring the body of an error response** → the connection may not be released. Let `retrieve()` handle it, or consume/release the body in `exchangeToMono`.
-- **No timeout.** A hung remote service keeps the request open forever. Add `timeout(...)` and/or set connect/response timeouts on the underlying `HttpClient`.
+- **`.block()` on a `WebClient` call inside a WebFlux handler** → `IllegalStateException`. Return the `Mono`.
+- **`WebClient.create()` per call** → no shared **connection pool** (reused open connections), no Boot customisation. Build once from the injected builder.
+- **Ignoring an error response's body** → the connection may not be released. Let `retrieve()` handle it, or consume/release the body in `exchangeToMono`.
+- **No timeout** → a hung remote service keeps the request open forever. Add `timeout(...)` and/or connect/response timeouts on the underlying `HttpClient`.
 
 ---
 
@@ -1067,9 +1013,9 @@ Five 300 ms calls finished in **322 ms**, not 1,500 ms, because `flatMap` ran th
 
 ### What it is
 
-JDBC is **blocking by design**: `executeQuery()` holds the calling thread until rows arrive. **R2DBC** (Reactive Relational Database Connectivity, spec 1.0 in 2022) is a non-blocking SPI (service provider interface: a standard API that each database vendor implements in its driver) for SQL databases. Drivers exist for PostgreSQL, MySQL/MariaDB, SQL Server, Oracle and H2. **Spring Data R2DBC** adds repositories and `R2dbcEntityTemplate` on top. Spring's `DatabaseClient` offers fluent SQL.
+JDBC is **blocking by design**: `executeQuery()` holds the thread until rows arrive. **R2DBC** (Reactive Relational Database Connectivity, spec 1.0 in 2022) is a non-blocking SPI (service provider interface: a standard API each vendor's driver implements) for SQL databases, with drivers for PostgreSQL, MySQL/MariaDB, SQL Server, Oracle and H2. **Spring Data R2DBC** adds repositories and `R2dbcEntityTemplate`; `DatabaseClient` offers fluent SQL.
 
-It is **not an ORM** (object-relational mapper, such as Hibernate, which maps object graphs to tables automatically): no lazy loading, no relationships or cascades (operations that spread to related rows), no dirty checking (detecting changed fields to update automatically), no first-level cache. An entity maps to one table. Joins are written by hand. That is deliberate: lazy loading would mean hidden blocking I/O. Compare [Chapter 8](../08-spring-data-jpa-and-hibernate/README.md).
+It is **not an ORM** (like Hibernate): no lazy loading, relationships, cascades, dirty checking (auto-detecting changed fields) or first-level cache. One entity = one table; joins are hand-written. Deliberately — lazy loading would mean hidden blocking I/O. Compare [Chapter 8](../08-spring-data-jpa-and-hibernate/README.md).
 
 ### Configuration
 
@@ -1079,7 +1025,7 @@ spring.r2dbc.url=r2dbc:h2:mem:///books;DB_CLOSE_DELAY=-1
 spring.sql.init.mode=always
 ```
 
-For PostgreSQL: `spring.r2dbc.url=r2dbc:postgresql://host:5432/db` with the `org.postgresql:r2dbc-postgresql` driver. Boot adds a connection pool (`r2dbc-pool`) automatically. Schema migrations (versioned scripts that create and change tables): Flyway and Liquibase need JDBC, so apps usually keep a JDBC driver *only* for migrations.
+For PostgreSQL: `spring.r2dbc.url=r2dbc:postgresql://host:5432/db` with `org.postgresql:r2dbc-postgresql`. Boot adds a pool (`r2dbc-pool`) automatically. Flyway and Liquibase migrations need JDBC, so apps usually keep a JDBC driver *only* for migrations.
 
 ### Entity and repository
 
@@ -1105,7 +1051,7 @@ public interface BookRepository extends ReactiveCrudRepository<Book, Long> {
 }
 ```
 
-The Javadoc comment records a real failure from this chapter. With `@Table("book")` every generated statement failed with *`Table "book" not found (candidates are: "BOOK")`*. Spring Data R2DBC **quotes** identifiers, which makes them case-sensitive. The unquoted `CREATE TABLE book` in `schema.sql` produced `BOOK` in H2 (PostgreSQL would fold it to lower case instead). Either omit the name, as here, so Spring derives it in the dialect's (the specific database's SQL flavour) default case, or match the case exactly.
+The Javadoc records a real failure: with `@Table("book")` every statement failed with *`Table "book" not found (candidates are: "BOOK")`*. Spring Data R2DBC **quotes** identifiers (case-sensitive), and the unquoted `CREATE TABLE book` produced `BOOK` in H2 (PostgreSQL folds to lower case instead). Omit the name, so Spring derives it in the dialect's default case, or match the case exactly.
 
 ### Tests — `@DataR2dbcTest`, `DatabaseClient`, a reactive transaction
 
@@ -1163,15 +1109,13 @@ rows with isbn tmp-1 after rollback: 0
 search('SPRING') -> [Hands-On Reactive Programming in Spring 5, Reactive Spring]
 ```
 
-What it shows:
-
-- **Derived queries and `@Query`** work as in Spring Data JPA, but return `Flux`/`Mono`. `save` on a record with `id == null` INSERTs and returns the row with its generated id. (The id is 7 because the in-memory database is shared with the other test contexts in the same JVM, and `data.sql` ran several times.)
-- **Reactive transactions**: `TransactionalOperator` (or `@Transactional` on a method returning `Mono`/`Flux`, backed by `R2dbcTransactionManager`) binds the connection to the **subscription's Context**, not to a thread ([Chapter 7](../07-data-access-jdbc-and-transactions/README.md) covers the thread-bound version). The error after the INSERT rolled it back: 0 rows.
-- **`@DataR2dbcTest` is not transactional.** Unlike `@DataJpaTest`, it is not meta-annotated with `@Transactional` (checked in Boot 4.1.1), because the TestContext's test-managed transactions are thread-bound. Clean up in the test, as `saveAssignsId` does.
+- **Derived queries and `@Query`** work as in Spring Data JPA, returning `Flux`/`Mono`. `save` with `id == null` INSERTs and returns the row with its generated id (7, because the in-memory DB is shared with other test contexts and `data.sql` ran several times).
+- **Reactive transactions**: `TransactionalOperator` (or `@Transactional` on a method returning `Mono`/`Flux`, backed by `R2dbcTransactionManager`) binds the connection to the **subscription's Context**, not a thread ([Chapter 7](../07-data-access-jdbc-and-transactions/README.md) has the thread-bound version). The error after the INSERT rolled it back: 0 rows.
+- **`@DataR2dbcTest` is not transactional**: unlike `@DataJpaTest` it isn't meta-annotated `@Transactional` (checked in Boot 4.1.1), because test-managed transactions are thread-bound. Clean up in the test (`saveAssignsId`).
 
 ### When not to use R2DBC
 
-When you need JPA features (relationships, lazy loading, caching), when your team knows JPA well, or when you're on virtual threads anyway. The ecosystem is smaller and some drivers lag behind their JDBC versions.
+When you need JPA features (relationships, lazy loading, caching), the team knows JPA well, or you're on virtual threads anyway. The ecosystem is smaller and some drivers lag their JDBC versions.
 
 ---
 
@@ -1179,17 +1123,17 @@ When you need JPA features (relationships, lazy loading, caching), when your tea
 
 ### The question
 
-Java 21 made **virtual threads** final ([Java ch15](../../../java/chapters/15-concurrency-2-modern/README.md)): threads managed by the JVM that cost a few hundred bytes to a few KB each instead of a platform thread's MB-sized stack. When a virtual thread blocks on I/O, the JVM **unmounts** (detaches) it from its carrier (platform) thread, and the carrier runs another virtual thread. Blocking code gets event-loop-like scalability *without changing the code*. Spring Boot (3.2+) switches Tomcat's request handling, `@Async`, `@Scheduled` and more to virtual threads with **one property**:
+Java 21 made **virtual threads** final ([Java ch15](../../../java/chapters/15-concurrency-2-modern/README.md)): JVM-managed threads costing a few hundred bytes to a few KB instead of a platform thread's MB-sized stack. A virtual thread blocking on I/O is **unmounted** from its carrier (platform) thread, which runs another one — event-loop-like scalability *without code changes*. Spring Boot (3.2+) switches Tomcat request handling, `@Async`, `@Scheduled` and more to virtual threads with **one property**:
 
 ```properties
 spring.threads.virtual.enabled=true
 ```
 
-So: for an I/O-bound endpoint, how do **MVC on platform threads**, **MVC on virtual threads** and **WebFlux** compare?
+For an I/O-bound endpoint, how do **MVC on platform threads**, **MVC on virtual threads** and **WebFlux** compare?
 
 ### The setup
 
-Two tiny projects with the same endpoint: wait 100 ms (simulated I/O), then answer.
+Two tiny projects share one endpoint: wait 100 ms (simulated I/O), then answer.
 
 ```java
 // load-mvc: blocking. The thread WAITS 100 ms, like a JDBC query or a blocking HTTP call.
@@ -1213,14 +1157,14 @@ Mono<String> ioBlocking(@RequestParam(defaultValue = "100") long ms) throws Inte
 }
 ```
 
-- `load-mvc` runs twice: `spring.threads.virtual.enabled=false` (Tomcat's default 200 platform worker threads) and `=true`. Each is a separate `@SpringBootTest(webEnvironment = RANDOM_PORT)` class, marked `@DirtiesContext` so its server is shut down before the next one is measured.
-- The load generator (`LoadGenerator.java`, in both projects) is a **closed loop**: `concurrency` clients, each a virtual thread using the JDK `HttpClient` (HTTP/1.1), send requests back-to-back until the total is reached. It reports wall time (real elapsed time), throughput (requests completed per second), median (p50) and 99th-percentile (p99: 99% of requests were faster) latency (time per request), and the JVM's **peak platform thread count** (`ThreadMXBean`, which doesn't count virtual threads).
-- Each scenario first runs a warm-up (JIT compilation — the JVM compiling hot code to fast machine code while running, connection setup) that is not reported.
-- **Caveats:** client and server share one JVM and one laptop; `Thread.sleep`/`Mono.delay` stand in for real I/O; there's no database pool or downstream service to saturate. The numbers show the *shape* of the difference, not what your production system will do.
+- `load-mvc` runs twice: `spring.threads.virtual.enabled=false` (Tomcat's 200 platform workers) and `=true`, each a separate `@SpringBootTest(webEnvironment = RANDOM_PORT)` class marked `@DirtiesContext` so its server stops before the next measurement.
+- The load generator (`LoadGenerator.java`) is a **closed loop**: `concurrency` clients, each a virtual thread with the JDK `HttpClient` (HTTP/1.1), send requests back-to-back. It reports wall time, throughput (req/s), p50 (median) and p99 (99% faster) latency, and the JVM's **peak platform thread count** (`ThreadMXBean`, excluding virtual threads).
+- An unreported warm-up runs first (JIT compilation, connection setup).
+- **Caveats:** client and server share one JVM and laptop; `Thread.sleep`/`Mono.delay` stand in for real I/O; no database pool or downstream to saturate. The numbers show the *shape* of the difference, not production behaviour.
 
 ### Results (machine-dependent)
 
-Real output from the three runs (14-core Apple M4 Pro, JDK 26 running Java 25 bytecode — the compiled `.class` format the JVM executes):
+Real output (14-core Apple M4 Pro, JDK 26 running Java 25 bytecode):
 
 ```text
 MVC, spring.threads.virtual.enabled=false -> "ok on platform thread"
@@ -1240,11 +1184,11 @@ CPU cores = 14 (Reactor Netty event-loop threads default to this number)
 
 ### Reading the numbers
 
-1. **At 100 concurrent clients, all three are the same** (~930 req/s, p50 ≈ 105 ms). The ceiling is the clients themselves: 100 clients × 10 requests/s. Below the thread limit, platform threads are perfectly fine.
-2. **At 1,000 concurrent clients, platform threads hit the wall.** 200 workers × 10 req/s = 2,000 req/s is the theoretical maximum, and 1,909 was measured. The extra requests **queue**: the median latency jumps from ~105 ms to **517 ms** (≈ 5 queue rounds of 100 ms).
-3. **Virtual threads remove the wall without touching the code.** 7,942 req/s at a 108 ms median, about 4× the platform-thread throughput, using **33** platform threads in the whole JVM instead of 231. Each request got its own virtual thread, and while it slept its carrier thread served others.
-4. **WebFlux matches virtual threads** (8,058 req/s, p50 110 ms). The difference is noise on this setup. Both are now limited by CPU and the load generator, not by threads. (The p99 values of 263–346 ms at 1,000 clients come from CPU contention between the client and server in one JVM, plus GC pauses (moments when the garbage collector, which frees unused memory, briefly stops the program). Treat tail latencies (the slowest few percent of requests) here with care.)
-5. **Blocking on an event loop is a disaster.** The same `Thread.sleep(100)` inside a WebFlux handler dropped throughput to **97 req/s** with a p99 of **2.5 s**. Each of the 14 event-loop threads can serve only one sleeping request at a time: at best 14 × 10 = 140 req/s. Connections aren't spread perfectly evenly over the loops, so the real figure is lower. And every *other* request on a blocked loop waits too, even requests that wouldn't block.
+1. **At 100 clients all three are equal** (~930 req/s, p50 ≈ 105 ms): the ceiling is the clients (100 × 10 req/s). Below the thread limit platform threads are fine.
+2. **At 1,000 clients platform threads hit the wall**: 200 workers × 10 req/s = 2,000 theoretical, 1,909 measured. Extra requests **queue**: median jumps from ~105 ms to **517 ms** (≈ 5 rounds of 100 ms).
+3. **Virtual threads remove the wall without code changes**: 7,942 req/s at 108 ms median, ~4× platform throughput, with **33** platform threads in the JVM instead of 231 — each request's carrier served others while it slept.
+4. **WebFlux matches virtual threads** (8,058 req/s, p50 110 ms; the difference is noise). Both are now CPU/load-generator bound. (p99 263–346 ms at 1,000 clients comes from client/server CPU contention in one JVM plus GC pauses — treat tail latencies here with care.)
+5. **Blocking on an event loop is a disaster**: the same `Thread.sleep(100)` in a WebFlux handler gave **97 req/s**, p99 **2.5 s**. Each of 14 loops serves one sleeping request at a time (≤ 14 × 10 = 140 req/s; uneven connection spread lowers it), and every *other* request on a blocked loop waits too.
 
 ### Which one should you choose?
 
@@ -1253,20 +1197,20 @@ CPU cores = 14 (Reactor Netty event-loop threads default to this number)
 | Typical CRUD/REST service on JDBC/JPA, blocking clients | **MVC + virtual threads** | same scalability for I/O-bound work, plain imperative code, all blocking libraries work, easy debugging |
 | Streaming: SSE, WebSockets, long-lived connections, NDJSON, backpressure end-to-end | **WebFlux** | a stream is a `Flux`; backpressure and cancellation are built in |
 | Gateways/proxies that mostly forward bytes (Spring Cloud Gateway's reactive variant) | **WebFlux** | minimal per-connection cost, non-blocking all the way |
-| Heavy fan-out/composition: call 10 services, combine, time out, retry, race | either; **Reactor** operators are very expressive, structured concurrency (a Java API that treats a group of parallel subtasks as one unit) is the (preview, i.e. not yet final) imperative alternative | |
+| Heavy fan-out/composition: call 10 services, combine, time out, retry, race | either; **Reactor** operators are very expressive; structured concurrency (subtasks treated as one unit; still preview) is the imperative alternative | |
 | CPU-bound work (image processing, crypto) | neither helps | you need more cores; keep it off event loops |
 | Team unfamiliar with reactive, blocking dependencies you can't replace | **MVC + virtual threads** | a reactive stack with blocking calls inside is the worst of both |
 
 ### Virtual-thread caveats
 
-- **Pinning**: before Java 24, a virtual thread blocking inside a `synchronized` block **pinned** its carrier thread and couldn't unmount. [JEP 491](https://openjdk.org/jeps/491) (a JEP is a numbered JDK Enhancement Proposal; Java 24) removed this for `synchronized`. Native calls (calls into C code) and some class-initialisation paths still pin. See [Java ch15 §15.5](../../../java/chapters/15-concurrency-2-modern/README.md).
-- **Resources are still finite.** 10,000 virtual threads still share a JDBC pool of, say, 10 connections; the pool becomes the queue ([Chapter 7](../07-data-access-jdbc-and-transactions/README.md)). Rate-limit calls to downstream services with semaphores (counters that allow only N holders at once) or bulkheads (separate, capped resource pools per dependency, so one slow service cannot use them all).
-- **`ThreadLocal` caches** (big per-thread buffers) multiply with millions of threads. Prefer scoped values (Java's newer, immutable, per-call alternative to `ThreadLocal`) or pass data explicitly.
+- **Pinning**: before Java 24 a virtual thread blocking inside `synchronized` **pinned** its carrier (couldn't unmount). [JEP 491](https://openjdk.org/jeps/491) (JDK Enhancement Proposal; Java 24) fixed this for `synchronized`; native calls and some class-initialisation paths still pin. See [Java ch15 §15.5](../../../java/chapters/15-concurrency-2-modern/README.md).
+- **Resources are still finite**: 10,000 virtual threads still share, say, 10 JDBC connections — the pool becomes the queue ([Chapter 7](../07-data-access-jdbc-and-transactions/README.md)). Limit downstream calls with semaphores (N holders at once) or bulkheads (capped resource pools per dependency).
+- **`ThreadLocal` caches** (big per-thread buffers) multiply with millions of threads; prefer scoped values (immutable per-call alternative) or explicit passing.
 
 ### In the interview
 
 **Q: WebFlux or virtual threads?**
-"For I/O-bound request/response services I'd default to Spring MVC with `spring.threads.virtual.enabled=true`. In my measurements it gives the same throughput as WebFlux for a 100 ms I/O endpoint: about 8,000 req/s at 1,000 concurrent clients vs about 1,900 on 200 platform threads. And the code stays simple and debuggable. I'd pick WebFlux for streaming (SSE, WebSockets), gateways, or where end-to-end backpressure and rich async composition matter, and only if the whole call path is non-blocking. A single blocking call on an event loop cut WebFlux to ~100 req/s in the same test."
+"For I/O-bound request/response services I'd default to Spring MVC with `spring.threads.virtual.enabled=true`. In my measurements it matches WebFlux for a 100 ms I/O endpoint — about 8,000 req/s at 1,000 concurrent clients vs about 1,900 on 200 platform threads — and the code stays simple and debuggable. I'd pick WebFlux for streaming (SSE, WebSockets), gateways, or end-to-end backpressure and rich async composition, and only if the whole call path is non-blocking: a single blocking call on an event loop cut WebFlux to ~100 req/s."
 
 - *Do virtual threads make code faster?* → No; they make *waiting* cheap, so more requests can wait at once. CPU-bound work gets no faster.
 - *What is pinning?* → A virtual thread that can't unmount from its carrier while blocked (before Java 24 inside `synchronized`; still for native frames), so it holds a platform thread.
@@ -1293,16 +1237,15 @@ CPU cores = 14 (Reactor Netty event-loop threads default to this number)
 ## 13.17 In the interview
 
 **Q: What is reactive programming and what problem does it solve?**
-"It's programming with asynchronous streams of data and a subscriber-controlled flow rate (backpressure). In a server it means no thread waits for I/O: a handful of event-loop threads handle thousands of concurrent requests because work resumes only when data arrives. Spring's implementation is Project Reactor, with `Mono` for 0..1 and `Flux` for 0..N items. Pipelines are lazy and cold until someone subscribes; in WebFlux the framework subscribes."
+"Programming with asynchronous data streams and a subscriber-controlled flow rate (backpressure). In a server no thread waits for I/O: a few event-loop threads handle thousands of concurrent requests because work resumes only when data arrives. Spring uses Project Reactor — `Mono` for 0..1, `Flux` for 0..N. Pipelines are lazy and cold until subscribed; in WebFlux the framework subscribes."
 
-- *`Mono` vs `Flux`?* → 0..1 vs 0..N items, both ending with complete or error.
-- *`flatMap` vs `concatMap`?* → Concurrent and interleaved vs sequential and ordered.
-- *`publishOn` vs `subscribeOn`?* → `publishOn` moves the operators after it to another scheduler; `subscribeOn` moves the subscription (the source) regardless of its position.
-- *How do you call a blocking library from WebFlux?* → `Mono.fromCallable(...).subscribeOn(Schedulers.boundedElastic())`, and question whether WebFlux is the right choice.
-- *What is backpressure? Give an example.* → The subscriber's `request(n)` limits what the publisher may send; `limitRate`, `onBackpressureDrop/Latest/Buffer` handle sources that can't slow down.
-- *How do you test reactive code?* → `StepVerifier` (with virtual time for delays and retries), `WebTestClient` for endpoints, `@WebFluxTest` / `@DataR2dbcTest` slices.
-- *Can you use JPA with WebFlux?* → Not without blocking (wrap every call on `boundedElastic`). Use R2DBC, or use MVC with virtual threads instead.
-- *How do transactions work in reactive code?* → `ReactiveTransactionManager` (`R2dbcTransactionManager`); `@Transactional` on methods returning `Mono`/`Flux` or `TransactionalOperator`; the transaction lives in the Reactor `Context`, not a `ThreadLocal`.
+- *`Mono` vs `Flux`?* → 0..1 vs 0..N items, both ending with complete or error. *`flatMap` vs `concatMap`?* → Concurrent/interleaved vs sequential/ordered.
+- *`publishOn` vs `subscribeOn`?* → `publishOn` moves the operators after it; `subscribeOn` moves the subscription (source) regardless of position.
+- *Blocking library from WebFlux?* → `Mono.fromCallable(...).subscribeOn(Schedulers.boundedElastic())` — and question whether WebFlux fits.
+- *Backpressure example?* → `request(n)` limits the publisher; `limitRate`, `onBackpressureDrop/Latest/Buffer` handle sources that can't slow down.
+- *Testing?* → `StepVerifier` (virtual time for delays/retries), `WebTestClient`, `@WebFluxTest` / `@DataR2dbcTest` slices.
+- *JPA with WebFlux?* → Not without blocking (wrap every call on `boundedElastic`). Use R2DBC, or MVC with virtual threads.
+- *Reactive transactions?* → `ReactiveTransactionManager` (`R2dbcTransactionManager`); `@Transactional` on `Mono`/`Flux` methods or `TransactionalOperator`; the transaction lives in the Reactor `Context`, not a `ThreadLocal`.
 
 ---
 

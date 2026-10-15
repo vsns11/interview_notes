@@ -1,22 +1,10 @@
 # Chapter 8 — Spring Data JPA and Hibernate
 
-[Chapter 7](../07-data-access-jdbc-and-transactions/README.md) wrote SQL by hand. This chapter lets an **ORM** (object-relational mapper) write it. You describe Java classes and their relationships, and Hibernate (the most widely used ORM for Java) generates the `SELECT`, `INSERT`, `UPDATE` and `DELETE` statements, tracks changes to your objects, and loads related objects on demand. Spring Data JPA adds **repositories**: interfaces whose methods become queries without any implementation code. (JPA, the Jakarta Persistence API, is the standard Java API that ORMs such as Hibernate implement.)
+[Chapter 7](../07-data-access-jdbc-and-transactions/README.md) wrote SQL by hand. This chapter lets an **ORM** (object-relational mapper) write it. You describe Java classes (**entities** — objects stored as table rows) and their relationships, and Hibernate (the most widely used Java ORM) generates the SQL, tracks changes to your objects, and loads related objects on demand. Spring Data JPA adds **repositories**: interfaces whose methods become queries (derived from method names, or `@Query` in JPQL — JPA's object-oriented query language — or native SQL) without implementation code. (JPA, the Jakarta Persistence API, is the standard API that ORMs such as Hibernate implement.)
 
-This is very productive, and it is also where many performance problems in Spring applications come from. So every important behaviour below is *measured*. The tests count the SQL statements Hibernate really sends and print them. You will see the N+1 problem (one query for a list, then one extra query per item — §8.7) happen, then disappear with three different fixes. You will also see a `LazyInitializationException` (the error when related data is loaded after the database session has closed), dirty checking (Hibernate spotting changed objects and writing them back on its own) writing an `UPDATE` without any `save()` call, and two users colliding on an optimistic lock (a version check that detects a conflicting save instead of blocking it).
+This is productive, and also where many Spring performance problems come from, so every important behaviour below is *measured*: the tests count and print the SQL Hibernate really sends. You will see the N+1 problem (one query for a list, then one per item — §8.7) appear and disappear with three fixes, a `LazyInitializationException` (related data loaded after the session closed), dirty checking (Hibernate writing changed objects back by itself) producing an `UPDATE` without `save()`, and two users colliding on an optimistic lock (a version check that detects a conflicting save instead of blocking). Also covered: auditing (who changed what, when), pessimistic locking (locking the row so others wait), and schema migrations (versioned scripts evolving the tables) with Flyway.
 
-**What you'll learn**
-
-- How JPA, Hibernate and Spring Data JPA relate (and which versions Boot 4.1 ships)
-- Entities (classes whose objects are stored as table rows), ids and id generation strategies
-- The persistence context: entity states, the first-level cache, dirty checking, flushing (sending queued changes to the database)
-- Relationships: `@ManyToOne`, `@OneToMany`, `@ManyToMany`, owning side, `mappedBy`, cascades, `orphanRemoval`
-- Fetch types (when related data is loaded), `LazyInitializationException`, and Open Session in View
-- The N+1 problem and its fixes: `JOIN FETCH`, `@EntityGraph`, batch fetching, projections
-- Repositories: derived queries (queries generated from a method's name), `@Query` (JPQL — JPA's object-oriented query language — and native SQL), `@Modifying`, paging and sorting, projections (queries that return only selected fields)
-- Auditing (recording who changed what and when), optimistic locking with `@Version`, pessimistic locking (locking the row in the database so others must wait)
-- Schema migrations (versioned scripts that evolve the table structure) with Flyway
-
-**The code** (Spring Boot 4.1.1 → Hibernate ORM 7.4, Spring Data 2026.0, H2 — a small Java database — in memory):
+**The code** (Spring Boot 4.1.1 → Hibernate ORM 7.4, Spring Data 2026.0, H2 in memory):
 
 | Project | What it proves |
 |---|---|
@@ -44,16 +32,16 @@ flowchart TB
 |---|---|---|
 | **Jakarta Persistence (JPA)** | a *specification*: the `jakarta.persistence` annotations, `EntityManager`, the JPQL query language | 3.2 |
 | **Hibernate ORM** | the most used *implementation* of JPA. It does the real work | 7.4 (Boot 4.1 upgraded to 7.4; Hibernate 7.0 came out in 2025) |
-| **Spring Data JPA** | a Spring layer on top of JPA: repositories, derived queries, paging, auditing | part of the Spring Data 2026.0 release train (a set of Spring Data modules released together under one version) |
-| **Spring ORM** | the glue in Spring Framework: `JpaTransactionManager`, the shared `EntityManager` proxy, exception translation (turning vendor errors into Spring's `DataAccessException` family) | Framework 7.0 |
+| **Spring Data JPA** | a Spring layer on top of JPA: repositories, derived queries, paging, auditing | part of the Spring Data 2026.0 release train (modules released together) |
+| **Spring ORM** | the glue in Spring Framework: `JpaTransactionManager`, the shared `EntityManager` proxy, exception translation to `DataAccessException` | Framework 7.0 |
 
-A few Hibernate 7 facts worth knowing: it implements **Jakarta Persistence 3.2** and **Jakarta Data 1.0**, it needs Java 17 or later, and it is the first Hibernate version licensed under **Apache License 2.0** (a permissive open-source licence; earlier versions were LGPL, a licence with more conditions on distribution). Spring Data 2025.1 (the Boot 4.0 generation) moved to JSpecify null annotations (standard markers for what may be `null`) and added **AOT repositories** (AOT = ahead-of-time), which generate repository code at build time for faster startup and native images (apps compiled to a stand-alone executable that needs no JVM). Spring Data 2026.0 (Boot 4.1) added **type-safe property paths**, for example `Sort.by(Book::getPrice)` instead of `Sort.by("price")`.
+A few Hibernate 7 facts worth knowing: it implements **Jakarta Persistence 3.2** and **Jakarta Data 1.0**, it needs Java 17 or later, and it is the first Hibernate version licensed under **Apache License 2.0** (permissive; earlier versions were LGPL, with more distribution conditions). Spring Data 2025.1 (the Boot 4.0 generation) moved to JSpecify null annotations and added **AOT repositories** (ahead-of-time), which generate repository code at build time for faster startup and native images. Spring Data 2026.0 (Boot 4.1) added **type-safe property paths**, for example `Sort.by(Book::getPrice)` instead of `Sort.by("price")`.
 
 ### When not to use JPA
 
-JPA is a good fit for a rich domain model (classes that model the business and its rules): many related entities, loaded, changed and saved as a unit of work (one business operation whose changes are saved together). It fits poorly for:
+JPA fits a rich domain model: many related entities, loaded, changed and saved as a unit of work (one business operation whose changes are saved together). It fits poorly for:
 
-- reporting and analytics (big joins; aggregations, i.e. sums/counts over groups; window functions, i.e. SQL calculations over a sliding set of rows): use SQL through `JdbcClient` ([7.3](../07-data-access-jdbc-and-transactions/README.md#73-jdbcclient-and-jdbctemplate)) or jOOQ (a library for writing type-safe SQL in Java)
+- reporting and analytics (big joins, aggregations, window functions): use SQL through `JdbcClient` ([7.3](../07-data-access-jdbc-and-transactions/README.md#73-jdbcclient-and-jdbctemplate)) or jOOQ (a library for writing type-safe SQL in Java)
 - bulk data processing (millions of rows): use JDBC batches or database-side SQL
 - teams who want to see every statement: Spring Data JDBC is simpler and has no lazy loading and no persistence context ([ch09](../09-spring-data-beyond-jpa-and-caching/README.md))
 
@@ -106,7 +94,7 @@ Boot's default is `create-drop` for an embedded database when no migration tool 
 
 | Option | Shows |
 |---|---|
-| `spring.jpa.show-sql=true` | every statement on stdout (the console output), prefixed `Hibernate:` (`@DataJpaTest` turns this on by default) |
+| `spring.jpa.show-sql=true` | every statement on stdout, prefixed `Hibernate:` (`@DataJpaTest` turns this on by default) |
 | `logging.level.org.hibernate.SQL=DEBUG` | the same through the logger (better) |
 | `logging.level.org.hibernate.orm.jdbc.bind=TRACE` | the bound parameter values too |
 | `hibernate.generate_statistics=true` | counters: statements, entity loads, collection fetches, flushes |
@@ -132,7 +120,7 @@ In your own projects you can get the same effect in tests with the *datasource-p
 
 ### What it is
 
-An **entity** is a class whose instances are rows of a table. The JPA rules: annotate it with `@Entity`, give it an `@Id`, give it a no-argument constructor (it may be `protected`), and do not make the class or its persistent methods `final`, because Hibernate subclasses entities to build lazy proxies (stand-in objects that load the real data on first use). **Records cannot be entities**, since they are final and immutable (cannot change after creation). Records work well as `@Embeddable` value types (small objects without their own id, stored as columns of the owning table) (Hibernate 6.2+) and as projections ([8.12](#812-projections)).
+An **entity** is a class whose instances are rows of a table. The JPA rules: annotate it with `@Entity`, give it an `@Id`, give it a no-argument constructor (it may be `protected`), and do not make the class or its persistent methods `final`, because Hibernate subclasses entities to build lazy proxies (stand-ins that load the real data on first use). **Records cannot be entities**, since they are final and immutable. Records work well as `@Embeddable` value types (small objects without their own id, stored as columns of the owning table; Hibernate 6.2+) and as projections ([8.12](#812-projections)).
 
 ```java
 @Entity
@@ -167,7 +155,7 @@ public class Book {
 }
 ```
 
-The chapter's tests switch `show-sql` off, but running one of them with `-Dlogging.level.org.hibernate.SQL=DEBUG` shows the table Hibernate generated at startup. Boot's default naming strategy (the rule that turns Java names into table/column names) turns `createdAt` into `created_at`:
+The chapter's tests switch `show-sql` off, but running one of them with `-Dlogging.level.org.hibernate.SQL=DEBUG` shows the table Hibernate generated at startup. Boot's default naming strategy turns `createdAt` into `created_at`:
 
 ```
 create table book (price numeric(38,2), author_id bigint not null, created_at timestamp(6) with time zone,
@@ -175,23 +163,23 @@ create table book (price numeric(38,2), author_id bigint not null, created_at ti
   created_by varchar(255), title varchar(255), primary key (id))
 ```
 
-Useful column annotations: `@Column(nullable = false, length = 100, unique = true)`, `@Column(precision = 10, scale = 2)` (note the default `numeric(38,2)` above), `@Enumerated(EnumType.STRING)` (always use STRING, since ORDINAL — storing the enum's position number — breaks when someone reorders the enum), `@Transient` (not stored), and `@Embedded` for value objects such as `Address`.
+Useful column annotations: `@Column(nullable = false, length = 100, unique = true)`, `@Column(precision = 10, scale = 2)` (note the default `numeric(38,2)` above), `@Enumerated(EnumType.STRING)` (always STRING: ORDINAL stores the position number, which breaks when someone reorders the enum), `@Transient` (not stored), and `@Embedded` for value objects such as `Address`.
 
 ### Id generation strategies
 
 | Strategy | How the id is produced | Trade-off |
 |---|---|---|
-| `IDENTITY` | database auto-increment column (the database assigns the next number on insert) | simple, but Hibernate must `INSERT` **immediately** on `persist` to learn the id, which also rules out JDBC insert batching |
-| `SEQUENCE` | database sequence (a database object that hands out increasing numbers). Hibernate fetches blocks of ids (`allocationSize`, default 50) | best for PostgreSQL/Oracle: inserts can wait until flush and be batched |
+| `IDENTITY` | database auto-increment column | simple, but Hibernate must `INSERT` **immediately** on `persist` to learn the id, which also rules out JDBC insert batching |
+| `SEQUENCE` | database sequence (an object handing out increasing numbers). Hibernate fetches blocks of ids (`allocationSize`, default 50) | best for PostgreSQL/Oracle: inserts can wait until flush and be batched |
 | `AUTO` (default) | Hibernate picks, which in Hibernate 6+ is usually a sequence per entity, `book_seq` | know what you get |
-| `UUID` (JPA 3.1+) | `java.util.UUID` generated in Java | no round trip (no trip to the database and back), safe to generate anywhere. 16 bytes, and random UUIDs (universally unique identifiers) spread index inserts — an index is a lookup structure that speeds up queries, and random keys land all over it |
-| assigned (no `@GeneratedValue`) | you set it | natural keys (ids that come from the real world, like an ISBN). `save()` must then use `merge`, see [8.8](#88-repositories) |
+| `UUID` (JPA 3.1+) | `java.util.UUID` generated in Java | no database round trip, safe to generate anywhere. 16 bytes, and random UUIDs spread inserts all over the index |
+| assigned (no `@GeneratedValue`) | you set it | natural keys (real-world ids, like an ISBN). `save()` must then use `merge`, see [8.8](#88-repositories) |
 
 This project uses IDENTITY so `data.sql` can insert rows without ids. You can see the immediate inserts in [8.5](#85-relationships).
 
 ### equals and hashCode
 
-Entities live in `Set`s (which use `hashCode` to place items and `equals` to compare them) and are compared across persistence contexts, so these methods matter:
+Entities live in `Set`s (which use `hashCode` and `equals`) and are compared across persistence contexts, so these methods matter:
 
 - The **default** (`Object` identity) is correct inside one persistence context, because Hibernate guarantees one instance per row there ([8.4](#84-the-persistence-context-and-dirty-checking)). This project relies on that.
 - **Never** base `hashCode` on a generated id that is `null` before persist. The hash changes after saving, and the object gets lost inside a `HashSet`.
@@ -207,7 +195,7 @@ Entities live in `Set`s (which use `hashCode` to place items and `equals` to com
 The **persistence context** is Hibernate's in-memory workspace for one unit of work. It is the `EntityManager` (Hibernate calls it `Session`). In Spring it usually lives exactly as long as the transaction. It does three jobs:
 
 1. **Identity map / first-level cache**: each row is loaded at most once and always gives the *same* Java object.
-2. **Change tracking (dirty checking)**: at load time it keeps a snapshot (a copy of the loaded values) of each entity. At **flush** time it compares every managed entity with its snapshot and writes an `UPDATE` for the ones that changed. You never call `update()`.
+2. **Change tracking (dirty checking)**: at load time it keeps a snapshot (copy of the loaded values) of each entity. At **flush** time it compares every managed entity with its snapshot and writes an `UPDATE` for the ones that changed. You never call `update()`.
 3. **Write-behind**: inserts, updates and deletes are queued and sent at flush. Flush happens before commit, before a query that might read the changed tables, or when you call `flush()`.
 
 ### Entity states
@@ -270,7 +258,7 @@ public void changePrice(Long bookId, BigDecimal newPrice) {
 }
 ```
 
-Notice that the `UPDATE` lists **all** columns. By default Hibernate uses one prepared `UPDATE` (a statement compiled once and reused with different values) per entity type, which it can cache. `@DynamicUpdate` on the entity makes it send only the changed columns instead.
+Notice that the `UPDATE` lists **all** columns. By default Hibernate uses one cached prepared `UPDATE` per entity type. `@DynamicUpdate` on the entity makes it send only the changed columns instead.
 
 ### Demo — detached entities are not tracked
 
@@ -305,12 +293,6 @@ No `UPDATE` was sent: the change is simply lost. To store changes to a detached 
 - *When does Hibernate flush?* → Before commit, before a query that touches affected tables (AUTO flush mode), and on an explicit `flush()`.
 - *`persist` vs `merge`?* → `persist` makes a transient object managed (the same instance). `merge` copies a detached object's state onto a managed copy and returns the copy.
 
-### Self-check
-
-1. How many SELECTs does `findById(1)` twice cost in one transaction? → One.
-2. Why was no UPDATE sent after `em.clear()`? → The entity was detached, so nothing tracked it.
-3. What does `readOnly = true` save with Hibernate? → Snapshots and dirty checking, and flushes.
-
 ---
 
 ## 8.5 Relationships
@@ -326,7 +308,7 @@ No `UPDATE` was sent: the change is simply lost. To store changes to a detached 
 
 ### The owning side and mappedBy
 
-In the database a relationship is **one foreign-key column** (a column holding the id of a row in another table) or a join table (an extra table whose rows link two tables). In Java it may be navigable from both sides, but only one side may control that column. That side is the **owning side**:
+In the database a relationship is **one foreign-key column** (holding the id of a row in another table) or a join table (rows linking two tables). In Java it may be navigable from both sides, but only one side may control that column. That side is the **owning side**:
 
 - For `@ManyToOne`/`@OneToMany` the owner is the **many** side (`Book.author` → `book.author_id`).
 - The other side says `mappedBy = "author"`, meaning "I am just a mirror of `Book.author`". This is the **inverse side**.
@@ -380,7 +362,7 @@ A **cascade** passes an operation from parent to children:
 | `REFRESH`, `DETACH` | reload / detach together |
 | `ALL` | all of the above |
 
-Use cascades only from an **aggregate root** (the main object of a group that is always saved together, e.g. an order with its lines) to the parts it owns (author → books in this demo, order → order lines in real life). Never cascade `REMOVE` on `@ManyToMany` or towards shared entities. Deleting a book must not delete the "sci-fi" tag that other books use.
+Use cascades only from an **aggregate root** (the main object of a group always saved together) to the parts it owns (author → books in this demo, order → order lines in real life). Never cascade `REMOVE` on `@ManyToMany` or towards shared entities. Deleting a book must not delete the "sci-fi" tag that other books use.
 
 ```java
 Author author = new Author("N. K. Jemisin");
@@ -429,18 +411,12 @@ A plain `@ManyToMany` suits a pure link with no data of its own. As soon as the 
 
 - Setting only the inverse side (`author.getBooks().add(book)`), so nothing is saved.
 - `cascade = ALL` everywhere, which deletes shared data.
-- Bidirectional mappings (navigable from both sides) everywhere. Map the reverse side only when you really navigate it.
+- Bidirectional mappings everywhere. Map the reverse side only when you really navigate it.
 - `@OneToMany` without `mappedBy`. Hibernate then creates an extra join table.
 
 ### In the interview
 
 **30-second answer:** "The owning side is the one holding the foreign key, in a one-to-many that is the `@ManyToOne` side, and it is the only side JPA reads when writing. The other side uses `mappedBy`. Keep both sides in sync with helper methods. Cascade from aggregate roots only. `orphanRemoval` deletes children removed from the collection, while `CascadeType.REMOVE` deletes children when the parent is deleted."
-
-### Self-check
-
-1. Which side owns `Author.books` ↔ `Book.author`? → `Book.author` (the `author_id` column).
-2. Why were two DELETEs needed to remove one book? → The `book_tag` link rows go first, then the book row.
-3. `orphanRemoval` vs `CascadeType.REMOVE`? → Removal from the collection vs deletion of the parent.
 
 ---
 
@@ -506,7 +482,7 @@ inside @Transactional service -> AuthorSummary[name=Terry Pratchett, books=3]
 
 ### What it is
 
-You run **1** query to load N parents. Then, for each parent, touching a lazy association fires **1 more** query. With N = 1000 that is 1001 round trips for data that one query could return. It is the most common JPA performance bug, and a functional test (one that only checks the result is correct) cannot see it, because the result is correct, only slow.
+You run **1** query to load N parents. Then, for each parent, touching a lazy association fires **1 more** query. With N = 1000 that is 1001 round trips for data that one query could return. It is the most common JPA performance bug, and a functional test cannot see it: the result is correct, only slow.
 
 ### Demo — watch it happen
 
@@ -562,7 +538,7 @@ JOIN FETCH -> 1 SQL statement(s)
     select a1_0.id,b1_0.author_id,b1_0.id,...,a1_0.name from author a1_0 join book b1_0 on a1_0.id=b1_0.author_id order by a1_0.id
 ```
 
-Hibernate 6+ removes the duplicate parent rows that a join produces on its own, so `distinct` is no longer needed. Note that it is an **inner** join (keeps only rows that have a match on both sides): authors with no books would disappear from the result. Use `left join fetch` (a left join keeps every row of the left table, even without a match) to keep them.
+Hibernate 6+ removes the duplicate parent rows that a join produces on its own, so `distinct` is no longer needed. Note that it is an **inner** join: authors with no books disappear. Use `left join fetch` (keeps every left row, even without a match) to keep them.
 
 ### Fix 2 — @EntityGraph
 
@@ -620,7 +596,7 @@ The inner subquery picks 2 authors with `offset/fetch first`, and the outer quer
 | Fix | Queries | Good for | Watch out |
 |---|---|---|---|
 | `JOIN FETCH` | 1 | one known use case | inner join by default. Fetching **two** `List` collections at once → `MultipleBagFetchException` (use `Set`, or two queries) |
-| `@EntityGraph` | 1 | the same, declared on a repository method | same cartesian-product (every row combined with every other row) risk with several collections |
+| `@EntityGraph` | 1 | the same, declared on a repository method | same cartesian-product (rows multiplied) risk with several collections |
 | batch size | 1 + N/size | global default, several collections | still more than one query |
 | DTO projection | 1 | read-only screens and APIs | no entities, so no dirty checking (usually what you want) |
 
@@ -629,26 +605,16 @@ Fetching two collections in one query multiplies rows: 10 books × 10 tags = 100
 ### Common mistakes
 
 - Returning entities from a REST controller. Jackson walks every getter, triggering lazy loads (N+1) or `LazyInitializationException`, and exposes your schema. Return DTOs.
-- Using `toString()`/Lombok `@Data` (Lombok is a library that generates getters, `equals`, `toString` and more) on entities with associations. Printing loads them.
+- `toString()`/Lombok `@Data` (generated getters, `equals`, `toString`) on entities with associations. Printing loads them.
 - Testing with 3 rows. N+1 only hurts with real volumes, so assert statement counts in tests instead.
 
 ### In the interview
 
-**30-second answer:** "N+1 is one query for the parents plus one per parent when a lazy association is touched, or even untouched with EAGER to-one mappings. I find it by counting statements with Hibernate statistics or a datasource proxy (a wrapper around the `DataSource` that sees every SQL statement). I fix it per use case with `JOIN FETCH` or an `@EntityGraph`, globally reduce it with `default_batch_fetch_size`, or avoid entities with a DTO projection. EAGER is not a fix, it makes the problem permanent."
+**30-second answer:** "N+1 is one query for the parents plus one per parent when a lazy association is touched, or even untouched with EAGER to-one mappings. I find it by counting statements with Hibernate statistics or a datasource proxy (a `DataSource` wrapper that sees every statement). I fix it per use case with `JOIN FETCH` or an `@EntityGraph`, globally reduce it with `default_batch_fetch_size`, or avoid entities with a DTO projection. EAGER is not a fix, it makes the problem permanent."
 
 - *Why doesn't EAGER prevent N+1?* → EAGER says *whether* to load, not *how*. For queries Hibernate loads the associations with separate selects after the main query.
 - *JOIN FETCH with pagination?* → Historically in-memory pagination (HHH90003004). Hibernate 7.4 pages parents in a subquery. Otherwise page ids first, then fetch.
 - *`MultipleBagFetchException`?* → Two `List` collections fetched in one query. Use `Set`, or fetch them in separate queries.
-
-### Self-check
-
-1. How many statements does `findAll()` + touching books cost for 4 authors without a fix? With batch size 16? → 5, and 2.
-2. Which fix keeps authors that have no books? → `@EntityGraph` (left join), or `left join fetch`.
-3. Why did `reviews.findAll()` run 6 statements? → EAGER `@ManyToOne` loaded each distinct book separately.
-
-### TL;DR
-
-Mappings LAZY. Decide what to fetch per query with JOIN FETCH / `@EntityGraph`. `default_batch_fetch_size` as a safety net. DTO projections for read views. Count statements in tests.
 
 ---
 
@@ -668,7 +634,7 @@ public interface BookRepository extends JpaRepository<Book, Long> { ... }
 | `CrudRepository` / `ListCrudRepository` | `save`, `findById`, `findAll`, `count`, `delete...` (the List variant returns `List` instead of `Iterable`) |
 | `PagingAndSortingRepository` / `ListPagingAndSortingRepository` | `findAll(Sort)`, `findAll(Pageable)` |
 | `JpaRepository` | all of the above + `flush`, `saveAndFlush`, `deleteAllInBatch`, `getReferenceById`, ... |
-| `JpaSpecificationExecutor<T>` | dynamic `Specification` (criteria — conditions built in code) queries |
+| `JpaSpecificationExecutor<T>` | dynamic `Specification` (conditions built in code) queries |
 
 Expose only what callers should use. A `Repository` with a handful of methods is often better than handing out `deleteAll()`.
 
@@ -716,7 +682,7 @@ containing / count / exists -> 3 SQL statement(s)
     select b1_0.id from book b1_0 where b1_0.title=? fetch first ? rows only
 ```
 
-`existsBy` fetches just one id. Note also that `upper(title) like` cannot use a normal index (a sorted lookup structure for a column) on `title` ([SQL 12.13](../../../sql/chapters/12-indexes-storage-and-query-performance/README.md#1213-anti-patterns-that-disable-indexes)).
+`existsBy` fetches just one id. Note also that `upper(title) like` cannot use a normal index on `title` ([SQL 12.13](../../../sql/chapters/12-indexes-storage-and-query-performance/README.md#1213-anti-patterns-that-disable-indexes)).
 
 ### Keywords
 
@@ -769,7 +735,7 @@ List<String> titlesAbove(BigDecimal min);
 native titles > 11    : [Going Postal, Kindred, The Dispossessed]
 ```
 
-Use native queries for database features JPQL lacks (window functions; operators on `jsonb`, PostgreSQL's JSON column type; CTEs, i.e. `WITH` clauses that name a sub-query; `ON CONFLICT`, PostgreSQL's insert-or-update). The price is that the query is tied to one database and to table and column names.
+Use native queries for database features JPQL lacks (window functions, `jsonb` operators, CTEs — `WITH` clauses, `ON CONFLICT` upserts). The price: the query is tied to one database and to table/column names.
 
 ### Bulk updates with @Modifying
 
@@ -789,7 +755,7 @@ A bulk statement goes straight to the database. Entities already loaded in the p
 
 ### Dynamic queries
 
-For search screens with optional filters, write `Specification`s (`JpaSpecificationExecutor`), Query by Example (pass a sample object; its non-null fields become filters), or Querydsl (a library for type-safe queries in Java code), instead of dozens of derived methods. All three build the query at runtime from the filters that are present.
+For search screens with optional filters, use `Specification`s (`JpaSpecificationExecutor`), Query by Example (a sample object's non-null fields become filters), or Querydsl (type-safe queries in Java) instead of dozens of derived methods. All three build the query at runtime from the filters present.
 
 ### Common mistakes
 
@@ -824,7 +790,7 @@ Page + Slice -> 3 SQL statement(s)
 | Return type | Extra query | Knows | Use for |
 |---|---|---|---|
 | `Page<T>` | `COUNT(*)` | total elements and pages | UIs with page numbers |
-| `Slice<T>` | none (fetches one extra row) | whether there is a next slice | "load more" / infinite scroll (more items load as the user scrolls down) |
+| `Slice<T>` | none (fetches one extra row) | whether there is a next slice | "load more" / infinite scroll |
 | `Window<T>` + `ScrollPosition` | none | next position | keyset (cursor) scrolling over big tables |
 | `List<T>` + `Limit` | none | nothing | "top N" |
 
@@ -913,7 +879,7 @@ created: by=system at=true version=0
 after changePrice: price=10.50 version=1 updatedAt moved? true
 ```
 
-The auditing listener runs on the JPA `@PrePersist`/`@PreUpdate` callbacks, so it only sees changes that go through the persistence context. Bulk `@Modifying` updates bypass it. For a full history of every change use Hibernate Envers (`@Audited`, revision tables — extra tables holding every past version of a row) or database-level change data capture (reading the database's own change log to stream every change elsewhere).
+The auditing listener runs on the JPA `@PrePersist`/`@PreUpdate` callbacks, so it only sees changes that go through the persistence context. Bulk `@Modifying` updates bypass it. For a full history use Hibernate Envers (`@Audited`, revision tables holding every past version of a row) or database-level change data capture (streaming the database's own change log).
 
 ---
 
@@ -951,7 +917,7 @@ price in DB = 8.00 (Alice's)
 
 Alice's `save` is a `merge` of a detached entity, so it first `SELECT`s the current row, then updates with the version check. For Bob the merge found version 1 in the database, while his object said 0, so it failed.
 
-**Handling it:** tell the user "someone else changed this, reload", which a REST API reports as `409 Conflict`. Or reload and retry automatically when the change is safe to reapply. In REST APIs, send the version to the client, for example as an `ETag` (an HTTP header identifying one version of a resource), and require it back in `If-Match` (a request header meaning "only apply if the current version is still this one") ([ch05](../05-spring-mvc-and-rest/README.md)).
+**Handling it:** tell the user "someone else changed this, reload", which a REST API reports as `409 Conflict`. Or reload and retry automatically when the change is safe to reapply. In REST APIs, send the version to the client as an `ETag` (a header identifying one version of a resource) and require it back in `If-Match` ("only apply if the current version is still this one") ([ch05](../05-spring-mvc-and-rest/README.md)).
 
 ### Pessimistic locking
 
@@ -974,7 +940,7 @@ Other transactions that want the same row wait until this one commits. Set a loc
 | Conflict detected | at write time (0 rows updated) | prevented. Others wait |
 | Cost | none until a conflict | locks held, possible deadlocks and waiting |
 | Works across requests / user think time | ✅ | ❌ (a lock lives only as long as its transaction) |
-| Best when | conflicts are rare (most web apps) | conflicts are frequent and short (counters, stock, job queues — tables of pending work picked up by workers) |
+| Best when | conflicts are rare (most web apps) | conflicts are frequent and short (counters, stock, job queues) |
 
 ### In the interview
 
@@ -1024,7 +990,7 @@ open-in-view=false -> Cannot lazily initialize collection of role 'ch08.jpa.Auth
 
 ### What it is
 
-In production you never let Hibernate change the schema. A **migration tool** applies small, numbered SQL scripts in order, **exactly once per database**, and records each one in a history table. The schema's history then lives in version control (e.g. Git, which tracks every change to your files), like code. **Flyway** (SQL files) and **Liquibase** (XML/YAML/SQL changelogs — files listing the changes) are the two Boot supports.
+In production you never let Hibernate change the schema. A **migration tool** applies small, numbered SQL scripts in order, **exactly once per database**, and records each one in a history table. The schema's history then lives in version control, like code. **Flyway** (SQL files) and **Liquibase** (XML/YAML/SQL changelogs) are the two Boot supports.
 
 **Boot 4 change:** Flyway is only auto-configured when you use `spring-boot-starter-flyway`. `flyway-core` on its own is no longer enough, because of Boot 4's modular auto-configuration. For PostgreSQL also add `org.flywaydb:flyway-database-postgresql` (database support has been split into separate modules since Flyway 10).
 
@@ -1075,7 +1041,7 @@ customer: Ben <ben@example.com>
 ### How it works
 
 1. At startup, before JPA initializes, Boot runs Flyway against the `DataSource`.
-2. Flyway reads `flyway_schema_history`, finds the scripts not yet applied, runs them in version order (each in a transaction where the database allows), and records each with a **checksum** (a short fingerprint computed from the file's contents, so any edit is detected).
+2. Flyway reads `flyway_schema_history`, finds the scripts not yet applied, runs them in version order (each in a transaction where the database allows), and records each with a **checksum** (a fingerprint of the file's contents, so any edit is detected).
 3. Hibernate starts with `ddl-auto=validate`. If an entity has a column the schema lacks, for example if V2 were missing, startup fails. That is a useful safety net.
 
 ### Rules
@@ -1084,9 +1050,9 @@ customer: Ben <ben@example.com>
 |---|---|
 | Never edit a migration that has been applied anywhere | Flyway's checksum check fails (`validate` error). Fix forward with a new version |
 | Naming: `V<version>__<description>.sql` (two underscores), `R__<name>.sql` for repeatable scripts (views, functions) | how Flyway orders and classifies |
-| Make changes backward-compatible (expand → migrate → contract: first add new columns, then move data and code, only later remove old ones) | during a rolling deploy (servers updated one at a time), old and new app versions share one schema |
+| Make changes backward-compatible (expand → migrate → contract: add new columns, move data and code, only later remove old ones) | during a rolling deploy (servers updated one at a time), old and new app versions share one schema |
 | Big data changes in separate, batched migrations | one huge transaction locks tables |
-| Test migrations against the real database type | H2 accepts SQL that PostgreSQL rejects, and the other way round. Tests with PostgreSQL via Testcontainers (a library that starts real databases in Docker for tests): [ch12](../12-testing-spring-apps/README.md) |
+| Test migrations against the real database type | H2 accepts SQL that PostgreSQL rejects, and the other way round. Tests with PostgreSQL via Testcontainers (real databases in Docker): [ch12](../12-testing-spring-apps/README.md) |
 
 ---
 
@@ -1103,7 +1069,7 @@ Remember what that transaction hides. Inside it, lazy loading always works and n
 | Check | How |
 |---|---|
 | All `@ManyToOne`/`@OneToOne` LAZY | `fetch = FetchType.LAZY` |
-| No N+1 on hot paths (code that runs very often) | assert statement counts in tests. Use JOIN FETCH / `@EntityGraph` |
+| No N+1 on hot paths | assert statement counts in tests. Use JOIN FETCH / `@EntityGraph` |
 | Safety net | `spring.jpa.properties.hibernate.default_batch_fetch_size=16` (or similar) |
 | Read-only screens | projections / DTOs, `@Transactional(readOnly = true)` |
 | Batched inserts | SEQUENCE ids + `hibernate.jdbc.batch_size=50` + `hibernate.order_inserts=true` (IDENTITY disables insert batching) |

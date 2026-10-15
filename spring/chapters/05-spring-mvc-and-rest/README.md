@@ -1,21 +1,8 @@
 # Chapter 5 — Spring MVC and REST APIs
 
-**Spring MVC** is Spring's web framework for the classic, thread-per-request (each incoming request is handled from start to end by one thread, which waits while it does I/O) Servlet stack (the standard Java web-server API, implemented by servers such as Tomcat and Jetty). Almost every Spring Boot service that exposes an HTTP/JSON API is built on it. This chapter builds a small but complete **book catalogue API** and uses it to explain how a request travels through Spring MVC, how to map URLs to methods, read input, validate it, return the right status codes and error bodies, negotiate formats, version the API (new in Framework 7), handle CORS (letting browser pages from other sites call your API, §5.10) and file uploads, page through results, document the API with OpenAPI (a standard, machine-readable API description, §5.12), and plug in filters and interceptors (code that runs before/after every request, §5.11).
+**Spring MVC** is Spring's web framework for the classic, thread-per-request Servlet stack (one thread handles a request from start to end, waiting during I/O; the Servlet API is the standard Java web-server API, implemented by Tomcat and Jetty). Almost every Boot service exposing an HTTP/JSON API is built on it. This chapter builds a small **book catalogue API** to explain the request flow, mappings, input, validation, status codes and error bodies, content negotiation, Framework 7 API versioning, CORS (§5.10), uploads, pagination, OpenAPI docs (§5.12) and filters/interceptors (§5.11).
 
-**What you'll learn**
-
-1. REST in one page: resources, HTTP methods, status codes, idempotency.
-2. The `DispatcherServlet` request flow and the components involved.
-3. Controllers and request mappings (`@RestController`, `@GetMapping`, path patterns).
-4. Reading input: path variables, query parameters, headers, request bodies; and writing output with `ResponseEntity`.
-5. JSON with **Jackson 3** (Boot 4's default) — what changed from Jackson 2.
-6. Validation with Jakarta Bean Validation: `@Valid`, `@Validated`, groups, parameter validation.
-7. Error handling with `@RestControllerAdvice` and **Problem Details (RFC 9457)**.
-8. Content negotiation (`Accept`, `produces`, 406) and pagination.
-9. **API versioning** — first-class in Framework 7 / Boot 4.
-10. CORS, file upload, filters vs interceptors, OpenAPI with springdoc, HATEOAS in brief.
-
-Code: [`code/mvc-rest/`](code/mvc-rest/) (the book API) and [`code/api-versioning/`](code/api-versioning/) — Spring Boot 4.1.1, Framework 7.0, Java 25. All behaviour is proved with `@WebMvcTest` + `MockMvcTester` tests (a test that starts only the web layer and sends fake requests to it in memory); output shown is real. Testing in depth is [Chapter 12](../12-testing-spring-apps/README.md); the reactive alternative (WebFlux) is [Chapter 13](../13-reactive-and-webflux/README.md); calling other APIs is [Chapter 6](../06-rest-clients-and-http-interfaces/README.md).
+Code: [`code/mvc-rest/`](code/mvc-rest/) (the book API) and [`code/api-versioning/`](code/api-versioning/) — Spring Boot 4.1.1, Framework 7.0, Java 25. All behaviour is proved with `@WebMvcTest` + `MockMvcTester` tests (only the web layer, fake requests in memory); output is real. Testing in depth is [Chapter 12](../12-testing-spring-apps/README.md); the reactive alternative (WebFlux) is [Chapter 13](../13-reactive-and-webflux/README.md); calling other APIs is [Chapter 6](../06-rest-clients-and-http-interfaces/README.md).
 
 The project's single web dependency is the Boot 4 starter:
 
@@ -80,7 +67,7 @@ Idempotency matters for retries: a client may safely retry a timed-out `PUT` or 
 
 ### What it is
 
-Spring MVC is built around one servlet (a Java class that a web server calls to handle HTTP requests), the **`DispatcherServlet`** — a **front controller**: every request enters through it, and it delegates each step to pluggable components. Analogy: a hotel reception desk. Guests (requests) do not wander to rooms; reception looks up who handles the request, passes it on, and hands back the answer in a form the guest understands.
+Spring MVC is built around one servlet (a class the web server calls to handle HTTP requests), the **`DispatcherServlet`** — a **front controller**: every request enters through it, and it delegates each step to pluggable components.
 
 Boot registers the `DispatcherServlet` at `/` automatically and starts an embedded **Tomcat 11** (Jakarta Servlet 6.1).
 
@@ -111,7 +98,7 @@ sequenceDiagram
     Filters-->>Client: 200 application/json
 ```
 
-1. **Servlet filters** run first (security, request ids (a unique tag per request for tracing it in logs), compression). They are outside Spring MVC.
+1. **Servlet filters** run first (security, request ids, compression). They are outside Spring MVC and don't know which controller method will run.
 2. The `DispatcherServlet` asks its **`HandlerMapping`s** which handler matches. For annotated controllers, `RequestMappingHandlerMapping` compares path, HTTP method, `consumes`/`produces`, params, headers and — in Framework 7 — the **API version**.
 3. **`HandlerInterceptor.preHandle`** runs for the chosen handler.
 4. A **`HandlerAdapter`** invokes the method. Before that, **`HandlerMethodArgumentResolver`s** build each argument: `@PathVariable` from the URL, `@RequestParam` from the query string (the `?page=1&size=2` part of a URL), `@RequestBody` via an **`HttpMessageConverter`** (Jackson for JSON), plus validation.
@@ -120,12 +107,6 @@ sequenceDiagram
 7. `postHandle` / `afterCompletion` interceptor callbacks, then filters unwind.
 
 For server-rendered HTML (Thymeleaf, a template engine that fills HTML templates with data), step 5 instead returns a view name that a `ViewResolver` renders; this book focuses on JSON APIs.
-
-### Self-check
-
-1. What is a front controller? → One entry point that receives every request and delegates to handlers — the `DispatcherServlet`.
-2. Which component turns a Java object into JSON? → An `HttpMessageConverter` (the Jackson one), chosen by content negotiation.
-3. Do servlet filters know which controller method will run? → No — they run before the `DispatcherServlet` resolves the handler; interceptors do know.
 
 ---
 
@@ -194,7 +175,7 @@ Spring MVC matches with `PathPattern` (the default since Framework 6 / Boot 3):
 | Pattern | Matches |
 |---|---|
 | `/books/{id}` | one segment captured as `id` |
-| `/books/{id:\d+}` | only if the segment matches the regex (regular expression: a text pattern; `\d+` = one or more digits) |
+| `/books/{id:\d+}` | only if the segment matches the regex (`\d+` = one or more digits; in Java source `"{id:\\d+}"`) |
 | `/files/**` | anything below `/files/` |
 | `/files/{*path}` | the rest of the path, captured (must be at the end) |
 | `/books/*.csv` | `*` = any characters within one segment |
@@ -208,12 +189,6 @@ Two version-specific facts:
 
 The first version of this controller mapped `@GetMapping("/{id}")`. A request `GET /api/books/export` with `Accept: application/xml` could not be served by the two `/export` methods (they produce JSON and CSV only), so Spring fell back to the next matching pattern — `/{id}` with `id = "export"` — and answered **400 "Failed to convert 'id'"** instead of **406 Not Acceptable**. Constraining the variable with a regex, `/{id:\d+}`, removed the ambiguity. Use regex constraints (or distinct paths) when literal sub-paths share a level with variables.
 
-### Self-check
-
-1. `@RestController` vs `@Controller`? → `@RestController` adds `@ResponseBody` so return values become the response body; `@Controller` returns view names unless a method has `@ResponseBody`.
-2. Does `GET /api/books/` hit a method mapped to `/api/books` in Boot 4? → No; trailing-slash matching is off by default since Framework 6.
-3. How do you restrict `{id}` to digits? → `{id:\d+}` (in Java source `"{id:\\d+}"`).
-
 ---
 
 ## 5.4 Reading input and writing output
@@ -223,7 +198,7 @@ The first version of this controller mapped `@GetMapping("/{id}")`. A request `G
 | Annotation / type | Source | Notes |
 |---|---|---|
 | `@PathVariable long id` | URL segment `{id}` | type conversion is automatic; failure → 400 |
-| `@RequestParam int page` | query string / form field | `required` defaults to `true`; `defaultValue` makes it optional; `Optional<T>` also works |
+| `@RequestParam int page` | query string / form field | `required` defaults to `true` (missing → 400 `MissingServletRequestParameterException`); `defaultValue` makes it optional; `Optional<T>` also works |
 | `@RequestParam Map<String,String>` | all query params | |
 | `@RequestHeader("X-Client") String c` | request header | `defaultValue`, `required` as above |
 | `@CookieValue` | cookie (small named value the browser stores and sends back on every request) | |
@@ -245,7 +220,7 @@ Names: with `@PathVariable long id` Spring uses the parameter name `id`. That ne
 | `String` in a `@RestController` | written as text (`text/plain` or what `produces` says) |
 | `CompletableFuture<T>`, `Callable<T>`, `DeferredResult<T>`, `SseEmitter`, `StreamingResponseBody` | async/streaming responses (SSE — Server-Sent Events, a one-way stream of messages from server to browser — is covered in [Chapter 13](../13-reactive-and-webflux/README.md)) |
 
-### `ResponseEntity` for 201 + `Location`
+### `ResponseEntity` for 201 + `Location` — `ResponseEntity.created(uri).body(saved)`
 
 ```java
 @PostMapping
@@ -262,7 +237,7 @@ public ResponseEntity<Book> create(
 
 ### The tests
 
-The tests use **`MockMvcTester`** (Framework 6.2+), the AssertJ-style (AssertJ is a fluent test-assertion library) front end for MockMvc: it calls the `DispatcherServlet` in-process with mock (fake, test-only) request/response objects — no network, no Tomcat.
+The tests use **`MockMvcTester`** (Framework 6.2+), the AssertJ-style front end for MockMvc: it calls the `DispatcherServlet` in-process with mock request/response objects — no network, no Tomcat.
 
 ```java
 @WebMvcTest                        // web slice: controllers, advice, filters, WebMvcConfigurers, Jackson
@@ -314,19 +289,13 @@ public record PageResponse<T>(List<T> content, int page, int size, long totalEle
 - Return a **stable DTO** (Data Transfer Object: a simple class/record shaped for the API) like this one rather than serialising Spring Data's `Page` implementation directly — its JSON shape is not a stable API (Spring Data now warns about it and offers `@EnableSpringDataWebSupport(pageSerializationMode = VIA_DTO)`). With Spring Data you would accept a `Pageable` argument (`?page=1&size=2&sort=title,asc`) — see [Chapter 8](../08-spring-data-jpa-and-hibernate/README.md).
 - For very large or fast-changing data, **keyset (cursor) pagination** (`?after=lastSeenId` — "give me the rows after the last one I saw") is faster and more stable than `OFFSET` (SQL's "skip the first N rows", which still has to read them) — see the SQL book, [Indexes and query performance](../../../sql/chapters/12-indexes-storage-and-query-performance/README.md).
 
-### Self-check
-
-1. How do you return 201 with a `Location` header? → `ResponseEntity.created(uri).body(saved)`.
-2. What status does a missing required `@RequestParam` produce? → 400 (`MissingServletRequestParameterException`).
-3. What does `MockMvcTester` avoid? → Starting a server; it drives the `DispatcherServlet` directly.
-
 ---
 
 ## 5.5 JSON with Jackson 3
 
 ### What it is
 
-**Jackson** is the JSON library behind Spring MVC's JSON converter. **Spring Boot 4 uses Jackson 3** by default (Boot 4.1.1 manages Jackson 3.1.x). Jackson 3 is a new major version (one allowed to break compatibility) with new coordinates (the Maven group/artifact names that identify a library), so code and configuration written for Jackson 2 need small changes.
+**Jackson** is the JSON library behind Spring MVC's JSON converter. **Spring Boot 4 uses Jackson 3** by default (Boot 4.1.1 manages 3.1.x) — a new major version with new Maven coordinates, so Jackson 2 code and configuration need small changes.
 
 ### What changed from Jackson 2
 
@@ -426,7 +395,7 @@ or with properties, e.g. `spring.jackson.serialization.indent-output=true`, `spr
 ### Common mistakes
 
 - Mixing Jackson 2 and 3 imports (`com.fasterxml.jackson.databind.ObjectMapper` vs `tools.jackson.databind...`): Spring MVC uses the Jackson 3 mapper, so a Jackson 2 `ObjectMapper` bean you define is simply not used for HTTP. (Some libraries, e.g. springdoc's swagger-core, still bring Jackson 2 for their own use — that is fine.)
-- Exposing JPA entities (classes mapped to database tables by JPA, Java's object-database mapping standard) directly as JSON → lazy-loading errors (related data loaded only on first access, after the database session is closed), infinite recursion (two objects that point at each other are serialised forever), leaking columns. Use DTOs/records ([Chapter 8](../08-spring-data-jpa-and-hibernate/README.md)).
+- Exposing JPA entities directly as JSON → lazy-loading errors (related data loaded on first access, after the session closed), infinite recursion (two objects pointing at each other), leaking columns. Use DTOs/records ([Chapter 8](../08-spring-data-jpa-and-hibernate/README.md)).
 - Relying on field order in clients — JSON objects are unordered by definition.
 
 ---
@@ -465,7 +434,7 @@ Do **not** put `@Validated` on the controller class in Framework 6.1+: it switch
 
 ### Validation groups
 
-A **group** is a marker interface (an empty interface used only as a label) that labels constraints so you can validate different subsets in different situations. Constraints without `groups` belong to `jakarta.validation.groups.Default`. `@Valid` cannot select groups; Spring's `@Validated({...})` can:
+A **group** is a marker interface (an empty interface used as a label) that labels constraints so different subsets can be validated in different situations. Constraints without `groups` belong to `jakarta.validation.groups.Default`. `@Valid` (Jakarta) has no groups attribute; Spring's `@Validated({...})` does:
 
 ```java
 @PostMapping                     // create: Default rules + OnCreate rules (isbn required)
@@ -499,14 +468,8 @@ The `errors` maps are added by the exception handler in the next section.
 - Forgetting `@Valid`/`@Validated` on `@RequestBody` → annotations on the record are ignored.
 - Forgetting `@Valid` on a nested field (`@Valid Address address`) → nested object not validated.
 - Missing `spring-boot-starter-validation` → no validator on the classpath, constraints silently ignored.
-- Using `@NotNull` on a primitive `int` (a plain value type that can never be `null`) → never null; use a wrapper `Integer` (the object version, which can be `null`) if "missing" must be detected.
+- `@NotNull` on a primitive `int` is pointless (never null); use `Integer` if "missing" must be detected.
 - Validating only in the UI → every API must validate its own input.
-
-### Self-check
-
-1. How do you validate `size` ≤ 50 on a `@RequestParam` in Framework 7? → Put `@Max(50)` on the parameter; built-in method validation handles it (400 `HandlerMethodValidationException`).
-2. Why `@Validated` rather than `@Valid` for groups? → `@Valid` (Jakarta) has no groups attribute; Spring's `@Validated` does.
-3. What is the default group? → `jakarta.validation.groups.Default` — every constraint without `groups`.
 
 ---
 
@@ -514,7 +477,7 @@ The `errors` maps are added by the exception handler in the next section.
 
 ### The problem it solves
 
-Without a plan, errors leak as stack traces (the list of method calls active when an exception happened), HTML error pages, or a different JSON shape per endpoint. Clients need **one predictable error format**. **RFC 9457 "Problem Details for HTTP APIs"** (July 2023, replacing RFC 7807) defines it: media type (the format label used in `Content-Type`) `application/problem+json` with members
+Without a plan, errors leak as stack traces, HTML error pages, or a different JSON shape per endpoint. Clients need **one predictable error format**. **RFC 9457 "Problem Details for HTTP APIs"** (July 2023, replacing RFC 7807) defines it: media type (the format label used in `Content-Type`) `application/problem+json` with members
 
 | Member | Meaning |
 |---|---|
@@ -613,7 +576,7 @@ The 405 response also carries an `Allow` header listing the supported methods, a
 
 ### In the interview
 
-**30-second answer:** "I use a single `@RestControllerAdvice` that extends `ResponseEntityExceptionHandler`, so every Spring MVC exception already produces an RFC 9457 `ProblemDetail` with `application/problem+json`. I add `@ExceptionHandler` methods for domain exceptions — e.g. `NotFound` → 404 with a `type` URI and extra properties — and override `handleMethodArgumentNotValid` to include field errors. Unexpected exceptions become 500s with a safe message and are logged with a correlation id (an id attached to every log line of one request, so you can find them all)."
+**30-second answer:** "A single `@RestControllerAdvice` extending `ResponseEntityExceptionHandler`, so every Spring MVC exception already produces an RFC 9457 `ProblemDetail` (`application/problem+json`). I add `@ExceptionHandler`s for domain exceptions — e.g. `NotFound` → 404 with a `type` URI and extra properties — and override `handleMethodArgumentNotValid` to include field errors. Unexpected exceptions become 500s with a safe message, logged with a correlation id (an id on every log line of one request)."
 
 - *What's RFC 9457?* → Problem Details for HTTP APIs; it obsoletes RFC 7807; fields `type`, `title`, `status`, `detail`, `instance` plus extensions.
 - *Order of lookup?* → `@ExceptionHandler` in the controller, then in `@ControllerAdvice` beans, then `@ResponseStatus`/`ResponseStatusException`, then Spring defaults, finally Boot's `/error`.
@@ -659,7 +622,7 @@ Accept: application/xml -> 406
 
 ### What it is
 
-Public APIs change. **API versioning** lets old clients keep the old contract while new clients use a new one. Before Framework 7 every team invented its own scheme (`/v1/...` prefixes, custom header conditions). **Spring Framework 7.0 made it first-class**: a version is resolved from each request, parsed, validated, and used as one more mapping condition, with support on the client side (`RestClient`, `WebClient`, HTTP interfaces — [Chapter 6](../06-rest-clients-and-http-interfaces/README.md)) and in tests.
+**API versioning** lets old clients keep the old contract while new clients use a new one. Before Framework 7 every team invented its own scheme (`/v1/...` prefixes, custom header conditions); **Spring Framework 7.0 made it first-class**: a version is resolved from each request, parsed, validated, and used as one more mapping condition, with support on the client side (`RestClient`, `WebClient`, HTTP interfaces — [Chapter 6](../06-rest-clients-and-http-interfaces/README.md)) and in tests.
 
 ### How it works
 
@@ -934,23 +897,10 @@ springdoc logs a warning that `/v3/api-docs` is enabled by default — in produc
 | Versioning | pick one strategy; Framework 7 `version` attribute; deprecate with headers |
 | Security | authentication/authorization ([Ch. 10](../10-spring-security-1-fundamentals/README.md)), CORS explicit origins, upload limits |
 | Docs | OpenAPI published and tested |
-| Observability (being able to see what a running system is doing, via logs, metrics and traces) | request id filter, metrics per endpoint ([Ch. 15](../15-observability-and-production/README.md)) |
-| Threads | Spring MVC is thread-per-request; with `spring.threads.virtual.enabled=true` Tomcat uses virtual threads (cheap JVM-managed threads, so thousands can wait at once), giving high concurrency without reactive (non-blocking, callback/stream-based) code ([Ch. 13](../13-reactive-and-webflux/README.md)) |
+| Observability (logs, metrics, traces) | request id filter, metrics per endpoint ([Ch. 15](../15-observability-and-production/README.md)) |
+| Threads | Spring MVC is thread-per-request; with `spring.threads.virtual.enabled=true` Tomcat uses virtual threads (cheap JVM-managed threads), giving high concurrency without reactive code ([Ch. 13](../13-reactive-and-webflux/README.md)) |
 
 **Functional endpoints.** Besides annotated controllers, Spring MVC offers `RouterFunction`/`HandlerFunction` ("WebMvc.fn"): routes are declared as code (`route().GET("/api/books/{id}", handler::get).build()`). Same `DispatcherServlet`, same converters; choose it if you prefer explicit routing over annotations. It also supports API versioning.
-
-### Common mistakes (whole chapter)
-
-| Symptom | Cause | Fix |
-|---|---|---|
-| 404 for `/api/books/` | trailing slash no longer matched | call without slash or map both |
-| 400 "Failed to convert 'id'" for a literal path | `/{id}` pattern catches `/export` | regex `{id:\d+}` |
-| Validation ignored | missing `@Valid`/`@Validated` or validation starter | add them |
-| `ConstraintViolationException` → 500 from a controller | `@Validated` on the controller class | remove it; rely on built-in method validation |
-| Errors in five different JSON shapes | ad-hoc try/catch in controllers | central advice + `ProblemDetail` |
-| Browser "CORS error", curl works | missing CORS config (or blocked by security) | `addCorsMappings` + `http.cors()` |
-| Header set in `postHandle` missing | `@ResponseBody` already wrote the response | set it in `preHandle` or a filter |
-| `@SpringBootTest` test can't autowire `MockMvc` (Boot 4) | MockMvc no longer auto-added | `@AutoConfigureMockMvc` |
 
 ---
 

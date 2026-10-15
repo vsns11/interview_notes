@@ -5,7 +5,7 @@ Run everything from the `python/` book root. Needs Node 18+ and Google Chrome. `
 | Script | Purpose | Example |
 |---|---|---|
 | `md2pdf.mjs` | Render one or more `README.md` files → styled PDF (headless Chrome, Monaco font, Mermaid → SVG, images embedded). Given several inputs, it adds a cover (title from `COVER_TITLE`, default "Python Handbook") and a table of contents. Reports Mermaid errors and broken images. | `node tools/md2pdf.mjs chapters/05-lists-tuples-arrays/Chapter05-Notes.pdf chapters/05-lists-tuples-arrays/README.md` |
-| `regen_pdfs.sh` | Regenerate every `chapters/NN-name/ChapterNN-Notes.pdf` and the combined `Python-Handbook.pdf`. | `bash tools/regen_pdfs.sh` |
+| `regen_pdfs.sh` | Regenerate every `chapters/NN-name/ChapterNN-Notes.pdf` and the combined `Python-Handbook-Vol1.pdf` and `Python-Handbook-Vol2.pdf`. | `bash tools/regen_pdfs.sh` |
 
 To run all the book's Python examples, use the shared runner one level up: `bash ../tools_run_python.sh python`.
 

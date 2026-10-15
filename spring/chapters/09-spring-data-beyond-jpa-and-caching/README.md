@@ -1,19 +1,8 @@
 # Chapter 9 — Spring Data beyond JPA, and caching
 
-[Chapter 8](../08-spring-data-jpa-and-hibernate/README.md) used JPA, the most common way to reach a database from Spring. But JPA is not the only option, and it is not always the best one. This chapter covers the other Spring Data modules you are most likely to meet: **Spring Data JDBC**, a simpler relational mapper built around *aggregates* (groups of objects saved and loaded as one unit, §9.2); **Spring Data MongoDB** for document databases (databases that store each record as a JSON-like document instead of table rows); **Spring Data Redis** for the in-memory key-value store (a store that maps keys to values and keeps them in RAM); and **Spring Data REST**, which turns repositories into a REST API. It then compares the two schema-migration tools (tools that apply versioned changes to table structure), **Flyway and Liquibase**.
+[Chapter 8](../08-spring-data-jpa-and-hibernate/README.md) used JPA, but it is not the only option, nor always the best. This chapter covers the other Spring Data modules you are most likely to meet: **Spring Data JDBC**, a simpler relational mapper built around *aggregates* (groups of objects saved and loaded as one unit, §9.2); **Spring Data MongoDB** for document databases (each record a JSON-like document instead of table rows); **Spring Data Redis** for the in-memory key-value store; and **Spring Data REST**, which turns repositories into a hypermedia REST API. It then compares the schema-migration tools **Flyway and Liquibase** (Java and repeatable migrations, checksum validation).
 
-The second half is about **caching**: remembering the result of an expensive call so the next identical call is fast. Spring's cache abstraction lets you add caching with one annotation, and it is also easy to get wrong. So every behaviour is measured. The tests count real method calls and cache hits and misses (whether the answer was already in the cache or not), move a fake clock to show expiry, and start eight threads (parallel paths of execution) at once to show a cache stampede (many requests recomputing the same missing entry at once) and its fix.
-
-**What you'll learn**
-
-- What the Spring Data modules share, and what each store adds
-- Spring Data JDBC: aggregates, `@MappedCollection`, `AggregateReference`, `@Embedded`, the SQL it really runs, optimistic locking, queries, and the "new or existing?" trap
-- Spring Data REST: repositories as hypermedia endpoints (HTTP endpoints whose responses include links to related resources)
-- Flyway beyond the basics (Java and repeatable migrations, checksum validation), and Flyway vs Liquibase
-- Spring Data MongoDB and Spring Data Redis: documents, repositories, templates, and Testcontainers (a library that starts real databases in Docker containers for tests) tests
-- The cache abstraction: `@Cacheable`, `@CachePut`, `@CacheEvict`, `@Caching`, `@CacheConfig`, keys, `condition`/`unless`, TTL (time to live: how long an entry stays valid), `sync`
-- Caffeine (a fast Java in-memory cache library) as the local cache, and Redis as a shared cache
-- Cache pitfalls: self-invocation, key collisions, mutable cached objects, stampedes, stale data
+The second half is **caching**: remembering an expensive call's result so the next identical call is fast. Spring's cache abstraction (`@Cacheable`, `@CachePut`, `@CacheEvict`, `@Caching`, `@CacheConfig`, keys, `condition`/`unless`, TTL — time to live, how long an entry stays valid — and `sync`) adds caching with one annotation and is easy to get wrong, so every behaviour is measured: the tests count real method calls and cache hits/misses, move a fake clock to show expiry, and start eight threads at once to show a cache stampede (many requests recomputing the same missing entry) and its fix. Caffeine (a fast Java in-memory cache) is the local cache; Redis the shared one.
 
 **The code** (Spring Boot 4.1.1 → Spring Framework 7.0, Spring Data 2026.0, Flyway 12.4, Caffeine 3.2, H2 in memory):
 
@@ -21,7 +10,7 @@ The second half is about **caching**: remembering the result of an expensive cal
 |---|---|---|
 | [`code/data-jdbc`](code/data-jdbc) | Spring Data JDBC aggregates with SQL printed, optimistic locking, queries, assigned-id trap; Flyway SQL + Java + repeatable migrations and checksum validation; Spring Data REST | yes |
 | [`code/caching`](code/caching) | `@Cacheable`/`@CachePut`/`@CacheEvict` with Caffeine, hit/miss counts, key generation, TTL with a fake clock, mutable-object pitfall, stampede with and without `sync` | yes |
-| [`code/nosql`](code/nosql) | MongoDB and Redis repositories, `MongoTemplate` aggregation, `StringRedisTemplate`, Redis cache configuration, Testcontainers test | compiled only (needs Docker — the tool that runs containers — not run) |
+| [`code/nosql`](code/nosql) | MongoDB and Redis repositories, `MongoTemplate` aggregation, `StringRedisTemplate`, Redis cache configuration, Testcontainers test | compiled only (needs Docker, not run) |
 
 Run everything with `bash tools_run_spring.sh spring '09-*'`. The `nosql` project has a `.tools_run_skip` file, so the runner skips it.
 
@@ -45,7 +34,7 @@ What differs is the **mapping** (how an object becomes a row, a document or a ha
 | **Spring Data JDBC** | relational, plain JDBC | `spring-boot-starter-data-jdbc` | rows, **aggregate by aggregate** | `JdbcAggregateTemplate` |
 | Spring Data R2DBC | relational, reactive | `spring-boot-starter-data-r2dbc` | rows (no relationships) | `R2dbcEntityTemplate` ([ch13](../13-reactive-and-webflux/README.md)) |
 | **Spring Data MongoDB** | document database | `spring-boot-starter-data-mongodb` | BSON (binary JSON) documents | `MongoTemplate` |
-| **Spring Data Redis** | in-memory key-value | `spring-boot-starter-data-redis` | Redis hashes (a key holding a small map of field → value) | `RedisTemplate`, `StringRedisTemplate` |
+| **Spring Data Redis** | in-memory key-value | `spring-boot-starter-data-redis` | Redis hashes (a key holding a small field → value map) | `RedisTemplate`, `StringRedisTemplate` |
 | **Spring Data REST** | (any of the above) | `spring-boot-starter-data-rest` | repositories → HTTP endpoints | — |
 
 Other modules exist (Elasticsearch, Cassandra, Neo4j, Couchbase, LDAP), and they follow the same pattern.
@@ -60,7 +49,7 @@ All Spring Data modules are released together as a **release train**. The train 
 | Derived query parsing (`findByNameAndAgeGreaterThan`) | What a query *is*: SQL, a Mongo JSON filter, a Redis index lookup |
 | `Pageable`, `Sort`, `Page`, `Slice` ([8.11](../08-spring-data-jpa-and-hibernate/README.md#811-pagination-and-sorting)) | Transactions (full in JDBC/JPA; limited in Mongo; very different in Redis) |
 | Auditing (`@CreatedDate`, `@LastModifiedBy`), `@Version`, `@Id`, `@Transient` from `org.springframework.data.annotation` | Mapping annotations: `@Table`/`@Column` (relational), `@Document`/`@Field` (Mongo), `@RedisHash` (Redis) |
-| Projections, query by example, domain events (events an aggregate publishes when it changes) | Store features: aggregations, TTLs, geo queries (searches by location) |
+| Projections, query by example, domain events (published when an aggregate changes) | Store features: aggregations, TTLs, geo queries |
 
 Because the model is shared, the repository chapter of [ch08](../08-spring-data-jpa-and-hibernate/README.md) (sections 8.8–8.12) applies here too. This chapter shows only what is different.
 
@@ -72,7 +61,7 @@ Because the model is shared, the repository chapter of [ch08](../08-spring-data-
 
 **Spring Data JDBC** maps Java objects to relational tables **without JPA**. It has no Hibernate, no persistence context, no lazy loading, no dirty checking and no first-level cache. When you call `save`, it runs SQL right away. When you call `findById`, it runs SQL and gives you a plain object that is not connected to anything.
 
-Its design comes from **Domain-Driven Design (DDD)**, which uses the word **aggregate** for a cluster of objects that are always loaded, changed and saved as one unit. One object, the **aggregate root**, is the only way in. Think of an order: an order has lines, and it makes no sense to change a line without its order. Rules like "you cannot add lines to a paid order" live in the root.
+Its design comes from **Domain-Driven Design (DDD)**, where an **aggregate** is a cluster of objects always loaded, changed and saved as one unit, entered only through its **aggregate root** — e.g. an order and its lines; rules like "you cannot add lines to a paid order" live in the root.
 
 Spring Data JDBC builds on that idea:
 
@@ -88,12 +77,12 @@ JPA is powerful but complex. Most of the surprises in [ch08](../08-spring-data-j
 |---|---|---|
 | Loading | lazy or eager, proxies | everything in the aggregate, eagerly; nothing outside it |
 | Change tracking | dirty checking: changes are flushed automatically | none: only `save()` writes |
-| Caching | first-level cache per persistence context (+ optional second level, shared across sessions) | none |
+| Caching | first-level cache per persistence context (+ optional shared second level) | none |
 | Relationships | any direction, many-to-many, bidirectional | one direction, root → children; other aggregates by id |
-| Schema generation | `ddl-auto` can create tables | never; you write the DDL (Data Definition Language: `CREATE TABLE` and friends; use Flyway) |
+| Schema generation | `ddl-auto` can create tables | never; you write the DDL (`CREATE TABLE` etc.; use Flyway) |
 | SQL you can predict | not always | yes |
 | Updates of child collections | only the changed rows | **delete all children, insert them again** |
-| Best for | rich object graphs (many objects linked to each other), existing JPA knowledge | clear aggregates, teams that want to see the SQL |
+| Best for | rich object graphs, existing JPA knowledge | clear aggregates, teams that want to see the SQL |
 
 ### The example aggregate
 
@@ -175,14 +164,14 @@ public record Customer(@Id Long id, String name, String email) {}             //
 |---|---|---|
 | class `PurchaseOrder` | table `purchase_order` | default naming: camelCase (`purchaseOrder`) → snake_case (`purchase_order`). Override with `@Table("...")` |
 | field `createdAt` | column `created_at` | override with `@Column("...")` |
-| `@Id Long id` | primary key | `null` means "new": the database generates the id (identity column — an auto-increment column) |
+| `@Id Long id` | primary key | `null` means "new": the database generates the id (identity column) |
 | `@Version Integer version` | `version` | optimistic locking, as in [8.14](../08-spring-data-jpa-and-hibernate/README.md#814-locking-optimistic-and-pessimistic) |
 | `List<OrderLine>` + `@MappedCollection` | child table `order_line` | `idColumn` = foreign key to the root, `keyColumn` = the list index. `Set` needs no key column; `Map<K, V>` uses the map key |
-| `AggregateReference<Customer, Long>` | `customer_id` | just the id. You cannot navigate to the customer. Load it with `CustomerRepository` if you need it |
+| `AggregateReference<Customer, Long>` | `customer_id` | just the id (a `Customer customer` field would make the customer part of the order aggregate). You cannot navigate to it; load it with `CustomerRepository` if needed |
 | `@Embedded.Nullable(prefix = "ship_")` | `ship_street`, `ship_city` in the same row | `Nullable`: all columns `NULL` → field `null`. `@Embedded.Empty` gives an empty object instead |
 | records | supported | Spring Data creates a new instance through the constructor when it must set a generated id |
 
-Spring Data JDBC quotes every identifier it generates. With H2 that means upper case: `"PURCHASE_ORDER"`. A name you write in an annotation is quoted **as you wrote it**, so `idColumn = "purchase_order_id"` became `"purchase_order_id"` and H2 answered `Column "line_no" not found`. That is why the example uses upper case. On PostgreSQL, unquoted names are folded (converted) to lower case, so there you write lower case.
+Spring Data JDBC quotes every identifier it generates. With H2 that means upper case: `"PURCHASE_ORDER"`. A name you write in an annotation is quoted **as you wrote it**, so `idColumn = "purchase_order_id"` became `"purchase_order_id"` and H2 answered `Column "line_no" not found`. That is why the example uses upper case. On PostgreSQL, unquoted names are folded to lower case, so there you write lower case.
 
 ### How saving and loading work — measured
 
@@ -319,7 +308,7 @@ total: OrderTotal[orderId=5, customer=Ben, total=80.00]
 - **Derived queries** work as in JPA, but they may only use properties of the root row (and embedded values). You cannot write `findByLinesSku`, because that would need a join into the aggregate. Use `@Query` for that.
 - **`@Query`** takes plain SQL, not JPQL. Parameters are named (`:id`) and bound by parameter name. The result can be the entity, a DTO record (columns mapped by name, `order_id` → `orderId`) or a simple value.
 - **`@Modifying`** marks `UPDATE`/`DELETE` queries. It returns the row count as `int`, or `boolean` ("at least one row changed"). It bypasses the aggregate: no version check, no callbacks, no business rules. Use it for bulk or administrative changes only.
-- The view (a saved query that can be read like a table) `order_totals` is a read model (a structure shaped just for queries) built by a repeatable migration (section 9.4). Reading reports with SQL and DTOs, and writing through aggregates, is a common split.
+- The view `order_totals` is a read model (shaped just for queries) built by a repeatable migration (section 9.4). Reading reports with SQL and DTOs, and writing through aggregates, is a common split.
 
 ### Pitfall: "new or existing?" with assigned ids
 
@@ -379,20 +368,6 @@ Spring Data JDBC calls beans at fixed points of the lifecycle. **Callbacks** can
 - *"How does Spring Data decide between INSERT and UPDATE?"* → id `null`/`0` or `@Version` `null`/`0` → new. With assigned ids you need `@Version`, `Persistable`, or `JdbcAggregateTemplate.insert`, otherwise `save` issues an `UPDATE` that changes nothing.
 - *"How do you model many-to-many?"* → As a separate small entity inside one aggregate that holds the *id* of the other aggregate (for example `Set<BookAuthor>` in `Book`, where `BookAuthor` has an `AggregateReference<Author, Long>`).
 - *"Can you mix JPA and JDBC in one app?"* → Yes, on the same `DataSource`, but give them different entities and packages, and remember that JDBC writes are not seen by an open Hibernate persistence context.
-
-### Self-check
-
-1. What SQL does `save` run for an existing order with 3 lines? → `UPDATE` of the root (with version check), `DELETE` of all its lines, then 3 `INSERT`s (one batch).
-2. Why can `PurchaseOrder` not have a `Customer customer` field? → It would make the customer part of the order aggregate; references to other aggregates must be ids.
-3. A `findById` loaded the order and its lines. How many queries? → Two: root, then one per collection.
-4. Which annotation marks a list of child entities, and what are its two column settings? → `@MappedCollection`, `idColumn` (FK to the root) and `keyColumn` (list index or map key).
-
-### TL;DR
-
-- Spring Data JDBC = repositories over plain JDBC, **one repository per aggregate root**, no persistence context.
-- Saving an existing aggregate rewrites all of its children, so keep aggregates small. `@Version` on the root protects the whole aggregate.
-- Other aggregates are referenced by id (`AggregateReference`). Reports: `@Query` SQL into DTO records.
-- Assigned ids need `@Version`, `Persistable` or `insert()`, or `save` loses data silently.
 
 ---
 
@@ -499,7 +474,7 @@ public class V3__normalise_emails extends BaseJavaMigration {
 |---|---|---|---|
 | Versioned SQL | `V<version>__<description>.sql` | once, in version order | tables, columns, indexes, data fixes |
 | Versioned Java | class `V<version>__<description>` extending `BaseJavaMigration`, in a scanned location (e.g. package `db.migration`), or a Spring bean implementing `JavaMigration` (Boot registers such beans) | once, in version order with the SQL ones | data changes needing logic, calling code, big batched updates |
-| Repeatable | `R__<description>.sql` | after all versioned ones, **again whenever its checksum changes** | views, functions, stored procedures, grants (permission statements) — objects you can always re-create |
+| Repeatable | `R__<description>.sql` | after all versioned ones, **again whenever its checksum changes** | views, functions, stored procedures, grants — objects you can always re-create |
 
 The test prints what Flyway recorded:
 
@@ -524,7 +499,7 @@ V2 inserted `ASHA@Example.com` and `ben@EXAMPLE.com`, and the Java migration V3 
 
 ### Checksums: never edit an applied migration — proved
 
-Flyway stores a **checksum** (a number computed from the file's content) for each applied migration. On startup it validates that the files still match. The second test points a new Flyway instance at the same database but at a folder `db/tampered` that holds copies of V1, V2 and the repeatable script, with V1 edited:
+Flyway stores a **checksum** of each applied migration's content. On startup it validates that the files still match. The second test points a new Flyway instance at the same database but at a folder `db/tampered` that holds copies of V1, V2 and the repeatable script, with V1 edited:
 
 ```java
 Flyway tampered = Flyway.configure()
@@ -549,9 +524,9 @@ Widening the `name` columns in V1 from `VARCHAR(100)` to `VARCHAR(150)` was enou
 | Property | Default | Meaning |
 |---|---|---|
 | `spring.flyway.locations` | `classpath:db/migration` | where scripts are. Use `classpath:db/migration/{vendor}` for per-database folders |
-| `spring.flyway.baseline-on-migrate` | `false` | adopting Flyway on an **existing** database: mark the current state as the baseline (the starting version) instead of failing on a non-empty schema |
+| `spring.flyway.baseline-on-migrate` | `false` | adopting Flyway on an **existing** database: mark the current state as the baseline instead of failing on a non-empty schema |
 | `spring.flyway.clean-disabled` | `true` | `clean` drops everything in the schema. Keep it disabled everywhere except throwaway databases |
-| `spring.flyway.enabled` | `true` | switch off, e.g. when a separate pipeline (an automated build/deploy process) runs migrations |
+| `spring.flyway.enabled` | `true` | switch off, e.g. when a separate deploy pipeline runs migrations |
 | `spring.flyway.url` / `user` / `password` | the app's `DataSource` | migrate with a more powerful user than the app uses |
 
 ### Liquibase
@@ -663,7 +638,7 @@ public interface ReviewRepository extends MongoRepository<Review, String> {
 }
 ```
 
-A saved review looks like this in MongoDB (Spring Data adds a `_class` field with the Java type, used when reading back polymorphic data — documents of several subclasses in one collection):
+A saved review looks like this in MongoDB (Spring Data adds a `_class` field with the Java type, used to read back polymorphic data — several subclasses in one collection):
 
 ```json
 { "_id": ObjectId("..."), "productSku": "BOOK-1", "stars": 5, "text": "Great",
@@ -701,7 +676,7 @@ An **aggregation pipeline** is a list of stages that documents flow through (`$m
 |---|---|
 | Relationships | embed data that belongs together. Reference other documents by id. `@DBRef` and `@DocumentReference` exist but cost extra queries, like lazy loading |
 | Schema changes | no DDL. Old documents keep their old shape. Code must accept both, or you run a data migration (tools such as Mongock exist) |
-| Transactions | single-document writes are always atomic. Multi-document transactions need a **replica set** (several MongoDB servers holding copies of the same data) and a `MongoTransactionManager` bean, which Boot does **not** create for you |
+| Transactions | single-document writes are always atomic. Multi-document transactions need a **replica set** (several MongoDB servers holding copies of the data) and a `MongoTransactionManager` bean, which Boot does **not** create for you |
 | Optimistic locking | `@Version` works (the version is part of the update filter) |
 | Indexes | `@Indexed`, `@CompoundIndex`, created only if `auto-index-creation=true`. In production, many teams create indexes in a migration instead |
 | Reactive | `spring-boot-starter-data-mongodb-reactive` + `ReactiveMongoRepository` ([ch13](../13-reactive-and-webflux/README.md)) |
@@ -717,7 +692,7 @@ An **aggregation pipeline** is a list of stages that documents flow through (`$m
 
 ### What it is
 
-**Redis** is an **in-memory data structure server**. Keys map to strings, hashes, lists, sets, sorted sets, streams and more, and each command is atomic (runs completely, with no other command interleaving) on the server. Because data lives in memory, reads and writes take well under a millisecond. It is used as a cache (section 9.8), a session store, for rate limiting (capping how many requests a client may make per second), counters, leaderboards, distributed locks (a lock shared by many app instances) and simple queues.
+**Redis** is an **in-memory data structure server**. Keys map to strings, hashes, lists, sets, sorted sets, streams and more, and each command is atomic on the server. Data lives in memory, so reads and writes take well under a millisecond. It is used as a cache (section 9.8), a session store, for rate limiting, counters, leaderboards, distributed locks (shared by many app instances) and simple queues.
 
 `spring-boot-starter-data-redis` brings **Lettuce** as the default client library (Jedis is the alternative). Connection properties keep the `spring.data.redis.*` prefix in Boot 4:
 
@@ -741,7 +716,7 @@ public class PageViewCounter {
 }
 ```
 
-`opsForValue()`, `opsForHash()`, `opsForList()`, `opsForSet()`, `opsForZSet()` match the Redis data types. `StringRedisTemplate` stores keys and values as plain strings. `RedisTemplate<K, V>` can use other **serializers** (components that turn objects into bytes and back; JDK serialization by default, JSON if you configure it). Choose them deliberately, because anything written with one serializer can only be read back with the same one.
+`opsForValue()`, `opsForHash()`, `opsForList()`, `opsForSet()`, `opsForZSet()` match the Redis data types. `StringRedisTemplate` stores keys and values as plain strings. `RedisTemplate<K, V>` can use other **serializers** (objects ↔ bytes; JDK serialization by default, JSON if configured). Choose them deliberately, because anything written with one serializer can only be read back with the same one.
 
 ### Redis repositories
 
@@ -757,9 +732,9 @@ public interface CartRepository extends CrudRepository<Cart, String> {
 }
 ```
 
-How it is stored: the cart becomes a Redis **hash** at key `carts:c1`, the key is added to a set `carts` (for `findAll`), and `@Indexed` adds it to a set `carts:userId:u42`. So derived queries work only on `@Indexed` properties (each such set acts as a secondary index: an extra lookup structure by a non-id field) and only for equality. There are no ranges and no sorting.
+How it is stored: the cart becomes a Redis **hash** at key `carts:c1`, the key is added to a set `carts` (for `findAll`), and `@Indexed` adds it to a set `carts:userId:u42`. So derived queries work only on `@Indexed` properties (each such set is a secondary index) and only for equality. There are no ranges and no sorting.
 
-A trap: when Redis expires `carts:c1` because of the TTL, the index sets still contain its id. Spring Data cleans them only if you enable keyspace events (notifications Redis sends when keys change or expire) (`@EnableRedisRepositories(enableKeyspaceEvents = RedisKeyValueAdapter.EnableKeyspaceEvents.ON_STARTUP)`). Most teams use templates directly and use repositories only for simple cases.
+A trap: when Redis expires `carts:c1` because of the TTL, the index sets still contain its id. Spring Data cleans them only if you enable keyspace events (Redis notifications when keys change or expire) (`@EnableRedisRepositories(enableKeyspaceEvents = RedisKeyValueAdapter.EnableKeyspaceEvents.ON_STARTUP)`). Most teams use templates directly and use repositories only for simple cases.
 
 ---
 
@@ -852,7 +827,7 @@ It is an *abstraction*: the annotations talk to a `CacheManager` interface, and 
 
 ### Why it matters
 
-Reads usually far outnumber writes. A product page might be viewed 10,000 times between two price changes. Loading the product from the database every time wastes database capacity and adds latency (time per request). With a cache, one load serves thousands of requests. The price you pay is **staleness**: the cache may show old data until it is refreshed or evicted (removed from the cache). Every caching decision is about how stale is acceptable.
+Reads usually far outnumber writes. A product page might be viewed 10,000 times between two price changes. Loading it from the database every time wastes capacity and adds latency; with a cache, one load serves thousands of requests. The price is **staleness**: the cache may show old data until it is refreshed or evicted. Every caching decision is about how stale is acceptable.
 
 ### How it works
 
@@ -933,9 +908,9 @@ public class CacheConfig {
 spring.cache.cache-names=products,catalog,tags,reports-plain,reports-sync
 ```
 
-How Boot chooses a provider: if you define no `CacheManager` bean yourself, Boot checks the providers in a fixed order (Generic, JCache, Hazelcast, Infinispan, Couchbase, **Redis**, **Caffeine**, Cache2k, **Simple**) and configures the first one it finds on the classpath. You can force one with `spring.cache.type`. **Simple** is a `ConcurrentHashMap` (Java's thread-safe hash map) with no expiry and no size limit, fine for demos but never for production.
+How Boot chooses a provider: if you define no `CacheManager` bean yourself, Boot checks the providers in a fixed order (Generic, JCache, Hazelcast, Infinispan, Couchbase, **Redis**, **Caffeine**, Cache2k, **Simple**) and configures the first one it finds on the classpath. You can force one with `spring.cache.type`. **Simple** is a `ConcurrentHashMap` with no expiry and no size limit, fine for demos but never for production.
 
-For Caffeine, Boot applies the settings from, in order of precedence: `spring.cache.caffeine.spec` (e.g. `maximumSize=500,expireAfterWrite=10m`), a `CaffeineSpec` bean, or a `Caffeine` bean (used here, so that the test can swap the clock). **Caffeine** is the standard local cache for Java. Its eviction policy (W-TinyLFU) keeps the entries that are used most often and most recently, which gives better hit rates than a plain LRU (Least Recently Used: evict whatever was touched longest ago).
+For Caffeine, Boot applies the settings from, in order of precedence: `spring.cache.caffeine.spec` (e.g. `maximumSize=500,expireAfterWrite=10m`), a `CaffeineSpec` bean, or a `Caffeine` bean (used here, so that the test can swap the clock). **Caffeine** is the standard local cache for Java. Its eviction policy (W-TinyLFU) keeps the entries that are used most often and most recently, which gives better hit rates than plain LRU (evict whatever was touched longest ago).
 
 With `spring.cache.cache-names` set, the manager is **static**: only those caches exist, and using any other name fails with an error instead of quietly creating a new, unconfigured cache.
 
@@ -1147,7 +1122,7 @@ public String plain(String day) throws InterruptedException { ... }
 public String synced(String day) throws InterruptedException { ... }
 ```
 
-Both methods count their computations. The "expensive work" waits until all 8 callers are inside the method, or 300 ms at most, so the unsynchronised case really overlaps. The test submits 8 tasks at once to a thread pool (a fixed set of reusable worker threads):
+Both methods count their computations. The "expensive work" waits until all 8 callers are inside the method, or 300 ms at most, so the unsynchronised case really overlaps. The test submits 8 tasks at once to a thread pool:
 
 ```output
 8 concurrent callers, sync=false -> computed 8 times
@@ -1163,8 +1138,8 @@ With Caffeine, `sync = true` maps to Caffeine's atomic `get(key, loader)`: the f
 | `sync = true` / `get(key, loader)` | one loader per key per instance |
 | Random TTL jitter | entries written together do not all expire together |
 | Refresh ahead (`refreshAfterWrite`) | reload *before* expiry, while still serving the old value |
-| Distributed lock / single-flight (only one caller computes; the rest share its result) in Redis | one loader across all instances (costs complexity) |
-| Pre-warming | load hot (frequently requested) keys at startup or on a schedule |
+| Distributed lock / single-flight (one caller computes, the rest share its result) in Redis | one loader across all instances (costs complexity) |
+| Pre-warming | load hot keys at startup or on a schedule |
 
 More in the [system-design caching module](../../../system-design-patterns/modules/04-caching/README.md) (section "Cache Stampede Prevention").
 
@@ -1203,7 +1178,7 @@ If `@CachePut` or `@CacheEvict` runs inside a `@Transactional` method that later
 
 #### 4. Local caches in a cluster
 
-With 5 instances, each has its own Caffeine cache. An update evicts the entry on the instance that handled it, and the other 4 keep serving the old value until their TTL expires. Either accept staleness up to the TTL (keep it short), use a shared cache (Redis), or broadcast evictions (e.g. Redis pub/sub — publish/subscribe messaging, where every subscriber gets each message). A common design is **two levels**: a small, short-TTL Caffeine cache in front of Redis.
+With 5 instances, each has its own Caffeine cache. An update evicts the entry on the instance that handled it, and the other 4 keep serving the old value until their TTL expires. Either accept staleness up to the TTL (keep it short), use a shared cache (Redis), or broadcast evictions (e.g. Redis pub/sub messaging). A common design is **two levels**: a small, short-TTL Caffeine cache in front of Redis.
 
 #### 5. Other mistakes
 
@@ -1211,11 +1186,11 @@ With 5 instances, each has its own Caffeine cache. An update evicts the entry on
 |---|---|---|
 | No `@EnableCaching` | annotations ignored, no error | add it |
 | Caching everything | memory pressure, stale data everywhere, hard-to-reproduce bugs | cache only measured hot, expensive, rarely-changing reads |
-| No size bound (or the `simple` provider in production) | memory grows until an `OutOfMemoryError` (the JVM has run out of heap memory) | `maximumSize`, a real provider |
+| No size bound (or the `simple` provider in production) | memory grows until an `OutOfMemoryError` | `maximumSize`, a real provider |
 | Caching per-user data under a key without the user | one user sees another's data | include the user or tenant in the key |
 | Non-serializable values with Redis | `SerializationException` at runtime | JSON serializer, or `Serializable` types |
 | Changing a cached class's shape with Redis | old entries fail to deserialize after deploy | versioned key prefix per release, or short TTL |
-| Tests influenced by cached values from other tests | flaky tests (tests that pass or fail at random) | clear caches in `@BeforeEach` (as here), or disable caching with `spring.cache.type=none` / `@AutoConfigureCache` |
+| Tests influenced by cached values from other tests | flaky tests | clear caches in `@BeforeEach` (as here), or disable caching with `spring.cache.type=none` / `@AutoConfigureCache` |
 
 ### Redis as the cache (snippet — not run)
 
@@ -1261,7 +1236,7 @@ public class RedisCacheSetup {
 
 - Your own `RedisCacheConfiguration` bean **replaces** the one Boot would build from `spring.cache.redis.*`, so those properties no longer apply. Put everything in the bean.
 - `RedisCacheManagerBuilderCustomizer` (package `org.springframework.boot.cache.autoconfigure` in Boot 4) adjusts the auto-configured manager, typically with per-cache TTLs.
-- **Serialization:** the default is JDK serialization, which is binary, Java-only, and breaks when classes change. JSON is readable and survives small changes. Spring Data Redis 4 ships Jackson 3 serializers (`GenericJacksonJsonRedisSerializer`, `JacksonJsonRedisSerializer<T>`); the Jackson 2 ones are deprecated. The generic JSON serializer stores each value's class name, and the **type validator** restricts which classes may be created from it. Allowing any class is a known deserialization attack vector (an attacker crafts data that makes your app create and run dangerous classes). The builder's `enableUnsafeDefaultTyping()` is named that way for a reason.
+- **Serialization:** the default is JDK serialization, which is binary, Java-only, and breaks when classes change. JSON is readable and survives small changes. Spring Data Redis 4 ships Jackson 3 serializers (`GenericJacksonJsonRedisSerializer`, `JacksonJsonRedisSerializer<T>`); the Jackson 2 ones are deprecated. The generic JSON serializer stores each value's class name, and the **type validator** restricts which classes may be created from it. Allowing any class is a known deserialization attack vector (crafted data makes your app instantiate dangerous classes). The builder's `enableUnsafeDefaultTyping()` is named that way for a reason.
 - Every hit costs a network round trip plus deserialization (well under a millisecond on a local network, but not free). Cache larger, more expensive results in Redis, not tiny lookups.
 
 ### Local vs shared cache
@@ -1272,7 +1247,7 @@ public class RedisCacheSetup {
 | Consistency across instances | each instance has its own copy | one copy for all |
 | Survives restarts | no | yes (as far as Redis persistence is configured) |
 | Stores | references (mutable-object trap) | serialized copies |
-| Capacity | limited by the JVM heap (the memory area where Java objects live) | a separate server's memory |
+| Capacity | limited by the JVM heap | a separate server's memory |
 | Operations cost | none | another system to run and monitor |
 | Typical use | per-instance hot reference data, short TTLs | sessions, data shared between instances, expensive results |
 
@@ -1285,21 +1260,7 @@ public class RedisCacheSetup {
 - *"What is a cache stampede and how do you prevent it?"* → Many concurrent misses for the same hot key all hit the database. Use `sync = true` (one loader per JVM), TTL jitter, refresh-ahead, or a distributed lock for cluster-wide single-flight.
 - *"`condition` vs `unless`?"* → `condition` is checked before the call and can bypass the cache entirely. `unless` is checked after the call, can see `#result`, and only vetoes storing.
 
-### Self-check
-
-1. `@Cacheable` on a `private` method: what happens? → Nothing is cached; the proxy cannot intercept private methods.
-2. Two `@Cacheable("x")` methods take one `Long id` each. What goes wrong? → Same key in the same cache, so each returns the other's cached value. Use separate caches or distinct keys.
-3. How did the TTL test avoid sleeping? → It gave Caffeine a fake `Ticker` and advanced it by 9 and then 2 minutes.
-4. Why did 8 threads compute the report 8 times without `sync`? → All 8 missed before any of them had stored the value; plain `@Cacheable` does not coordinate loaders.
-5. Why can the mutable-list bug not happen with Redis? → Redis returns a freshly deserialized copy on every hit.
-
-### TL;DR
-
-- `@EnableCaching` + `@Cacheable` (read), `@CachePut` (always run, store), `@CacheEvict` (remove). Proxy-based, so the AOP rules apply.
-- Default key = the single argument, or `SimpleKey` of all arguments, **without the method name**.
-- TTL, size and statistics are provider settings. Caffeine: `expireAfterWrite`, `maximumSize`, `recordStats`.
-- Measured: 3 calls → 1 load (2 hits, 1 miss). A TTL of 10 min → reload at 11 min. 8 concurrent misses → 8 loads, or 1 with `sync = true`.
-- Cache immutable values. Evict after commit. Local caches go stale across instances. Redis needs a deliberate serializer.
+Measured in this section: 3 calls → 1 load (2 hits, 1 miss); a 10-min TTL → reload at 11 min; 8 concurrent misses → 8 loads, or 1 with `sync = true` (without it all 8 miss before any stores the value). Default keys omit the method name, so two `@Cacheable("x")` methods taking one `Long id` each return each other's values.
 
 ---
 
@@ -1320,7 +1281,7 @@ public class RedisCacheSetup {
 
 ## 9.10 Interview questions
 
-Quick round; the section-level "In the interview" and "Self-check" blocks above cover `save` on existing aggregates, repeatable and edited migrations, default keys, TTL, `sync`, mutable values and transactions.
+Quick round; the section-level "In the interview" blocks above cover `save` on existing aggregates, repeatable and edited migrations, default keys, TTL, `sync`, mutable values and transactions.
 
 1. **What is an aggregate in Spring Data JDBC?** → A root entity plus the entities it owns, loaded and saved as one unit through one repository ([9.2](#92-spring-data-jdbc-and-aggregates)).
 2. **Spring Data JDBC vs JPA?** → No persistence context, no lazy loading or dirty checking; eager aggregate loading; children rewritten on save; SQL is predictable.

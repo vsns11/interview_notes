@@ -1,51 +1,10 @@
 # Chapter 21 — Cheat Sheets and Glossary
 
-This last chapter compresses Chapters 1–20 into pages you can scan in a minute: one-page **cheat sheets** by topic, a **"which tool for which job"** table, and an alphabetical **glossary** of 570+ terms, each pointing to the section where it is explained properly. Nothing here is new — if a line doesn't make sense, follow its section reference (written like **§6.2** = Chapter 6, section 2) back to the full explanation.
+This last chapter compresses Chapters 1–20 into pages you can scan in a minute: one-page **cheat sheets** by topic, a **"which tool for which job"** table, and an alphabetical **glossary** of 560+ terms, each pointing to the section where it is explained properly. Nothing here is new — if a line doesn't make sense, follow its section reference (written like **§6.2** = Chapter 6, section 2) back to the full explanation.
 
 > **New to a word?** Every term, acronym and tool name used in this book — from *API*, *CLI* and *PATH* to *GIL*, *DAG* and *Copy-on-Write* — has a one-line plain-English definition in the [glossary (21.22)](#2122-glossary-az). Words about networks and large systems (HTTP, latency, caching, queues) are explained in more depth in [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md).
 
-Every snippet with a visible result was checked by [`code/cheatsheet_checks.py`](code/cheatsheet_checks.py) (Python 3.14; everything shown is valid on 3.12 unless a version is noted).
-
-```
-OK  sheet_21_2_types_operators
-OK  sheet_21_4_strings
-OK  sheet_21_5_methods
-OK  sheet_21_6_iteration
-OK  sheet_21_7_functions
-OK  sheet_21_8_oop
-OK  sheet_21_9_exceptions
-OK  sheet_21_11_tools
-OK  sheet_21_18_copy
-OK  sheet_21_19_numpy_pandas
-all 10 cheat-sheet checks passed
-```
-
-**What's inside**
-
-| # | Sheet | Built from |
-|---|---|---|
-| 21.1 | Syntax and control flow | Ch 1–3 |
-| 21.2 | Types, numbers and operators | Ch 2 |
-| 21.3 | Data structures and big-O | Ch 5, 6, 17, 19 |
-| 21.4 | String methods and formatting | Ch 4 |
-| 21.5 | List, tuple, dict and set methods | Ch 5, 6 |
-| 21.6 | Comprehensions, iterators and generators | Ch 5, 6, 11 |
-| 21.7 | Functions and arguments | Ch 7 |
-| 21.8 | OOP and dunder methods | Ch 10, 12 |
-| 21.9 | Exceptions | Ch 9 |
-| 21.10 | Files, paths and data formats | Ch 9, 14 |
-| 21.11 | `itertools`, `functools`, `collections` | Ch 6, 7, 11, 12 |
-| 21.12 | Decorators, context managers, metaprogramming | Ch 12 |
-| 21.13 | Type hints | Ch 13 |
-| 21.14 | Standard-library quick picks | Ch 14 |
-| 21.15 | Modules, packages and environments | Ch 8 |
-| 21.16 | Testing and debugging | Ch 15 |
-| 21.17 | Concurrency: which tool? | Ch 16 |
-| 21.18 | Performance and internals | Ch 17 |
-| 21.19 | numpy, pandas, matplotlib essentials | Ch 18 |
-| 21.20 | Interview patterns and gotchas | Ch 19, 20 |
-| 21.21 | Which tool for which job | all |
-| 21.22 | Glossary (A–Z) | all |
+Every snippet with a visible result was checked by [`code/cheatsheet_checks.py`](code/cheatsheet_checks.py) (Python 3.14; all 10 checks pass; everything shown is valid on 3.12 unless a version is noted). Each sheet's heading names the chapters it compresses.
 
 **Chapter links:** [1](../01-getting-started/README.md) · [2](../02-variables-types-operators/README.md) · [3](../03-control-flow/README.md) · [4](../04-strings/README.md) · [5](../05-lists-tuples-arrays/README.md) · [6](../06-dicts-sets-collections/README.md) · [7](../07-functions/README.md) · [8](../08-modules-packages-environments/README.md) · [9](../09-errors-exceptions-files/README.md) · [10](../10-oop-in-python/README.md) · [11](../11-iterators-generators-functional/README.md) · [12](../12-decorators-context-managers-metaprogramming/README.md) · [13](../13-type-hints/README.md) · [14](../14-standard-library-tour/README.md) · [15](../15-testing-and-debugging/README.md) · [16](../16-concurrency-and-async/README.md) · [17](../17-performance-memory-internals/README.md) · [18](../18-data-stack/README.md) · [19](../19-python-for-coding-interviews/README.md) · [20](../20-pythonic-idioms-gotchas-interview-qa/README.md)
 
@@ -141,7 +100,7 @@ for x in sorted(xs, key=len): ...               # sorted view, original unchange
 | `min`/`max`/`sum` | O(n) | `Counter(xs)` | O(n) |
 | `heapq.nlargest(k, xs)` | O(n log k) | `list(dict)` | O(n) |
 
-**Big-O** describes how an operation's cost grows with the input size *n*, ignoring constant factors: O(1) constant, O(log n) grows very slowly (halving each step), O(n) linear, O(n log n) typical good sorting, O(n²) quadratic (nested loops). "avg" means typical behaviour; a rare worst case can be slower.
+Big-O: O(1) constant, O(log n) halving, O(n) linear, O(n log n) good sorting, O(n²) nested loops; "avg" = typical, a rare worst case can be slower (glossary: *Big-O*, *Amortised O(1)*).
 
 Rules: membership tests in a loop → use a `set`; queues → `deque`; repeated "smallest next" → `heapq`; never build strings with `+=` in a loop → `"".join` (§4.8, §17.5).
 
@@ -830,9 +789,7 @@ fig.tight_layout(); fig.savefig("img/sales.png", dpi=120); plt.close(fig)
 | Durations | `time.perf_counter()` | `time.time()` | §14.2 |
 | Tests | pytest (+ fixtures, parametrize) | manual prints | §15.4 |
 | Replace a dependency in a test | `unittest.mock.patch` / `monkeypatch` | editing production code | §15.5 |
-| Many I/O waits, sync libraries | threads / `ThreadPoolExecutor` | processes | §16.8 |
-| Many I/O waits, async libraries | `asyncio` | one thread per connection | §16.9 |
-| CPU-heavy pure Python | `ProcessPoolExecutor` | threads (standard build) | §16.7 |
+| Concurrency (I/O waits, CPU-heavy work) | see the table in 21.17 | — | §16.10 |
 | Find the slow part | `cProfile`, `py-spy` | guessing | §17.6 |
 | Memoise a pure function | `functools.cache` | hand-rolled global dict | §7.6 |
 | Dependencies per project | `venv` + `pyproject.toml` (+ `uv`) | global `pip install` | §8.7, §8.8 |
@@ -846,15 +803,14 @@ Each entry: **term** — plain meaning — section where it is explained. Links 
 
 | Term | Meaning | Where |
 |---|---|---|
-| ABC (abstract base class) | A class (from `abc`) with `@abstractmethod`s that subclasses must implement before they can be instantiated | [10.7](../10-oop-in-python/README.md) |
+| ABC (abstract base class) / abstract method | A class (from `abc`) whose `@abstractmethod`-marked methods a subclass must implement before it can be instantiated | [10.7](../10-oop-in-python/README.md) |
 | Absolute import | Import by full path from the project/package root (`from pkg.sub import x`) | [8.4](../08-modules-packages-environments/README.md) |
-| Abstract method | Method marked `@abstractmethod` that a subclass must implement before the class can be instantiated | [10.7](../10-oop-in-python/README.md) |
 | Accumulate | `itertools.accumulate`: running totals (or running results of any two-argument function) | [11.5](../11-iterators-generators-functional/README.md) |
 | Adjacency list | Graph stored as "node → list of its neighbours", usually a `dict` of lists | [19.8](../19-python-for-coding-interviews/README.md) |
 | Agg backend | matplotlib's non-interactive renderer that only writes image files — for scripts and servers without a screen | [18.12](../18-data-stack/README.md) |
 | Aliasing | Two names bound to the same object, so a change through one is seen through the other | [5.8](../05-lists-tuples-arrays/README.md) |
 | Amortised O(1) | An operation that is occasionally expensive but constant on average over many calls (e.g. `list.append`) | [5.3](../05-lists-tuples-arrays/README.md) |
-| Annotation | A type hint attached to a parameter, return value or variable; stored in `__annotations__`, not enforced | [13.2](../13-type-hints/README.md) |
+| Annotation / type hint | Note describing the expected type of a parameter, return value or variable, for tools and readers; stored in `__annotations__`, not enforced | [13.2](../13-type-hints/README.md) |
 | `Any` | Type-hint escape hatch that disables checking for a value | [13.5](../13-type-hints/README.md) |
 | API | Application programming interface: the set of functions, classes or HTTP endpoints one piece of software offers to others | [1.3](../01-getting-started/README.md) |
 | `apply` (pandas) | Runs a Python function per row/column/group — flexible but slow; prefer vectorised operations | [18.11](../18-data-stack/README.md) |
@@ -878,12 +834,11 @@ Each entry: **term** — plain meaning — section where it is explained. Links 
 | Backpressure | Slowing producers when consumers can't keep up, e.g. with a bounded queue | [16.5](../16-concurrency-and-async/README.md) |
 | Backtracking | Search that builds a candidate step by step and undoes steps that can't succeed | [19.11](../19-python-for-coding-interviews/README.md) |
 | Banker's rounding | Round-half-to-even, used by `round()` (`round(2.5) == 2`) | [2.5](../02-variables-types-operators/README.md) |
-| Base case | The input where a recursive function stops recursing | [7.7](../07-functions/README.md) |
-| Base class | The class another class inherits from (also called parent or superclass) | [10.4](../10-oop-in-python/README.md) |
+| Base class / subclass | The class another inherits from (parent, superclass) / the class that inherits (child) | [10.4](../10-oop-in-python/README.md) |
 | `BaseException` | Root of all exceptions, including `SystemExit` and `KeyboardInterrupt`; catch `Exception` instead | [9.1](../09-errors-exceptions-files/README.md) |
 | BFS (breadth-first search) | Graph/tree traversal level by level with a queue; shortest paths in unweighted graphs | [19.8](../19-python-for-coding-interviews/README.md) |
 | Big-O | Notation for how cost grows with input size, ignoring constants | [17.5](../17-performance-memory-internals/README.md) |
-| Binary heap | Complete binary tree stored in an array where each parent is ≤ its children (min-heap); what `heapq` uses | [6.10](../06-dicts-sets-collections/README.md) |
+| Binary heap / `heapq` / min-heap | Complete binary tree stored in an array where each parent is ≤ its children, so the smallest item is at index 0; `heapq` implements it on a list (O(log n) push/pop) | [6.10](../06-dicts-sets-collections/README.md) |
 | Binary mode | Opening a file with `"b"` so reads/writes are raw `bytes` with no encoding or newline translation | [9.9](../09-errors-exceptions-files/README.md) |
 | Binary search | Finding a position in sorted data by halving the range each step, O(log n) | [19.6](../19-python-for-coding-interviews/README.md) |
 | Binary search on the answer | Binary-searching a range of candidate answers using a yes/no "is this value feasible?" check | [19.6](../19-python-for-coding-interviews/README.md) |
@@ -976,7 +931,6 @@ Each entry: **term** — plain meaning — section where it is explained. Links 
 | Deadlock | Threads waiting for each other's locks forever | [16.11](../16-concurrency-and-async/README.md) |
 | Debugger | Tool that pauses a running program so you can step line by line and inspect variables (pdb, IDE debuggers) | [15.11](../15-testing-and-debugging/README.md) |
 | `Decimal` | Exact decimal arithmetic type for money; construct from strings | [14.8](../14-standard-library-tour/README.md) |
-| Decode / encode | `bytes.decode()` turns bytes into `str`; `str.encode()` turns text into bytes, both using an encoding such as UTF-8 | [4.9](../04-strings/README.md) |
 | Decorator | Callable that takes a function (or class) and returns a replacement; `@d` means `f = d(f)` | [12.1](../12-decorators-context-managers-metaprogramming/README.md) |
 | Decorator factory | Function taking arguments that returns a decorator (`@retry(times=3)`), giving three nested levels | [12.1](../12-decorators-context-managers-metaprogramming/README.md) |
 | Deep copy | Recursive copy of an object and everything it contains (`copy.deepcopy`) | [5.8](../05-lists-tuples-arrays/README.md) |
@@ -991,7 +945,6 @@ Each entry: **term** — plain meaning — section where it is explained. Links 
 | dict | Mutable mapping from hashable keys to values; hash table, insertion-ordered | [6.1](../06-dicts-sets-collections/README.md) |
 | Dict view | Live, set-like object from `keys()`/`items()`/`values()` | [6.4](../06-dicts-sets-collections/README.md) |
 | Dijkstra's algorithm | Shortest paths with non-negative weights using a min-heap | [19.8](../19-python-for-coding-interviews/README.md) |
-| Directed / weighted graph | Edges have a direction / edges carry a cost such as distance | [19.8](../19-python-for-coding-interviews/README.md) |
 | Django / Flask / FastAPI | Popular Python web frameworks: full-featured / minimal / async and type-hint driven | [1.3](../01-getting-started/README.md) |
 | Docstring | String literal as the first statement of a module/class/function, shown by `help()` | [1.10](../01-getting-started/README.md) |
 | doctest | Runs examples written in docstrings as tests | [15.7](../15-testing-and-debugging/README.md) |
@@ -1007,10 +960,9 @@ Each entry: **term** — plain meaning — section where it is explained. Links 
 | Dynamic typing | Types belong to objects; names can be rebound to any type | [2.3](../02-variables-types-operators/README.md) |
 | EAFP | "Easier to ask forgiveness than permission": try, then handle the exception | [9.5](../09-errors-exceptions-files/README.md) |
 | Eager evaluation | Computing every result immediately (a list comprehension) — the opposite of lazy | [11.4](../11-iterators-generators-functional/README.md) |
-| Edge / node | A graph's connections / its points (nodes are also called vertices) | [19.8](../19-python-for-coding-interviews/README.md) |
 | Editable install | Installing a project so source edits take effect without reinstalling (`pip install -e .`) | [8.8](../08-modules-packages-environments/README.md) |
 | Ellipsis (`...`) | Built-in singleton object, often used as a placeholder body in stubs; also NumPy slicing shorthand | [3.8](../03-control-flow/README.md) |
-| Encoding | Rule turning text into bytes (UTF-8 is the standard) | [4.9](../04-strings/README.md) |
+| Encoding / encode / decode | Rule turning text into bytes (UTF-8 is the standard); `str.encode()` text → bytes, `bytes.decode()` bytes → text | [4.9](../04-strings/README.md) |
 | End-to-end (E2E) test | Test of the whole system as a user would exercise it, from input to final output | [15.1](../15-testing-and-debugging/README.md) |
 | Enum | Class of named constant members (`enum.Enum`, `StrEnum`, `auto()`) | [10.11](../10-oop-in-python/README.md) |
 | `enumerate` | Built-in yielding `(index, item)` pairs | [3.6](../03-control-flow/README.md) |
@@ -1031,7 +983,7 @@ Each entry: **term** — plain meaning — section where it is explained. Links 
 | f-string | String literal `f"…{expr:spec}…"` that evaluates and formats expressions | [4.6](../04-strings/README.md) |
 | Fake | Test double with a working lightweight implementation (e.g. in-memory DB) | [15.5](../15-testing-and-debugging/README.md) |
 | Fall-through | In other languages' `switch`, running into the next case; Python's `match` never does this | [3.4](../03-control-flow/README.md) |
-| Falsy | Value treated as false in a condition: `None`, `False`, zeros, empty containers | [2.6](../02-variables-types-operators/README.md) |
+| Falsy / truthy | Value treated as false in a condition (`None`, `False`, zeros, empty containers) / as true (anything else) | [2.6](../02-variables-types-operators/README.md) |
 | Fancy indexing | NumPy indexing with an array of positions (`a[[0, 2]]`); returns a copy | [18.1](../18-data-stack/README.md) |
 | Fast and slow pointers | Two pointers moving at speeds 1 and 2 to find a list's middle or a cycle's entry in O(1) space (Floyd) | [19.16](../19-python-for-coding-interviews/README.md) |
 | Figure / Axes | matplotlib's whole image / a single plot area within it | [18.12](../18-data-stack/README.md) |
@@ -1057,31 +1009,27 @@ Each entry: **term** — plain meaning — section where it is explained. Links 
 | Future | Placeholder for a result that will be available later (`.result()`) | [16.8](../16-concurrency-and-async/README.md) |
 | Garbage collector (cyclic) | CPython component that finds and frees reference cycles | [17.2](../17-performance-memory-internals/README.md) |
 | Generations (GC) | The cyclic garbage collector groups objects by age and scans young ones most often | [17.2](../17-performance-memory-internals/README.md) |
-| Generator | Iterator produced by a function containing `yield`; pauses between values | [11.2](../11-iterators-generators-functional/README.md) |
+| Generator / generator object | Iterator returned by calling a function containing `yield`; its body runs only as values are requested, pausing between them | [11.2](../11-iterators-generators-functional/README.md) |
 | Generator expression | Lazy comprehension in parentheses: `(x * x for x in xs)` | [11.2](../11-iterators-generators-functional/README.md) |
-| Generator object | The iterator returned by calling a generator function; its body runs only as you ask for values | [11.2](../11-iterators-generators-functional/README.md) |
-| Generic class | Class parameterised by a type variable (`class Box[T]`), so `Box[int]` and `Box[str]` are checked separately | [13.6](../13-type-hints/README.md) |
-| Generic type | Type parameterised by other types (`list[int]`, `dict[str, float]`) | [13.3](../13-type-hints/README.md) |
+| Generic type / generic class | Type parameterised by other types (`list[int]`, `dict[str, float]`); a generic class takes a type variable (`class Box[T]`) so `Box[int]` and `Box[str]` are checked separately | [13.6](../13-type-hints/README.md) |
 | GIL (Global Interpreter Lock) | CPython lock letting one thread run Python bytecode at a time | [16.6](../16-concurrency-and-async/README.md) |
 | Git | Version-control system that records every change to a project's files | [1.4](../01-getting-started/README.md) |
 | `global` | Statement letting a function rebind a module-level name | [7.3](../07-functions/README.md) |
 | Gotcha | Behaviour that surprises people and causes bugs (mutable defaults, late binding, …) | [20.2](../20-pythonic-idioms-gotchas-interview-qa/README.md) |
 | GraalPy / MicroPython | Alternative Python implementations: on the Java VM / on tiny microcontrollers | [1.8](../01-getting-started/README.md) |
 | Gradual typing | Adding type hints incrementally; unannotated code is treated as `Any` | [13.1](../13-type-hints/README.md) |
-| Graph | Set of nodes connected by edges — maps, networks, dependencies | [19.8](../19-python-for-coding-interviews/README.md) |
+| Graph (nodes, edges; directed / weighted) | Set of nodes (vertices) connected by edges — maps, networks, dependencies; directed edges have a direction, weighted edges carry a cost | [19.8](../19-python-for-coding-interviews/README.md) |
 | Greedy algorithm | Builds an answer by always taking the locally best choice; correct only when an exchange argument proves it | [19.14](../19-python-for-coding-interviews/README.md) |
 | groupby (itertools) | Groups *consecutive* items with equal keys — sort first | [11.5](../11-iterators-generators-functional/README.md) |
 | groupby (pandas) | Split–apply–combine: aggregate or transform rows per group | [18.7](../18-data-stack/README.md) |
 | Guard (match) | `if` condition attached to a `case` pattern | [3.4](../03-control-flow/README.md) |
 | Guard clause | Early `return`/`continue` for special cases to keep code flat | [3.2](../03-control-flow/README.md) |
 | Has-a / is-a | Composition (a car *has an* engine) vs inheritance (a car *is a* vehicle) | [10.8](../10-oop-in-python/README.md) |
-| Hash | Integer computed from a value by `hash()`, used to place it in a hash table | [6.2](../06-dicts-sets-collections/README.md) |
-| Hash function | Function mapping any data to a fixed-size value; cryptographic ones (SHA-256) are hard to reverse or collide | [14.9](../14-standard-library-tour/README.md) |
+| Hash / hash function | Hash function: maps any data to a fixed-size value; `hash()` gives the integer that places a value in a hash table; cryptographic ones (SHA-256) are hard to reverse or collide | [6.2](../06-dicts-sets-collections/README.md) |
 | Hash randomisation | str/bytes hashes are salted with a random per-process seed (`PYTHONHASHSEED`), so set order can change between runs | [6.2](../06-dicts-sets-collections/README.md) |
 | Hash table | Array of slots indexed by hash — the structure behind dict and set | [6.2](../06-dicts-sets-collections/README.md) |
 | Hashable | Has a hash that never changes and consistent `__eq__`; can be a dict key or set item | [6.2](../06-dicts-sets-collections/README.md) |
 | hashlib | Standard-library cryptographic hash functions (SHA-256…) | [14.9](../14-standard-library-tour/README.md) |
-| Heap / heapq | Binary min-heap stored in a list; priority queues with O(log n) push/pop | [6.10](../06-dicts-sets-collections/README.md) |
 | Heapify | Turning a list into a heap in place in O(n) (`heapq.heapify`) | [6.10](../06-dicts-sets-collections/README.md) |
 | Hexadecimal / octal / binary | Base-16 (`0xff`), base-8 (`0o17`) and base-2 (`0b101`) ways of writing integers | [2.5](../02-variables-types-operators/README.md) |
 | Higher-order function | Function that takes or returns functions (`map`, `sorted(key=…)`, decorators) | [7.5](../07-functions/README.md) |
@@ -1144,7 +1092,7 @@ Each entry: **term** — plain meaning — section where it is explained. Links 
 | `Literal` | Type hint restricting a value to specific constants | [13.10](../13-type-hints/README.md) |
 | Literal (value) | A value written directly in code: `42`, `"hi"`, `[1, 2]`, `{"a": 1}` | [2.4](../02-variables-types-operators/README.md) |
 | Load factor | How full a hash table is; CPython resizes a dict at about 2/3 full to keep lookups fast | [6.2](../06-dicts-sets-collections/README.md) |
-| Lock | Synchronisation primitive allowing one thread into a critical section | [16.4](../16-concurrency-and-async/README.md) |
+| Lock / mutex | "Mutual exclusion" synchronisation primitive: only one holder (thread) at a time may enter a critical section | [16.4](../16-concurrency-and-async/README.md) |
 | Lock file | File pinning exact versions of every dependency for reproducible installs | [8.8](../08-modules-packages-environments/README.md) |
 | Log level | Severity of a log message: DEBUG < INFO < WARNING < ERROR < CRITICAL | [14.4](../14-standard-library-tour/README.md) |
 | Logger / Handler / Formatter | logging's named source / output destination / message layout | [14.4](../14-standard-library-tour/README.md) |
@@ -1164,15 +1112,13 @@ Each entry: **term** — plain meaning — section where it is explained. Links 
 | Merge sort | Divide-and-conquer sort: split in half, sort each, merge; O(n log n) and stable | [19.17](../19-python-for-coding-interviews/README.md) |
 | Metaclass | The class of a class (default `type`); controls class creation | [12.6](../12-decorators-context-managers-metaprogramming/README.md) |
 | Method | Function defined in a class and called on its instances | [10.1](../10-oop-in-python/README.md) |
-| Min-heap | Heap where the smallest item is always at the top (index 0) | [6.10](../06-dicts-sets-collections/README.md) |
 | Mixin | Small class adding one capability through multiple inheritance | [10.6](../10-oop-in-python/README.md) |
 | Mock | Test double that records calls and returns configured values | [15.5](../15-testing-and-debugging/README.md) |
 | Module | A `.py` file whose names can be imported | [8.1](../08-modules-packages-environments/README.md) |
 | Mojibake | Garbled text produced by decoding bytes with the wrong encoding | [4.9](../04-strings/README.md) |
 | Monkey patching | Replacing attributes of modules/classes at runtime | [12.7](../12-decorators-context-managers-metaprogramming/README.md) |
 | Monotonic clock | Clock that never goes backwards (`time.monotonic`, `perf_counter`) — correct for timeouts and durations | [14.2](../14-standard-library-tour/README.md) |
-| Monotonic deque | Deque kept in sorted order, used for sliding-window maximum/minimum in O(n) | [19.4](../19-python-for-coding-interviews/README.md) |
-| Monotonic stack | Stack kept in sorted order to answer "next greater/smaller" in O(n) | [19.4](../19-python-for-coding-interviews/README.md) |
+| Monotonic stack / deque | Stack (or deque) kept in sorted order: "next greater/smaller" in O(n); the deque version also drops items leaving a window — sliding-window max/min in O(n) | [19.4](../19-python-for-coding-interviews/README.md) |
 | MRO (method resolution order) | Order Python searches classes for attributes, computed by C3 linearisation | [10.5](../10-oop-in-python/README.md) |
 | MST (minimum spanning tree) | Cheapest set of edges connecting all nodes of a weighted graph; Kruskal's algorithm uses union-find | [19.9](../19-python-for-coding-interviews/README.md) |
 | Multi-paradigm | Supports several programming styles: procedural, object-oriented and functional | [1.2](../01-getting-started/README.md) |
@@ -1180,7 +1126,6 @@ Each entry: **term** — plain meaning — section where it is explained. Links 
 | Mutable | Can be changed in place (`list`, `dict`, `set`) | [2.2](../02-variables-types-operators/README.md) |
 | Mutable default argument | Default like `[]` created once and shared by all calls — use `None` | [7.2](../07-functions/README.md) |
 | Mutation testing | Deliberately changing code (`<` → `<=`) to check that some test fails | [15.6](../15-testing-and-debugging/README.md) |
-| Mutex | "Mutual exclusion" lock: only one holder at a time | [16.6](../16-concurrency-and-async/README.md) |
 | mypy | Static type checker for Python type hints | [13.13](../13-type-hints/README.md) |
 | mypyc | Compiler that turns type-annotated Python modules into C extensions | [17.7](../17-performance-memory-internals/README.md) |
 | Naive datetime | A `datetime` without time-zone information | [14.1](../14-standard-library-tour/README.md) |
@@ -1210,7 +1155,6 @@ Each entry: **term** — plain meaning — section where it is explained. Links 
 | Operator overloading | Defining dunder methods so operators work on your types | [10.3](../10-oop-in-python/README.md) |
 | Operator precedence | Which operators bind first (`*` before `+`); use parentheses when unsure | [2.8](../02-variables-types-operators/README.md) |
 | Optimal substructure | An optimal answer is built from optimal answers to subproblems — needed for DP and greedy | [19.10](../19-python-for-coding-interviews/README.md) |
-| `Optional[X]` | Type hint meaning `X \| None` | [13.4](../13-type-hints/README.md) |
 | OrderedDict | Dict with `move_to_end` and order-sensitive equality; handy for LRU caches | [6.9](../06-dicts-sets-collections/README.md) |
 | Overflow | A value exceeding what a fixed-size type can hold; Python `int`s never overflow, floats become `inf` | [2.5](../02-variables-types-operators/README.md) |
 | Overlapping subproblems | The same smaller problems recur many times — caching them is what makes DP fast | [19.10](../19-python-for-coding-interviews/README.md) |
@@ -1271,9 +1215,8 @@ Each entry: **term** — plain meaning — section where it is explained. Links 
 | `range` | Lazy, immutable sequence of integers (`range(start, stop, step)`, stop excluded) | [3.6](../03-control-flow/README.md) |
 | Raw string | `r"…"` literal where backslashes are not escapes | [4.5](../04-strings/README.md) |
 | Re-raise | Using a bare `raise` inside `except` to send the same exception onward | [9.3](../09-errors-exceptions-files/README.md) |
-| Recursion | A function calling itself on a smaller input | [7.7](../07-functions/README.md) |
+| Recursion (base case, recursive case) | A function calling itself on a smaller input (the recursive case) until it reaches an input where it stops (the base case) | [7.7](../07-functions/README.md) |
 | Recursion limit | Maximum call depth (default 1000), `sys.getrecursionlimit()` | [7.7](../07-functions/README.md) |
-| Recursive case | Part of a recursive function that calls itself on a smaller input | [7.7](../07-functions/README.md) |
 | Reentrant | Can be entered again while already in use (an `RLock`, a reusable context manager) | [12.3](../12-decorators-context-managers-metaprogramming/README.md) |
 | Reference count | Number of references to an object; freed when it reaches zero | [17.2](../17-performance-memory-internals/README.md) |
 | Reference cycle | Objects that refer to each other, so reference counts never reach zero; the cyclic GC frees them | [17.2](../17-performance-memory-internals/README.md) |
@@ -1320,7 +1263,6 @@ Each entry: **term** — plain meaning — section where it is explained. Links 
 | Stack | LIFO structure: push and pop at the same end (a Python `list`) | [19.4](../19-python-for-coding-interviews/README.md) |
 | Standard library | Modules shipped with Python ("batteries included") | [8.1](../08-modules-packages-environments/README.md) |
 | Standard output (stdout) | The stream `print` writes to — normally the terminal; `stderr` is the separate error stream | [1.7](../01-getting-started/README.md) |
-| Star-unpacking | `*` gathering "the rest" (`first, *rest = xs`) or spreading an iterable (`f(*xs)`, `[*a, *b]`) | [5.10](../05-lists-tuples-arrays/README.md) |
 | Start method | How `multiprocessing` creates children: `fork`, `spawn` or `forkserver` | [16.7](../16-concurrency-and-async/README.md) |
 | Static typing | Checking types before the program runs (mypy, pyright) rather than at run time | [13.1](../13-type-hints/README.md) |
 | `staticmethod` | Method with no implicit first argument; a plain function in the class namespace | [10.1](../10-oop-in-python/README.md) |
@@ -1333,7 +1275,6 @@ Each entry: **term** — plain meaning — section where it is explained. Links 
 | Structured logging | Log records as key–value data (often JSON) instead of free text, so tools can search them | [14.4](../14-standard-library-tour/README.md) |
 | Stub | Test double returning canned answers | [15.5](../15-testing-and-debugging/README.md) |
 | Stub file (`.pyi`) | File with only type signatures for a module | [13.13](../13-type-hints/README.md) |
-| Subclass | Class that inherits from another (its base class) | [10.4](../10-oop-in-python/README.md) |
 | Subinterpreter | Separate Python interpreter inside the same process, which can have its own GIL (3.12+) | [16.6](../16-concurrency-and-async/README.md) |
 | subprocess | Module for running external commands (`subprocess.run([...])`) | [14.6](../14-standard-library-tour/README.md) |
 | Substring | A contiguous part of a string | [4.3](../04-strings/README.md) |
@@ -1345,7 +1286,6 @@ Each entry: **term** — plain meaning — section where it is explained. Links 
 | `sys.modules` | Cache of already-imported modules | [8.2](../08-modules-packages-environments/README.md) |
 | `sys.path` | List of directories searched for imports | [8.2](../08-modules-packages-environments/README.md) |
 | t-string | Template string literal `t"…"` (3.14) producing a `Template` object instead of a `str` | [4.6](../04-strings/README.md) |
-| Tabulation | Bottom-up DP: fill a table from the smallest subproblems upwards | [19.10](../19-python-for-coding-interviews/README.md) |
 | Tail-call optimisation | Reusing the frame when a function's last action is a call; CPython doesn't do it | [7.7](../07-functions/README.md) |
 | Task (asyncio) | Wrapper that schedules a coroutine on the event loop to run concurrently (`create_task`) | [16.9](../16-concurrency-and-async/README.md) |
 | TaskGroup | asyncio structured concurrency: runs tasks and cancels siblings on failure (3.11+) | [16.9](../16-concurrency-and-async/README.md) |
@@ -1363,7 +1303,7 @@ Each entry: **term** — plain meaning — section where it is explained. Links 
 | Timsort | Python's stable, adaptive merge/insertion sort, O(n log n) | [5.7](../05-lists-tuples-arrays/README.md) |
 | Token | Smallest meaningful piece of source code (name, number, operator); also a secret string such as an API key | [1.8](../01-getting-started/README.md) |
 | TOML | Simple configuration file format used by `pyproject.toml`; read with `tomllib` | [8.8](../08-modules-packages-environments/README.md) |
-| Top-down / bottom-up DP | Recursion with memoisation / iterative table filling | [19.10](../19-python-for-coding-interviews/README.md) |
+| Top-down / bottom-up DP (tabulation) | Recursion with memoisation / tabulation: iteratively filling a table from the smallest subproblems upwards | [19.10](../19-python-for-coding-interviews/README.md) |
 | Top-k | Finding the k largest/smallest items, typically with a size-k heap in O(n log k) | [19.5](../19-python-for-coding-interviews/README.md) |
 | Topological sort | Ordering of a DAG's nodes so every edge points forward | [19.8](../19-python-for-coding-interviews/README.md) |
 | tottime / cumtime | cProfile columns: time inside a function itself / including everything it calls | [17.6](../17-performance-memory-internals/README.md) |
@@ -1374,7 +1314,6 @@ Each entry: **term** — plain meaning — section where it is explained. Links 
 | Trie | Prefix tree storing strings letter by letter; insert, search and prefix checks are O(word length) | [19.13](../19-python-for-coding-interviews/README.md) |
 | True division | `/`, which always returns a float (`7 / 2 == 3.5`) | [2.5](../02-variables-types-operators/README.md) |
 | Trusted Publishing | Uploading to PyPI from CI with short-lived credentials instead of a stored token | [8.9](../08-modules-packages-environments/README.md) |
-| Truthy | Value treated as true in a condition (anything not falsy) | [2.6](../02-variables-types-operators/README.md) |
 | try / except / else / finally | Exception-handling statement; `else` on success, `finally` always | [9.2](../09-errors-exceptions-files/README.md) |
 | tuple | Immutable ordered sequence; hashable if its items are | [5.9](../05-lists-tuples-arrays/README.md) |
 | Tuple packing | Commas create a tuple: `t = 1, 2` | [5.9](../05-lists-tuples-arrays/README.md) |
@@ -1384,7 +1323,6 @@ Each entry: **term** — plain meaning — section where it is explained. Links 
 | Type checker | Tool that reads type hints and reports mismatches without running code (mypy, pyright) | [13.1](../13-type-hints/README.md) |
 | Type code | One-letter code fixing the element type of an `array.array` (`"i"`, `"d"`) | [5.1](../05-lists-tuples-arrays/README.md) |
 | Type conversion | Changing a value's type (`int("3")`); implicit only within the numeric tower | [2.7](../02-variables-types-operators/README.md) |
-| Type hint | Annotation describing expected types for tools and readers | [13.1](../13-type-hints/README.md) |
 | Type inference | A checker working out a type itself from the code (`x = 1` → `int`) | [13.2](../13-type-hints/README.md) |
 | `type: ignore` | Comment silencing a type-checker error on one line | [13.13](../13-type-hints/README.md) |
 | TypedDict | Type hint for dicts with a fixed set of typed keys | [13.9](../13-type-hints/README.md) |
@@ -1393,12 +1331,12 @@ Each entry: **term** — plain meaning — section where it is explained. Links 
 | ufunc | NumPy universal function operating element-wise in C (`np.sqrt`, `+`) | [18.1](../18-data-stack/README.md) |
 | Unicode | Standard assigning a number (code point) to every character | [4.9](../04-strings/README.md) |
 | Union by size | Union-find optimisation: attach the smaller tree under the larger one's root | [19.9](../19-python-for-coding-interviews/README.md) |
-| Union type | `A \| B`: a value that may be either type | [13.4](../13-type-hints/README.md) |
+| Union type / `Optional[X]` | `A \| B`: a value that may be either type; `Optional[X]` means `X \| None` | [13.4](../13-type-hints/README.md) |
 | Union-Find (DSU) | Structure tracking merging groups with near-O(1) find/union | [19.9](../19-python-for-coding-interviews/README.md) |
 | Unit test | Fast test of one small piece in isolation | [15.1](../15-testing-and-debugging/README.md) |
 | unittest | Standard-library xUnit-style testing framework | [15.3](../15-testing-and-debugging/README.md) |
 | `unittest.mock` | Standard library for mocks and `patch` | [15.5](../15-testing-and-debugging/README.md) |
-| Unpacking | Assigning an iterable's items to several names (`a, *rest = xs`) | [5.10](../05-lists-tuples-arrays/README.md) |
+| Unpacking / star-unpacking | Assigning an iterable's items to several names (`a, b = xs`); `*` gathers "the rest" (`first, *rest = xs`) or spreads an iterable (`f(*xs)`, `[*a, *b]`) | [5.10](../05-lists-tuples-arrays/README.md) |
 | URL | Web address (`https://host/path?query`); parse with `urllib.parse` | [14.12](../14-standard-library-tour/README.md) |
 | UTC | Coordinated Universal Time — the time-zone-free reference for storing timestamps | [14.1](../14-standard-library-tour/README.md) |
 | UTF-8 | Variable-length Unicode encoding, 1–4 bytes per character; the default to use | [4.9](../04-strings/README.md) |

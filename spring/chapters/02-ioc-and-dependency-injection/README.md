@@ -1,22 +1,8 @@
 # Chapter 2 — IoC and Dependency Injection
 
-Everything in Spring — web controllers (classes that handle HTTP requests), transactions (groups of database changes that succeed or fail together), security, Spring Data repositories (data-access objects Spring generates for you) — sits on one foundation: the **IoC container** that creates your objects and connects them. If you understand the container, the rest of Spring stops feeling like magic. This chapter opens it up: how beans are defined, how dependencies are found and injected, scopes, the full bean lifecycle, post-processors, circular dependencies, lazy beans, conditions and profiles, events, and two Framework 7 additions — JSpecify null-safety and programmatic bean registration.
+Everything in Spring — web controllers, transactions, security, Spring Data repositories — sits on one foundation: the **IoC container** that creates your objects and connects them. Understand the container and the rest of Spring stops feeling like magic. This chapter covers bean definition, dependency resolution and injection, scopes, the full lifecycle, post-processors, circular dependencies, lazy beans, conditions and profiles, events, and two Framework 7 additions — JSpecify null-safety and `BeanRegistrar`.
 
-**What you'll learn**
-
-1. Inversion of Control and Dependency Injection, with and without Spring (§2.1).
-2. `BeanFactory` vs `ApplicationContext` (§2.2).
-3. Four ways to define beans: component scanning, `@Bean` methods (full vs lite `@Configuration`), `@Import`, `BeanRegistrar` (§2.3).
-4. Constructor, setter and field injection — and why constructor wins (§2.4).
-5. How Spring picks a bean: by type, `@Primary`, `@Fallback`, `@Qualifier`, collections, optional dependencies (§2.5).
-6. Scopes: singleton, prototype, request, session (§2.6).
-7. The lifecycle: `@PostConstruct`, `InitializingBean`, init/destroy methods, `SmartLifecycle` (§2.7).
-8. `BeanPostProcessor` and `BeanFactoryPostProcessor` — the container's extension points (§2.8).
-9. Circular dependencies — why they fail and how to fix them (§2.9).
-10. Lazy initialization (§2.10), `@Conditional` and profiles (§2.11), application events (§2.12).
-11. JSpecify null-safety (§2.13) and `BeanRegistrar` (§2.14), both new in Framework 7.
-
-Runnable code: [`code/ioc-container/`](code/ioc-container/) (plain Spring containers inside JUnit tests — JUnit is Java's standard testing framework — so each demo gets its own isolated context) and [`code/web-scopes/`](code/web-scopes/) (request and session scopes). Both built with `mvn -q -B -ntp verify` on Spring Boot 4.1.1 / Framework 7.0.9 / JDK 25. Each demo writes to a small `Trace` log and the tests print it, so the outputs below show the *order* in which Spring did things.
+Runnable code: [`code/ioc-container/`](code/ioc-container/) (plain Spring containers inside JUnit tests, so each demo gets its own isolated context) and [`code/web-scopes/`](code/web-scopes/) (request and session scopes). Both built with `mvn -q -B -ntp verify` on Spring Boot 4.1.1 / Framework 7.0.9 / JDK 25. Each demo writes to a small `Trace` log that the tests print, so the outputs show the *order* in which Spring did things.
 
 ---
 
@@ -24,11 +10,9 @@ Runnable code: [`code/ioc-container/`](code/ioc-container/) (plain Spring contai
 
 ### What it is
 - **Dependency**: an object another object needs to do its job. A `PriceCalculator` needs a `TaxPolicy`.
-- **Inversion of Control (IoC)**: instead of your code creating and controlling its collaborators, an outside party (the framework) does it and calls your code.
-- **Dependency Injection (DI)**: the specific form of IoC where an object receives its dependencies from outside — through its constructor, a setter or a field — instead of creating them with `new` or looking them up.
+- **Inversion of Control (IoC)**: an outside party (the framework), not your code, creates and controls collaborators and calls your code.
+- **Dependency Injection (DI)**: the form of IoC where an object receives its dependencies from outside — constructor, setter or field — instead of creating them with `new` or looking them up.
 - **IoC container**: the Spring object that performs DI for a whole application. Objects it manages are **beans**.
-
-Analogy: a film crew. An actor (your class) doesn't hire their co-stars; the casting director (container) reads the script (configuration), casts everyone, and puts them on set together.
 
 ### The problem it solves
 ```java
@@ -45,15 +29,13 @@ public class PriceCalculator {
 }
 ```
 
-`PriceCalculator` depends on the *interface* `TaxPolicy`, not on `FlatTaxPolicy`. That already gives you testability (pass a fake `TaxPolicy` in a **unit test** — a small automated test of one class in isolation) and flexibility (swap implementations without editing the class). DI is first a *design style*; the container just automates the wiring. Someone still has to call the constructors:
+`PriceCalculator` depends on the *interface* `TaxPolicy`, not on `FlatTaxPolicy`. That already gives testability (pass a fake `TaxPolicy` in a unit test) and flexibility (swap implementations without editing the class). DI is first a *design style*; the container automates the wiring:
 
 ```java
 // Without Spring — you wire by hand (fine for 3 classes, painful for 300):
 PriceCalculator calc = new PriceCalculator(new FlatTaxPolicy());
-```
 
-```java
-// With Spring — you describe the wiring once:
+// With Spring — describe the wiring once:
 @Configuration
 public class ShopConfig {
     @Bean TaxPolicy taxPolicy() { return new FlatTaxPolicy(); }
@@ -71,29 +53,24 @@ try (var ctx = new AnnotationConfigApplicationContext(ShopConfig.class)) {
 ### Why the container is worth it
 | Hand wiring | Spring container |
 |---|---|
-| You decide creation order | Spring works out the order from the dependency graph (the map of which object needs which) |
+| You decide creation order | Spring derives the order from the dependency graph |
 | One object per `new`; sharing needs care | Singletons shared automatically; other scopes available |
-| No central place to add cross-cutting behaviour (concerns like logging or security that touch many classes) | Can wrap beans in proxies (stand-in objects that intercept calls before passing them on): transactions, security, caching (Chapter 4) |
+| No central place for cross-cutting behaviour (logging, security touching many classes) | Can wrap beans in proxies (stand-ins that intercept calls): transactions, security, caching (Chapter 4) |
 | Configuration values passed by hand | Values injected from properties/environment (Chapter 3) |
 | Start-up/shut-down hooks by hand | Lifecycle callbacks and graceful shutdown |
 
 ### When not to use it
-Not every object should be a bean. **Beans are the long-lived "service" objects** — services, repositories, controllers, clients, configuration. Data objects (a `Greeting`, an `Order` entity — a class mapped to a database table — or a DTO, Data Transfer Object: a plain class that just carries data between layers) are created with `new` in your code, many times per request. Making them beans adds nothing.
+**Beans are the long-lived "service" objects** — services, repositories, controllers, clients, configuration. Data objects (a `Greeting`, an `Order` entity, a DTO — Data Transfer Object, a plain data carrier between layers) are created with `new`, many times per request; making them beans adds nothing.
 
-The design ideas behind DI — the Dependency Inversion Principle and "program to an interface" — are covered in [LLD §4.10](../../../lld/chapters/04-solid-principles/README.md) and [LLD Chapter 5](../../../lld/chapters/05-design-principles/README.md).
-
-### TL;DR
-DI = objects receive dependencies instead of creating them. Spring's IoC container automates DI for the whole app and manages each bean's life.
+The design ideas behind DI — Dependency Inversion and "program to an interface" — are in [LLD §4.10](../../../lld/chapters/04-solid-principles/README.md) and [LLD Chapter 5](../../../lld/chapters/05-design-principles/README.md).
 
 ---
 
 ## 2.2 The container: `BeanFactory` vs `ApplicationContext`
 
 ### What it is
-Spring has two container interfaces:
-
 - **`BeanFactory`** — the basic container: holds **bean definitions** (recipes: class, scope, dependencies, init method...) and creates beans from them on request.
-- **`ApplicationContext`** — extends `BeanFactory` and adds everything a real application needs. It is what you always use; Spring Boot creates one for you.
+- **`ApplicationContext`** — extends `BeanFactory` with everything a real application needs. It is what you always use; Spring Boot creates one for you.
 
 | Feature | `BeanFactory` | `ApplicationContext` |
 |---|---|---|
@@ -102,7 +79,7 @@ Spring has two container interfaces:
 | Registers `BeanPostProcessor`s automatically | No (manual) | Yes — so `@Autowired`, `@PostConstruct`, `@Transactional` work |
 | Application events (`publishEvent`, `@EventListener`) | No | Yes |
 | `Environment`, profiles, property sources | No | Yes |
-| i18n (internationalization: showing text in the user's language) messages (`MessageSource`) | No | Yes |
+| i18n (internationalization) messages (`MessageSource`) | No | Yes |
 | Resource loading (`classpath:`, `file:`) | No | Yes |
 | Typical implementations | `DefaultListableBeanFactory` | `AnnotationConfigApplicationContext`; in Boot: servlet/reactive web-server contexts |
 
@@ -138,47 +115,44 @@ Output:
  3. PriceCalculator created with FlatTaxPolicy
 ```
 
-Notice three things: the context created both beans *before* anyone asked; Spring created `FlatTaxPolicy` first because `PriceCalculator` needs it; and `getBean` twice returned the same instance (the default **singleton** scope).
+The context created both beans *before* anyone asked, created `FlatTaxPolicy` first because `PriceCalculator` needs it, and `getBean` twice returned the same instance (the default **singleton** scope).
 
 ### How startup works (`refresh()`)
-1. **Load bean definitions** — from `@Configuration` classes, component scanning, `@Import`, registrars.
-2. **Run `BeanFactoryPostProcessor`s** — they may read or change *definitions* (e.g. resolve `${...}` placeholders — markers replaced by a property value) before any bean exists (§2.8).
-3. **Register `BeanPostProcessor`s** — objects that will get a chance to modify every bean.
-4. **Instantiate all non-lazy singletons** — for each: construct, inject, run init callbacks, apply post-processors (§2.7).
+1. **Load bean definitions** — `@Configuration` classes, component scanning, `@Import`, registrars.
+2. **Run `BeanFactoryPostProcessor`s** — may read or change *definitions* (e.g. resolve `${...}` placeholders) before any bean exists (§2.8).
+3. **Register `BeanPostProcessor`s** — objects that get a chance to modify every bean.
+4. **Instantiate all non-lazy singletons** — construct, inject, init callbacks, post-processors (§2.7).
 5. **Finish** — start `SmartLifecycle` beans, publish `ContextRefreshedEvent`.
 
-In Spring Boot, `SpringApplication.run` does all this (Chapter 1 §1.8).
+In Spring Boot, `SpringApplication.run` does all this ([§1.8](../01-spring-ecosystem-and-first-app/README.md#18-the-main-class-and-springbootapplication)).
 
 ### Common mistakes
-- Calling `ctx.getBean(...)` all over your code ("service locator" style). Use injection; `getBean` belongs in tests, `main` methods and framework code.
-- Creating a second `ApplicationContext` inside a bean. You get a duplicate set of beans that are not the ones the rest of the app uses.
+- Calling `ctx.getBean(...)` throughout your code ("service locator" style). Use injection; `getBean` belongs in tests, `main` methods and framework code.
+- Creating a second `ApplicationContext` inside a bean — a duplicate set of beans that are not the ones the rest of the app uses.
 
 ### In the interview
-**Q: BeanFactory vs ApplicationContext?** `BeanFactory` is the minimal container: definitions + lazy creation. `ApplicationContext` extends it with eager singleton creation, automatic post-processor registration (needed for annotations), events, the `Environment`/profiles, i18n and resource loading. Applications use `ApplicationContext`.
+**Q: BeanFactory vs ApplicationContext?** `BeanFactory` is the minimal container: definitions + lazy creation. `ApplicationContext` adds eager singleton creation, automatic post-processor registration (needed for annotations), events, `Environment`/profiles, i18n and resource loading. Applications use `ApplicationContext`.
 - *Follow-up: Why is eager creation good?* Configuration errors (missing bean, bad property) fail at startup instead of on the first request in production.
-
-### TL;DR
-Use `ApplicationContext`. It creates singletons eagerly in dependency order, and it's what makes annotations, events and profiles work.
 
 ---
 
 ## 2.3 Defining beans
 
-There are four ways to tell the container about beans. Most apps use the first two.
+Four ways; most apps use the first two.
 
 ### 1. Component scanning with stereotype annotations
-Stereotype annotations are labels that say what *role* a class plays (service, repository, controller). Annotate the class; Spring finds it while scanning packages (`@ComponentScan`, included in `@SpringBootApplication`).
+Stereotype annotations say what *role* a class plays. Spring finds annotated classes while scanning packages (`@ComponentScan`, included in `@SpringBootApplication`).
 
 | Annotation | Meaning | Extra behaviour |
 |---|---|---|
 | `@Component` | Generic bean | — |
 | `@Service` | Business logic | None (documents intent) |
-| `@Repository` | Data access | Persistence exceptions (errors thrown by database libraries) translated to Spring's `DataAccessException` (when a translation post-processor is present — Boot/Spring Data set it up) |
+| `@Repository` | Data access | Persistence exceptions translated to Spring's `DataAccessException` (when a translation post-processor is present — Boot/Spring Data set it up) |
 | `@Controller` | Spring MVC controller (returns views) | Detected as a request handler |
 | `@RestController` | `@Controller` + `@ResponseBody` | Return values written as the body |
 | `@Configuration` | Holds `@Bean` methods | Proxied in full mode (below) |
 
-All of them are meta-annotated with `@Component` (their own declaration carries `@Component`, so they count as one); that's why scanning finds them.
+All are meta-annotated with `@Component` (their declaration carries `@Component`), which is why scanning finds them.
 
 ```java
 @Repository public class InvoiceRepository {}
@@ -197,10 +171,10 @@ public class NotABean {}                              // no annotation -> ignore
 scanned beans: invoiceRepository, invoiceService, renderer
 ```
 
-**Bean names.** The default is the simple class name with a lower-case first letter (`InvoiceService` → `invoiceService`); `@Component("renderer")` overrides it. For a *nested* class Spring uses the outer class too: `Ambiguous.DiskStorage` becomes `ambiguous.DiskStorage` (you'll see this in §2.5's output).
+**Bean names.** Default: simple class name with lower-case first letter (`InvoiceService` → `invoiceService`); `@Component("renderer")` overrides it. A *nested* class includes the outer class: `Ambiguous.DiskStorage` → `ambiguous.DiskStorage` (see §2.5's output).
 
 ### 2. `@Bean` methods
-Write a method that builds the object; Spring calls it once (for a singleton) and registers the result. Use `@Bean` for **classes you can't annotate** (third-party libraries: `ObjectMapper` — Jackson's JSON converter, `DataSource` — a source of database connections, a cloud SDK — Software Development Kit, a vendor's client library — client) and when construction needs logic.
+A method that builds the object; Spring calls it once (for a singleton) and registers the result. Use `@Bean` for **classes you can't annotate** (third-party: `ObjectMapper` — Jackson's JSON converter, `DataSource`, a cloud SDK client) and when construction needs logic.
 
 ```java
 @Configuration
@@ -212,7 +186,7 @@ public class ShopConfig {
 `@Bean` attributes: `name`/`value` (names and aliases), `initMethod`, `destroyMethod`, `autowireCandidate`, `defaultCandidate` (6.2). Combine with `@Scope`, `@Lazy`, `@Primary`, `@Profile`, `@Conditional...` on the same method.
 
 ### Full vs lite `@Configuration` — proved
-A `@Bean` method in a `@Configuration` class can call *another* `@Bean` method. What that call returns depends on the mode:
+A `@Bean` method can call *another* `@Bean` method. What that returns depends on the mode:
 
 ```java
 @Configuration                      // "full" mode: proxyBeanMethods = true (the default)
@@ -243,48 +217,43 @@ lite+params: order.log=#1 payment.log=#1, AuditLogs created=1
 ```
 
 How it works:
-1. In **full mode**, Spring generates a **CGLIB subclass** of your configuration class at startup (`FullConfig$$SpringCGLIB$$0`). CGLIB is a bytecode library that creates subclasses at runtime (**bytecode** is the compiled form of Java that the JVM — Java Virtual Machine — executes).
-2. The subclass overrides each `@Bean` method: "if the bean already exists in the container, return it; otherwise call the real method once". So `auditLog()` called from two methods still yields the one singleton.
-3. In **lite mode** (`proxyBeanMethods = false`, or `@Bean` methods in a plain `@Component`), there is no subclass: `auditLog()` is an ordinary Java call and creates a new, *unmanaged* object each time — 3 `AuditLog`s, two of which Spring knows nothing about (no lifecycle callbacks, no proxies).
+1. In **full mode** Spring generates a **CGLIB subclass** of your configuration class at startup (`FullConfig$$SpringCGLIB$$0`). CGLIB is a bytecode library that creates subclasses at runtime.
+2. The subclass overrides each `@Bean` method: "if the bean exists in the container, return it; otherwise call the real method once" — so `auditLog()` called twice still yields one singleton.
+3. In **lite mode** (`proxyBeanMethods = false`, or `@Bean` methods in a plain `@Component`) there is no subclass: `auditLog()` is a plain Java call creating a new, *unmanaged* object each time — 3 `AuditLog`s, two unknown to Spring (no lifecycle callbacks, no proxies).
 4. **Parameters** avoid the problem in both modes: Spring injects the container's bean.
 
 | | Full (`@Configuration`) | Lite (`proxyBeanMethods = false` or `@Component`) |
 |---|---|---|
 | Inter-bean method calls | Return the managed singleton | Create new unmanaged objects |
-| Startup cost | Generates a CGLIB subclass | None — slightly faster, friendlier to AOT (ahead-of-time build processing)/native images (apps compiled to a stand-alone executable) |
+| Startup cost | Generates a CGLIB subclass | None — slightly faster, friendlier to AOT/native images |
 | Class may be `final` / methods `private`? | No (must be subclassable) | Yes |
 | Recommended style | Works either way if you use parameters | Spring Boot's own auto-configurations all use lite mode |
 
 **Rule of thumb:** declare dependencies as `@Bean` method parameters and never call `@Bean` methods directly — then the mode doesn't matter.
 
 ### 3. `@Import`
-`@Import(SomeConfig.class)` pulls in another configuration class (or a plain class as a bean, or an `ImportSelector`/`ImportBeanDefinitionRegistrar`/`BeanRegistrar`) without component scanning. Auto-configuration and `@Enable...` annotations are built on it (Chapter 3).
+`@Import(SomeConfig.class)` pulls in another configuration class (or a plain class as a bean, or an `ImportSelector`/`ImportBeanDefinitionRegistrar`/`BeanRegistrar`) without scanning. Auto-configuration and `@Enable...` annotations are built on it (Chapter 3).
 
 ### 4. Programmatic registration — `BeanRegistrar` (Framework 7)
-For beans whose number or type depends on runtime logic (loops, ifs over properties). See §2.14.
+For beans whose number or type depends on runtime logic. See §2.14.
 
-Older projects also define beans in **XML** (`<bean id="..." class="...">`). It still works but new code uses annotations.
+Older projects also define beans in **XML** (`<bean id="..." class="...">`); it still works, but new code uses annotations.
 
 ### Common mistakes
-- Annotating an interface with `@Service` — scanning registers only concrete classes. Annotate the implementation.
-- Calling a `@Bean` method from a lite configuration and getting a second instance (shown above).
-- Two beans with the same name (e.g. two `@Bean` methods named `dataSource` in different configs). Spring Boot disables bean-definition overriding by default, so startup fails with `BeanDefinitionOverrideException` — rename one.
+- `@Service` on an interface — scanning registers only concrete classes. Annotate the implementation.
+- Calling a `@Bean` method from a lite configuration and getting a second instance (above).
+- Two beans with the same name (e.g. two `@Bean` methods named `dataSource`). Boot disables bean-definition overriding by default, so startup fails with `BeanDefinitionOverrideException` — rename one.
 
 ### In the interview
-**Q: `@Component` vs `@Bean`?** `@Component` goes on *your* class and is found by scanning; `@Bean` goes on a factory *method* in a configuration class and is used for third-party classes or when creation needs code. Both produce beans that behave the same.
-- *Follow-up: What does `proxyBeanMethods = false` change?* No CGLIB subclass; calls between `@Bean` methods become plain Java calls and create new objects. Safe when dependencies are passed as parameters, and cheaper at startup.
-- *Follow-up: Difference between `@Service` and `@Component`?* None technically; `@Service` documents intent. `@Repository` adds exception translation.
-
-### TL;DR
-Scan your own classes (`@Service`, `@Repository`...), use `@Bean` for others, pass dependencies as `@Bean` method parameters, and know that full `@Configuration` is a CGLIB subclass.
+**Q: `@Component` vs `@Bean`?** `@Component` goes on *your* class and is found by scanning; `@Bean` goes on a factory *method* for third-party classes or when creation needs code. The resulting beans behave the same.
+- *Follow-up: What does `proxyBeanMethods = false` change?* No CGLIB subclass; inter-bean calls become plain Java calls creating new objects. Safe with parameters, cheaper at startup.
+- *Follow-up: `@Service` vs `@Component`?* No technical difference; `@Service` documents intent. `@Repository` adds exception translation.
 
 ---
 
 ## 2.4 Injection types
 
 ### What it is
-Spring can inject a dependency in three places:
-
 ```java
 // Constructor injection (preferred)
 @Service
@@ -308,49 +277,46 @@ public class OtherStyles {
 }
 ```
 
-**`@Autowired`** tells Spring "inject here". Since Spring 4.3, a class with **exactly one constructor** doesn't need it — Spring uses that constructor automatically. With several constructors, mark the one to use with `@Autowired`. The standard `jakarta.inject.Inject` annotation works the same way if `jakarta.inject-api` is on the classpath (Framework 7 dropped the old `javax.inject`).
+**`@Autowired`** means "inject here". Since Spring 4.3 a class with **exactly one constructor** doesn't need it; with several constructors, mark the one to use. The standard `jakarta.inject.Inject` works the same if `jakarta.inject-api` is on the classpath (Framework 7 dropped `javax.inject`).
 
 ### Trade-offs
 
 | | Constructor | Setter | Field |
 |---|---|---|---|
 | Fields can be `final` (immutable) | Yes | No | No |
-| Object is complete after `new` | Yes | No — may be half-initialised | No |
-| Unit test without Spring | Just call the constructor | Call setters | Needs reflection (code inspecting/changing objects at runtime) or Spring |
-| Required dependency obvious | Yes (it's in the signature) | No | No |
+| Object complete after `new` | Yes | No — may be half-initialised | No |
+| Unit test without Spring | Just call the constructor | Call setters | Needs reflection or Spring |
+| Required dependency obvious | Yes (in the signature) | No | No |
 | Circular dependency possible | No (fails fast, §2.9) | Yes | Yes |
-| Too many dependencies visible | Yes — a 9-parameter constructor is a design smell (a hint that the design is off) you can see | Hidden | Hidden |
+| Too many dependencies visible | Yes — a 9-parameter constructor is a visible design smell | Hidden | Hidden |
 | Good for | **Almost everything** | Optional dependencies, re-configuration | Test classes (`@Autowired MockMvcTester mvc`) |
 
 ### Common mistakes
-- Field injection in production code — convenient but hides dependencies and makes plain unit tests awkward.
-- Adding `@Autowired` to a single constructor "just in case" — harmless but noise.
-- Using a dependency *inside the constructor* of a class that uses field injection → `NullPointerException` (the error thrown when you use a reference that is `null`), because fields are injected after construction.
+- Field injection in production code — hides dependencies and makes plain unit tests awkward.
+- `@Autowired` on a single constructor "just in case" — harmless noise.
+- Using a dependency *inside the constructor* of a field-injected class → `NullPointerException`, because fields are injected after construction.
 
 ### In the interview
-**Q: Why is constructor injection recommended?** Dependencies become `final`, the object is fully built when constructed, required dependencies are explicit, unit tests just call `new`, and circular dependencies fail fast instead of hiding. The Spring team recommends it.
-- *Follow-up: When would you use setter injection?* For truly optional dependencies or values that can change after startup.
-
-### TL;DR
-Use constructor injection with `final` fields; skip `@Autowired` on a single constructor; keep field injection for tests.
+**Q: Why is constructor injection recommended?** Dependencies are `final`, the object is complete when constructed, required dependencies are explicit, unit tests just call `new`, and circular dependencies fail fast. The Spring team recommends it.
+- *Follow-up: When setter injection?* Truly optional dependencies or values that can change after startup.
 
 ---
 
 ## 2.5 How Spring picks a bean
 
 ### What it is
-To inject a parameter of type `Notifier`, Spring looks for **candidate beans assignable to that type** (beans whose class is that type, implements it, or extends it). The rules when there are zero, one, or many candidates:
+To inject a `Notifier`, Spring looks for **candidate beans assignable to that type** (the type itself, implementations, subclasses):
 
 1. **Exactly one candidate** → inject it.
-2. **Several candidates** → narrow down in this order:
-   1. A `@Qualifier("name")` on the injection point selects the bean with that name (or that qualifier).
-   2. Otherwise, a bean marked **`@Primary`** wins.
-   3. Otherwise, if all but one are marked **`@Fallback`** (Framework 6.2), the remaining one wins.
-   4. Otherwise, a bean whose **name equals the parameter name** wins (needs the `-parameters` compiler flag — an option that keeps parameter names in the compiled class — which Boot's parent sets).
+2. **Several candidates** → narrow down in order:
+   1. `@Qualifier("name")` on the injection point selects that bean name (or qualifier).
+   2. Otherwise a **`@Primary`** bean wins.
+   3. Otherwise, if all but one are **`@Fallback`** (Framework 6.2), the remaining one wins.
+   4. Otherwise a bean whose **name equals the parameter name** wins (needs the `-parameters` compiler flag, which Boot's parent sets).
    5. Otherwise → `NoUniqueBeanDefinitionException`.
-   (`@jakarta.annotation.Priority` on the candidate classes is also consulted — highest priority wins — but it is rarely used in application code.)
-3. **No candidate** → `NoSuchBeanDefinitionException` — unless the injection point is optional (`Optional<T>`, `ObjectProvider<T>`, `@Nullable`, `@Autowired(required = false)`).
-4. **Collection/array/Map of the type** → inject *all* candidates: `List<Notifier>` ordered by `@Order`/`Ordered`, `Map<String, Notifier>` keyed by bean name.
+   (`@jakarta.annotation.Priority` on candidate classes is also consulted — highest wins — but is rare in application code.)
+3. **No candidate** → `NoSuchBeanDefinitionException` — unless the point is optional (`Optional<T>`, `ObjectProvider<T>`, `@Nullable`, `@Autowired(required = false)`).
+4. **Collection/array/Map of the type** → *all* candidates: `List<Notifier>` ordered by `@Order`/`Ordered` (lowest first, unordered last), `Map<String, Notifier>` keyed by bean name.
 
 ### Example
 ```java
@@ -387,7 +353,7 @@ Map keys:           [email, push, sms]
 optional AuditTrail present? false
 ```
 
-And the failure case — two `Storage` beans, no tie-breaker:
+The qualifier beats `@Primary` because it is more specific. The failure case — two `Storage` beans, no tie-breaker:
 ```java
 @Component public static class DiskStorage implements Storage {}
 @Component public static class CloudStorage implements Storage {}
@@ -405,29 +371,21 @@ The exception is `UnsatisfiedDependencyException` wrapping `NoUniqueBeanDefiniti
 |---|---|---|---|
 | `@Primary` | On a bean | "Default choice for this type" | One implementation is the normal one |
 | `@Fallback` (6.2+) | On a bean | "Use me only if nothing else qualifies" | A default that others should override |
-| `@Qualifier("x")` | On the injection point (and optionally the bean) | "I want exactly this one" | A specific consumer needs a specific implementation |
+| `@Qualifier("x")` | Injection point (optionally the bean) | "I want exactly this one" | A consumer needs a specific implementation |
 | Custom qualifier annotation | e.g. `@Qualifier @interface Fast {}` | Type-safe qualifier | Avoid string names spread across code |
 | `List<T>` / `Map<String,T>` | Injection point | "Give me all of them" | Strategy/plugin patterns, broadcast |
 | `ObjectProvider<T>` | Injection point | Lazy/optional/multiple lookup: `getIfAvailable()`, `getIfUnique()`, `orderedStream()` | Optional beans, prototypes (§2.6) |
 
-`List<Notifier>` + `Map` is how you implement the **Strategy pattern** with Spring: each strategy is a bean, the consumer receives them all and picks by key — see [LLD §11.3](../../../lld/chapters/11-patterns-behavioral-2/README.md).
+`List<Notifier>` + `Map` is the Spring way to implement the **Strategy pattern**: each strategy is a bean, the consumer receives all and picks by key — [LLD §11.3](../../../lld/chapters/11-patterns-behavioral-2/README.md).
 
 ### Common mistakes
-- Adding a second implementation of an interface later (e.g. a test stub) and breaking every injection point that relied on "only one". Decide on `@Primary` or qualifiers early.
-- Qualifier string typos — they fail at startup (good), but a custom qualifier annotation avoids them entirely.
-- Expecting `@Order` to change which single bean is injected. It only orders collections; use `@Primary`/`@Qualifier` for single injection.
+- Adding a second implementation later (e.g. a test stub) and breaking every injection point that relied on "only one". Decide on `@Primary` or qualifiers early.
+- Qualifier string typos — they fail at startup, but a custom qualifier annotation avoids them entirely.
+- Expecting `@Order` to choose the single injected bean. It only orders collections.
 
 ### In the interview
-**Q: Two beans implement the same interface. How does Spring decide?** By type first; with several candidates, `@Qualifier` on the injection point, then `@Primary`, then `@Fallback`, then a bean named like the parameter; otherwise startup fails with `NoUniqueBeanDefinitionException`. Or inject `List<T>`/`Map<String,T>` to get all.
-- *Follow-up: How do you inject an optional dependency?* `Optional<T>`, `ObjectProvider<T>.getIfAvailable()`, a `@Nullable` parameter (§2.13), or `@Autowired(required = false)` on a setter.
-
-### Self-check
-1. `@Primary` on `SmsNotifier`, `@Qualifier("email")` on a parameter — which is injected there? → `email`; the qualifier is more specific.
-2. What order does `List<Notifier>` have? → `@Order`/`Ordered` values, lowest first; unordered beans come last.
-3. What happens with zero candidates for a required dependency? → `NoSuchBeanDefinitionException` at startup.
-
-### TL;DR
-Type first, then `@Qualifier` > `@Primary` > `@Fallback` > parameter name. Collections get everything. Optional via `Optional`/`ObjectProvider`/`@Nullable`.
+**Q: Two beans implement the same interface. How does Spring decide?** By type; with several candidates, `@Qualifier`, then `@Primary`, then `@Fallback`, then a bean named like the parameter; otherwise `NoUniqueBeanDefinitionException` at startup. Or inject `List<T>`/`Map<String,T>` to get all.
+- *Follow-up: Optional dependency?* `Optional<T>`, `ObjectProvider<T>.getIfAvailable()`, a `@Nullable` parameter (§2.13), or `@Autowired(required = false)` on a setter.
 
 ---
 
@@ -439,15 +397,15 @@ A **scope** decides *how many instances* of a bean exist and *how long* each liv
 | Scope | Instances | Lives until | Available in |
 |---|---|---|---|
 | `singleton` (default) | One per container | Context closes | All apps |
-| `prototype` | New one **per injection/lookup** | Garbage collected (freed automatically by the JVM once nothing references it) — Spring forgets it after handing it out | All apps |
+| `prototype` | New one **per injection/lookup** | Garbage collected — Spring forgets it after handing it out | All apps |
 | `request` | One per HTTP request | Request ends | Web apps |
-| `session` | One per HTTP session (one user's series of requests, tied together by a cookie) | Session expires | Web apps |
-| `application` | One per `ServletContext` (the web app as a whole, inside the server) | App stops | Web apps |
-| `websocket` | One per WebSocket (a long-lived two-way connection between browser and server) session | Socket closes | WebSocket apps |
+| `session` | One per HTTP session (one user's requests, tied by a cookie) | Session expires | Web apps |
+| `application` | One per `ServletContext` (the web app as a whole) | App stops | Web apps |
+| `websocket` | One per WebSocket session | Socket closes | WebSocket apps |
 
 Declare with `@Scope("prototype")` (or `ConfigurableBeanFactory.SCOPE_PROTOTYPE`), `@RequestScope`, `@SessionScope`, `@ApplicationScope`.
 
-> **Spring singleton ≠ GoF Singleton.** (GoF = "Gang of Four", the authors of the classic *Design Patterns* book.) The GoF Singleton pattern enforces one instance *per class loader* via a private constructor. A Spring singleton is one instance *per container and bean definition* — you could define two beans of the same class. See [LLD §8.8](../../../lld/chapters/08-patterns-creational/README.md).
+> **Spring singleton ≠ GoF Singleton.** The "Gang of Four" Singleton pattern enforces one instance *per class loader* via a private constructor. A Spring singleton is one instance *per container and bean definition* — you could define two beans of the same class. See [LLD §8.8](../../../lld/chapters/08-patterns-creational/README.md).
 
 ### Singleton vs prototype — and the classic trap
 ```java
@@ -476,14 +434,13 @@ via ObjectProvider:                #4, #5 (fresh)
  1. PriceList#1 @PreDestroy
 ```
 
-What this proves:
-1. `getBean(PriceList.class)` always returns instance #1; `getBean(ShoppingCart.class)` returns a new one each time.
-2. **A prototype injected into a singleton is created once** — when the singleton is built — and then reused forever. The singleton is created only once, so injection happens only once.
-3. The fix is to *look up* a new instance when needed: `ObjectProvider<T>.getObject()` (shown), `@Lookup` method injection, or a scoped proxy.
-4. **Spring does not call destroy callbacks on prototypes.** Only `PriceList`'s `@PreDestroy` ran. If a prototype holds resources (files, connections), the code that asked for it must clean up.
+1. `getBean(PriceList.class)` always returns #1; `getBean(ShoppingCart.class)` returns a new one each time.
+2. **A prototype injected into a singleton is created once** — when the singleton is built — and reused forever.
+3. Fix: *look up* a new instance when needed — `ObjectProvider<T>.getObject()` (shown), `@Lookup` method injection, or a scoped proxy.
+4. **Spring does not call destroy callbacks on prototypes** — only `PriceList`'s `@PreDestroy` ran. The code that asked for a resource-holding prototype must clean up.
 
 ### Request and session scopes — proved
-A singleton controller can't hold "the current request's object" in a field... unless that field is a **scoped proxy**: a stand-in object that, on every method call, finds the real instance for the *current* request or session.
+A singleton controller can hold "the current request's object" only through a **scoped proxy**: a stand-in that, on every call, finds the real instance for the *current* request or session.
 
 ```java
 @Component @RequestScope          // one instance per HTTP request; a scoped proxy is injected into singletons
@@ -505,41 +462,34 @@ public class CartController {
 }
 ```
 
-The test posts twice with Alice's session and once with Bob's (`MockHttpSession` objects):
+Two posts with Alice's session and one with Bob's (`MockHttpSession`):
 ```
 alice: request#1 cart=[book] proxy=true
 alice: request#2 cart=[book, pen] proxy=true
 bob:   request#3 cart=[mug] proxy=true
 ```
-Every request got a new `RequestInfo`; Alice's two requests shared one `Cart`, Bob got his own — through the same singleton controller. `@RequestScope` and `@SessionScope` create class-based (CGLIB) proxies by default (`proxyMode = TARGET_CLASS`); with plain `@Scope("request")` you must set `proxyMode` yourself.
+Every request got a new `RequestInfo`; Alice's requests shared one `Cart`, Bob got his own — through the same singleton controller. `@RequestScope`/`@SessionScope` create CGLIB proxies by default (`proxyMode = TARGET_CLASS`); with plain `@Scope("request")` you must set `proxyMode` yourself.
 
 ### Thread safety
-A singleton bean is shared by **all request threads at once**. Keep singletons **stateless** (holding no data that changes between calls — only `final` references to other beans and configuration). Per-request data belongs in method parameters/local variables, or in request-scoped beans. Concurrency basics: [Java Chapter 14](../../../java/chapters/14-concurrency-1/README.md).
+A singleton is shared by **all request threads at once**. Keep singletons **stateless** (only `final` references to other beans and configuration); per-request data goes in parameters/locals or request-scoped beans. Concurrency basics: [Java Chapter 14](../../../java/chapters/14-concurrency-1/README.md).
 
 ### Common mistakes
-- A mutable field (`private int counter`, a `HashMap` cache) in a singleton service → race conditions under load.
-
-  > **Key term — race condition:** a bug where the result depends on the exact timing of several threads touching the same data. Two threads both read `counter = 5`, both add 1, both write `6` — one increment is lost. It appears only under concurrent load, so it often slips through tests.
-- Expecting a new prototype on each method call when it was injected once (shown above).
+- A mutable field (`private int counter`, a `HashMap` cache) in a singleton → **race conditions** under load (the result depends on thread timing: two threads read `counter = 5`, both write `6`, one increment is lost; it shows only under concurrency, so tests often miss it).
+- Expecting a new prototype per method call when it was injected once.
 - Injecting a request-scoped bean into a singleton without a proxy → `Scope 'request' is not active for the current thread` at startup.
-- Using session scope for data in a horizontally scaled app (one that runs several copies behind a load balancer) without session replication (copying session data so every copy can see it — Spring Session, Chapter 10; see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)).
+- Session scope in a horizontally scaled app (several copies behind a load balancer) without session replication (Spring Session, Chapter 10; [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)).
 
 ### In the interview
 **Q: What are Spring's bean scopes?** singleton (default, one per container), prototype (new per lookup, not destroyed by Spring), and web scopes request, session, application, websocket.
 - *Follow-up: Prototype inside singleton?* Injected once, so effectively a singleton for that consumer. Use `ObjectProvider`, `@Lookup`, or a scoped proxy.
-- *Follow-up: Are singletons thread-safe?* Spring doesn't make them thread-safe; they're shared, so design them stateless.
-
-### TL;DR
-Singleton by default, shared by all threads — keep it stateless. Prototype = new per lookup, no destroy callback. Web scopes use proxies so singletons can reach the current request/session object.
+- *Follow-up: Are singletons thread-safe?* Spring doesn't make them so; they're shared, so design them stateless.
 
 ---
 
 ## 2.7 The bean lifecycle
 
 ### What it is
-From creation to destruction Spring calls a fixed sequence of hooks. You rarely need more than `@PostConstruct` and `@PreDestroy`, but knowing the order explains many "why is my field null?" questions.
-
-This bean implements *every* hook and records when it runs:
+From creation to destruction Spring calls a fixed sequence of hooks. You rarely need more than `@PostConstruct`/`@PreDestroy`, but the order explains many "why is my field null?" questions. This bean implements *every* hook:
 
 ```java
 public class CacheWarmer implements BeanNameAware, InitializingBean, DisposableBean {
@@ -602,15 +552,14 @@ flowchart TB
     H --> I["9 Destroy callbacks - @PreDestroy, destroy, destroyMethod"]
 ```
 
-1. **Instantiate** — the constructor runs; constructor-injected dependencies are available here.
-2. **Populate properties** — setter and field injection.
-3. **`Aware` callbacks** — the bean can receive container objects: its name, the `BeanFactory`, the `ApplicationContext`, the `Environment`. (Prefer injecting these normally; `Aware` interfaces tie code to Spring.)
-4. **`BeanPostProcessor.postProcessBeforeInitialization`** for every post-processor. `@PostConstruct` itself is implemented by one (`CommonAnnotationBeanPostProcessor`), which is why our custom "before" ran just before it.
-5. **Initialization**, in this order: `@PostConstruct` → `InitializingBean.afterPropertiesSet()` → `@Bean(initMethod)`.
-6. **`postProcessAfterInitialization`** — the bean may be *replaced* here, typically by a proxy (transactions, AOP, §2.8).
-7. After **all** singletons are ready: `SmartLifecycle.start()` (by phase), then `ContextRefreshedEvent` (then, in Boot, `ApplicationStartedEvent` and `ApplicationReadyEvent`).
-8. On `close()` (or JVM shutdown hook — code the JVM runs when the process is asked to stop — which Boot registers): `ContextClosedEvent`, `SmartLifecycle.stop()` in reverse phase order.
-9. **Destruction**, in this order: `@PreDestroy` → `DisposableBean.destroy()` → `@Bean(destroyMethod)`. Beans are destroyed in reverse dependency order.
+Notes on the steps:
+- **3 `Aware`** — the bean can receive its name, the `BeanFactory`, `ApplicationContext`, `Environment`. Prefer normal injection; `Aware` ties code to Spring.
+- **4** — `BeanPostProcessor.postProcessBeforeInitialization` runs for every BPP. `@PostConstruct` itself is implemented by a BPP (`CommonAnnotationBeanPostProcessor`), which is why our custom "before" ran just before it.
+- **5** — init order: `@PostConstruct` → `InitializingBean.afterPropertiesSet()` → `@Bean(initMethod)`.
+- **6** — `postProcessAfterInitialization`: the bean may be *replaced* here, typically by a proxy (transactions, AOP, §2.8).
+- **7** — after **all** singletons are ready: `SmartLifecycle.start()` (by phase), then `ContextRefreshedEvent` (in Boot then `ApplicationStartedEvent` and `ApplicationReadyEvent`).
+- **8** — on `close()` or the JVM shutdown hook (which Boot registers): `ContextClosedEvent`, `SmartLifecycle.stop()` in reverse phase order.
+- **9** — `@PreDestroy` → `DisposableBean.destroy()` → `@Bean(destroyMethod)`; beans are destroyed in reverse dependency order.
 
 ### Which hook to use
 
@@ -619,39 +568,35 @@ flowchart TB
 | `@PostConstruct` / `@PreDestroy` (`jakarta.annotation`) | Validate state, warm a cache, open/close a resource | **Default choice** — standard, no Spring interface |
 | `InitializingBean` / `DisposableBean` | Framework or library code | Couples your class to Spring |
 | `@Bean(initMethod, destroyMethod)` | Third-party classes you can't annotate | `destroyMethod` is inferred: a public `close()`/`shutdown()` is called automatically |
-| `SmartLifecycle` | Things that must *run* while the app is up: message listeners, pollers, schedulers | `start`/`stop`, `getPhase()` orders them (lower starts first, stops last), `isAutoStartup()` |
+| `SmartLifecycle` | Things that *run* while the app is up: message listeners, pollers, schedulers | `start`/`stop`, `getPhase()` orders them (lower starts first, stops last), `isAutoStartup()` |
 | `ApplicationReadyEvent` listener (Boot) | "Do X once the app is fully started" | Runs after runners; the server already accepts traffic |
 | `CommandLineRunner` / `ApplicationRunner` (Boot) | One-off startup tasks with access to args | Run before `ApplicationReadyEvent` |
 
 ### Common mistakes
-- Doing heavy work (remote calls, long cache loads) in constructors or `@PostConstruct` — it slows startup and a failure kills the app. Consider lazy loading or `ApplicationReadyEvent`.
-- Calling `@Transactional` methods from `@PostConstruct` and expecting a transaction: the proxy is applied in step 6, *after* `@PostConstruct` (step 5), and you are calling `this` anyway (self-invocation, Chapter 4).
-- Expecting `@PreDestroy` on prototype beans (§2.6).
-- Killing the JVM with `kill -9` (a forced kill the process cannot intercept): no shutdown hook runs, so no destroy callbacks.
+- Heavy work (remote calls, long cache loads) in constructors or `@PostConstruct` — slows startup and a failure kills the app. Consider lazy loading or `ApplicationReadyEvent`.
+- Calling `@Transactional` methods from `@PostConstruct` expecting a transaction: the proxy is applied in step 6, *after* `@PostConstruct` (step 5), and you are calling `this` anyway (self-invocation, Chapter 4).
+- Expecting `@PreDestroy` on prototypes (§2.6).
+- `kill -9` (a forced kill) runs no shutdown hook, so no destroy callbacks.
 
 ### In the interview
-**Q: Describe the Spring bean lifecycle.** Instantiate → inject → `Aware` callbacks → BPP before-init → `@PostConstruct` → `afterPropertiesSet` → custom init → BPP after-init (proxies) → ready; on shutdown `@PreDestroy` → `destroy()` → custom destroy.
+**Q: Describe the Spring bean lifecycle.** Instantiate → inject → `Aware` → BPP before-init → `@PostConstruct` → `afterPropertiesSet` → custom init → BPP after-init (proxies) → ready → `SmartLifecycle.start` → `ContextRefreshedEvent`; on shutdown `@PreDestroy` → `destroy()` → custom destroy.
 - *Follow-up: Where does a `@Transactional` proxy come from?* A `BeanPostProcessor`'s after-initialization step wraps the bean.
-- *Follow-up: `@PostConstruct` vs constructor?* In the constructor, setter/field-injected dependencies and post-processing haven't happened yet; `@PostConstruct` runs after all injection.
-
-### TL;DR
-Construct → inject → aware → BPP-before → `@PostConstruct` → `afterPropertiesSet` → initMethod → BPP-after (proxies) → lifecycle start → ... → `@PreDestroy` → `destroy` → destroyMethod.
+- *Follow-up: `@PostConstruct` vs constructor?* In the constructor, setter/field injection and post-processing haven't happened yet; `@PostConstruct` runs after all injection.
 
 ---
 
 ## 2.8 Post-processors: the container's extension points
 
 ### What it is
-Two interfaces let code customise the container itself:
 
 | | `BeanFactoryPostProcessor` (BFPP) | `BeanPostProcessor` (BPP) |
 |---|---|---|
 | Works on | Bean **definitions** (recipes) | Bean **instances** |
-| Runs | Once, after definitions are loaded, **before any normal bean is created** | For every bean, before and after its init callbacks |
+| Runs | Once, after definitions load, **before any normal bean is created** | For every bean, before and after its init callbacks |
 | Can | Change scopes, class names, property values; register more definitions | Modify the bean, or **return a different object** (proxy/wrapper) |
 | Spring's own examples | `PropertySourcesPlaceholderConfigurer` (resolves `${...}`), `ConfigurationClassPostProcessor` (processes `@Configuration`, `@ComponentScan`, `@Import`) | `AutowiredAnnotationBeanPostProcessor` (`@Autowired`, `@Value`), `CommonAnnotationBeanPostProcessor` (`@PostConstruct`, `@PreDestroy`), the AOP auto-proxy creator (`@Transactional`, `@Cacheable`, `@Async`) |
 
-In other words, most of Spring's annotation "magic" is ordinary post-processors.
+Most of Spring's annotation "magic" is ordinary post-processors.
 
 ### Example — a BPP that swaps beans for logging proxies
 ```java
@@ -696,17 +641,14 @@ Output (test gets the `Greeter` bean and calls `greet("Ada")`):
  4. <- Hi Ada
 ```
 
-1. The BFPP ran when the `friendlyGreeter` **definition** existed but no **instance** had been created.
-2. The BPP returned a proxy, so the container stored and injected the *proxy* (`jdk.proxy2.$Proxy45`), not `FriendlyGreeter`. Every caller now goes through the logging code — this is exactly how Spring AOP adds transactions and caching (Chapter 4). The Proxy pattern itself: [LLD §9.7](../../../lld/chapters/09-patterns-structural/README.md).
-3. The proxy here is a **JDK dynamic proxy** (Java's built-in way to create, at runtime, an object that implements given interfaces and routes every call to one handler). Because it implements only the *interfaces*, `ctx.getBean(FriendlyGreeter.class)` would now fail — one reason to inject interfaces, and one reason Spring often uses class-based CGLIB proxies instead.
+1. The BFPP ran when the `friendlyGreeter` **definition** existed but no **instance** did.
+2. The BPP returned a proxy, so the container stored and injected the *proxy* (`jdk.proxy2.$Proxy45`). Every caller goes through the logging code — exactly how Spring AOP adds transactions and caching (Chapter 4). Proxy pattern: [LLD §9.7](../../../lld/chapters/09-patterns-structural/README.md).
+3. A **JDK dynamic proxy** (Java's built-in runtime object implementing given interfaces, routing every call to one handler) implements only the *interfaces*, so `ctx.getBean(FriendlyGreeter.class)` would now fail — one reason to inject interfaces, and one reason Spring often uses class-based CGLIB proxies.
 
 ### Rules
-- Declare BFPP and BPP `@Bean` methods **`static`** (as in `LifecycleConfig` above). They must be created very early; a non-static `@Bean` method forces Spring to create the whole configuration class early too, so that class's own `@Autowired`/`@Value` may not be processed. Spring logs an info/warning message when this happens.
-- A BPP should not depend on ordinary beans: anything it injects is created before all BPPs are registered, and so is "not eligible for getting processed by all BeanPostProcessors" (e.g. won't get transactional proxies). Spring logs exactly that phrase.
+- Declare BFPP and BPP `@Bean` methods **`static`** (as in `LifecycleConfig`). They are created very early; a non-static method forces the whole configuration class to be created early too, so its own `@Autowired`/`@Value` may not be processed. Spring logs a message when this happens.
+- A BPP should not depend on ordinary beans: anything it injects is created before all BPPs are registered and is "not eligible for getting processed by all BeanPostProcessors" (e.g. no transactional proxy) — Spring logs exactly that phrase.
 - Order several post-processors with `Ordered`/`PriorityOrdered` or `@Order`.
-
-### TL;DR
-BFPP edits recipes before any bean exists; BPP sees (and can replace) every bean. `@Autowired`, `@Value`, `@PostConstruct` and all proxy-based features are implemented as post-processors.
 
 ---
 
@@ -739,30 +681,27 @@ field cycle, Spring Boot -> BeanCurrentlyInCreationException
 ```
 
 ### How it works
-1. **Constructor cycles are impossible to satisfy.** To call `new OrderService(customers)` Spring needs a finished `CustomerService`, whose constructor needs a finished `OrderService`... Spring detects the loop and throws `BeanCurrentlyInCreationException`.
-2. **Field/setter cycles can be satisfied in plain Spring**: Spring constructs `OrderService` (empty), registers an *early reference* to it in an internal cache, then creates `CustomerService` and injects that early reference, then finishes `OrderService`. (The internal "singleton caches" are sometimes called the three-level cache in interviews.)
-3. **Spring Boot forbids that by default** (`spring.main.allow-circular-references=false`, since Boot 2.6). A cycle usually means the classes are too entangled, and early references can also skip proxies (an early reference is the raw object, not the transactional proxy). Boot's startup report prints the cycle as a small ASCII diagram.
-4. **`@Lazy` on an injection point** injects a proxy instead of the real bean; the real `CustomerService` is looked up on the first method call. That breaks the creation-time cycle — note the `$$SpringCGLIB$$` class name.
+1. **Constructor cycles cannot be satisfied.** `new OrderService(customers)` needs a finished `CustomerService`, whose constructor needs a finished `OrderService`... Spring detects the loop and throws `BeanCurrentlyInCreationException`.
+2. **Field/setter cycles work in plain Spring**: Spring constructs `OrderService` (empty), registers an *early reference* in an internal cache, creates `CustomerService` injecting that reference, then finishes `OrderService`. (The internal "singleton caches" are often called the three-level cache in interviews.)
+3. **Spring Boot forbids this by default** (`spring.main.allow-circular-references=false`, since Boot 2.6): a cycle usually means entangled classes, and an early reference is the raw object, not the transactional proxy. Boot's startup report prints the cycle as an ASCII diagram.
+4. **`@Lazy` on an injection point** injects a proxy; the real `CustomerService` is looked up on first call, breaking the creation-time cycle — note the `$$SpringCGLIB$$` class name.
 
 ### How to fix a cycle (best first)
-1. **Redesign.** Usually one of the classes does two jobs. Extract the shared logic into a third bean both can depend on, or move a method to where its data lives.
-2. **Use events** (§2.12): `OrderService` publishes `OrderPlaced`; `CustomerService` listens. No compile-time dependency either way.
-3. **Inject lazily**: `@Lazy` on the parameter, or `ObjectProvider<CustomerService>` and call `getObject()` when needed.
-4. **Last resort**: `spring.main.allow-circular-references=true` — hides the design problem; avoid.
+1. **Redesign.** Usually one class does two jobs. Extract shared logic into a third bean, or move a method to where its data lives.
+2. **Use events** (§2.12): `OrderService` publishes `OrderPlaced`; `CustomerService` listens. No compile-time dependency.
+3. **Inject lazily**: `@Lazy` on the parameter, or `ObjectProvider<CustomerService>` with `getObject()` when needed.
+4. **Last resort**: `spring.main.allow-circular-references=true` — hides the design problem.
 
 ### In the interview
-**Q: How does Spring handle circular dependencies?** Constructor cycles fail with `BeanCurrentlyInCreationException`. Field/setter cycles can be resolved with early singleton references, but Spring Boot disallows them by default since 2.6. Fix by redesigning (extract a third class), decoupling with events, or `@Lazy`/`ObjectProvider`.
-- *Follow-up: Why is constructor injection "good" here?* It makes cycles fail fast at startup instead of silently producing half-initialised or unproxied objects.
-
-### TL;DR
-Constructor cycles always fail; field cycles work in plain Spring but Boot rejects them. Refactor first; `@Lazy` or events if you must.
+**Q: How does Spring handle circular dependencies?** Constructor cycles fail with `BeanCurrentlyInCreationException`. Field/setter cycles can be resolved via early singleton references, but Boot disallows them by default since 2.6. Fix by redesigning (extract a third class), decoupling with events, or `@Lazy`/`ObjectProvider`.
+- *Follow-up: Why is constructor injection "good" here?* Cycles fail fast at startup instead of silently producing half-initialised or unproxied objects.
 
 ---
 
 ## 2.10 Lazy initialization
 
 ### What it is
-By default the `ApplicationContext` creates every singleton at startup. A **lazy** bean is created on first use instead.
+By default the `ApplicationContext` creates every singleton at startup. A **lazy** bean is created on first use.
 
 ```java
 @Component @Lazy                             // not created at startup; created on first use
@@ -782,7 +721,7 @@ public class RateCache { public RateCache() { Trace.add("RateCache created (eage
  2. RateCache created (eager)
 ```
 
-The second run started the same classes with Spring Boot and the property `spring.main.lazy-initialization=true`, which makes **every** bean lazy — even `RateCache`, which has no `@Lazy`. `@Lazy(false)` on a bean opts it back out.
+The second run used Boot with `spring.main.lazy-initialization=true`, which makes **every** bean lazy — even `RateCache`. `@Lazy(false)` opts a bean back out.
 
 ### Trade-offs
 
@@ -793,15 +732,15 @@ The second run started the same classes with Spring Boot and the property `sprin
 | First request is fast | First request pays the creation cost |
 | Memory used up front | Memory only for used beans |
 
-**When to use it:** individual rarely used, expensive beans; global lazy init only in development or for tests/CLI tools (command-line programs) where startup time dominates. Keep production eager so broken configuration can't get past startup. (For fast production startup, Chapter 15 covers AOT and CDS — Class Data Sharing, a JVM cache of pre-loaded classes.)
+**When to use it:** individual rarely used, expensive beans; global lazy init only in development, tests or CLI tools where startup dominates. Keep production eager so broken configuration can't get past startup. (For fast production startup, Chapter 15 covers AOT and CDS — Class Data Sharing, a JVM cache of pre-loaded classes.)
 
 ---
 
 ## 2.11 `@Conditional` and profiles
 
 ### What it is
-- **`@Conditional(SomeCondition.class)`** — register a bean *only if* a `Condition` returns true. A `Condition` sees the environment (properties and profiles), the registry (the bean definitions registered so far) and the classpath (the jars and classes available to the app). This is the building block of Spring Boot's auto-configuration (`@ConditionalOnClass`, `@ConditionalOnMissingBean`, `@ConditionalOnProperty` — Chapter 3).
-- **`@Profile("dev")`** — a ready-made condition: register only when that **profile** is active. A profile is a named set of beans/settings for one environment (`dev`, `test`, `prod`). Expressions are allowed: `"!dev"`, `"prod & eu"`, `"dev | test"`.
+- **`@Conditional(SomeCondition.class)`** — register a bean *only if* a `Condition` returns true. A `Condition` sees the environment (properties, profiles), the registry (definitions so far) and the classpath. This is the building block of Boot's auto-configuration (`@ConditionalOnClass`, `@ConditionalOnMissingBean`, `@ConditionalOnProperty` — Chapter 3).
+- **`@Profile("dev")`** — a ready-made condition: register only when that **profile** (a named set of beans/settings for one environment: `dev`, `test`, `prod`) is active. Expressions allowed: `"!dev"`, `"prod & eu"`, `"dev | test"`.
 
 ```java
 public class OnFeatureFlag implements Condition {
@@ -824,29 +763,26 @@ public class PaymentBeans {
 }
 ```
 
-The test starts two contexts — one with profile `dev` and `features.fraud-check=true`, one with neither:
+Two contexts — one with profile `dev` and `features.fraud-check=true`, one with neither:
 ```
 profile dev : fake gateway (dev), fraudChecker beans = 1
 no profile  : HTTP gateway (real), fraudChecker beans = 0
 ```
 
 ### How to activate profiles
-`spring.profiles.active=dev` in a property file, `--spring.profiles.active=dev` on the command line, env var `SPRING_PROFILES_ACTIVE=dev`, `@ActiveProfiles("test")` in tests, or `context.getEnvironment().setActiveProfiles("dev")` in plain Spring. With no active profile, the `default` profile is active. Profile-specific *property files* (`application-dev.yaml`) and profile groups are in Chapter 3.
+`spring.profiles.active=dev` in a property file, `--spring.profiles.active=dev`, env var `SPRING_PROFILES_ACTIVE=dev`, `@ActiveProfiles("test")` in tests, or `context.getEnvironment().setActiveProfiles("dev")` in plain Spring. With none active, the `default` profile is active. Profile-specific *property files* (`application-dev.yaml`) and profile groups: Chapter 3.
 
 ### Common mistakes
-- Using profiles for things that are just values (URLs, timeouts). Keep one bean and change the *property* per environment; reserve profiles for genuinely different beans (a fake payment gateway in dev).
-- `@Profile("prod")` on a bean that tests need → tests fail with "no bean". Provide an alternative for the non-prod case (`"!prod"`).
-- Writing a custom `Condition` in a Boot app when a `@ConditionalOnProperty` already does it.
-
-### TL;DR
-`@Conditional` = register the bean only if a condition matches; `@Profile` = the environment-name condition. Boot's auto-configuration is built from these.
+- Profiles for things that are just values (URLs, timeouts). Keep one bean and vary the *property*; reserve profiles for genuinely different beans (a fake payment gateway in dev).
+- `@Profile("prod")` on a bean tests need → "no bean". Provide a `"!prod"` alternative.
+- A custom `Condition` in a Boot app when `@ConditionalOnProperty` already does it.
 
 ---
 
 ## 2.12 Application events
 
 ### What it is
-The container includes a small **publish/subscribe** mechanism (senders "publish" messages without knowing who receives them; receivers "subscribe" to the kinds they care about). Any bean can publish an event object through `ApplicationEventPublisher`; any bean method annotated `@EventListener` whose parameter type matches receives it. Publishers don't know who listens — this is the **Observer pattern** ([LLD §11.1](../../../lld/chapters/11-patterns-behavioral-2/README.md)) built into Spring. Since Spring 4.2 an event can be any object (it no longer has to extend `ApplicationEvent`); records are ideal.
+The container includes an in-process **publish/subscribe** mechanism: any bean publishes an event object through `ApplicationEventPublisher`; any `@EventListener` method whose parameter type matches receives it. Publishers don't know who listens — the **Observer pattern** ([LLD §11.1](../../../lld/chapters/11-patterns-behavioral-2/README.md)). Since Spring 4.2 an event can be any object (no need to extend `ApplicationEvent`); records are ideal.
 
 ```java
 public record OrderPlaced(String orderId, long cents) {}
@@ -900,20 +836,20 @@ Output for `place("A-1", 2_500)` then `place("B-2", 50_000)`:
 ```
 
 ### How it works
-1. `publishEvent` finds all listeners whose parameter type matches the event (generics — type parameters like `List<String>` — are respected).
-2. It calls them **synchronously** (the caller waits until they finish)**, on the publisher's thread** (a thread is one independent path of execution in the program) (`main` above), in `@Order` sequence; unordered listeners run after ordered ones.
-3. A listener's return value (if not `void`/`null`) is published as a new event — `StockReserved` was handled *before* the remaining `OrderPlaced` listener ran.
-4. `condition` is a SpEL (Spring Expression Language — small expressions Spring evaluates at runtime) expression over `#event` (or the parameter name); `false` skips the listener.
-5. Only after all listeners finish does `publishEvent` return. **An exception in a listener propagates to the publisher** (is thrown on up to the code that called `publishEvent`).
+1. `publishEvent` finds all listeners whose parameter type matches (generics respected).
+2. It calls them **synchronously, on the publisher's thread** (`main` above), in `@Order` sequence; unordered listeners run after ordered ones.
+3. A non-`void`/non-`null` return value is published as a new event — `StockReserved` was handled *before* the remaining `OrderPlaced` listener ran.
+4. `condition` is a SpEL expression over `#event` (or the parameter name); `false` skips the listener.
+5. `publishEvent` returns only after all listeners finish. **An exception in a listener propagates to the publisher.**
 
 ### Variations and built-in events
 
 | Need | Use | Chapter |
 |---|---|---|
-| Run the listener on another thread | `@Async` + `@EventListener` (needs `@EnableAsync`) | 14 |
-| Run only after the publisher's DB transaction commits (is permanently saved) | `@TransactionalEventListener(phase = AFTER_COMMIT)` | 7 |
+| Listener on another thread | `@Async` + `@EventListener` (needs `@EnableAsync`) | 14 |
+| Run only after the publisher's DB transaction commits | `@TransactionalEventListener(phase = AFTER_COMMIT)` | 7 |
 | React to container stages | `ContextRefreshedEvent`, `ContextClosedEvent` (Framework); `ApplicationStartingEvent`, `ApplicationEnvironmentPreparedEvent`, `ApplicationPreparedEvent`, `ApplicationStartedEvent`, `ApplicationReadyEvent`, `ApplicationFailedEvent`, `WebServerInitializedEvent` (Boot) | 2.7, 15 |
-| Events between services | A message broker (a server that stores and forwards messages between programs, e.g. Kafka), not application events — they are in-memory, single JVM | 14 |
+| Events between services | A message broker (e.g. Kafka) — application events are in-memory, single JVM | 14 |
 
 ### Trade-offs
 | Direct method call | Application event |
@@ -921,31 +857,28 @@ Output for `place("A-1", 2_500)` then `place("B-2", 50_000)`:
 | Explicit, easy to follow in the IDE | Decoupled — publisher doesn't know listeners |
 | Compile-time dependency | No dependency; breaks cycles (§2.9) |
 | Obvious error handling | Synchronous by default: slow/failing listeners slow/fail the publisher |
-| — | Lost if the JVM crashes (not durable — not saved anywhere that survives a crash) |
+| — | Not durable: lost if the JVM crashes |
 
 ### Common mistakes
-- Assuming events are asynchronous. They aren't unless you add `@Async`.
-- Using in-memory events as a reliable integration mechanism; for "must not be lost" use the transactional outbox (save the event in the same database transaction as the data, then publish it from there) + a broker (Chapter 14, [microservices notes](../../../microservices-patterns/chapters/11-event-driven/README.md)).
-- Sending emails in a plain listener inside a transaction that later rolls back (is cancelled, undoing its changes) — use `@TransactionalEventListener`.
-
-### TL;DR
-`publishEvent` + `@EventListener` = in-process Observer. Synchronous, same thread, ordered with `@Order`, filterable with SpEL, return values become new events.
+- Assuming events are asynchronous. Not without `@Async`.
+- Using in-memory events for "must not be lost" integration; use the transactional outbox (save the event in the same DB transaction as the data, publish from there) + a broker (Chapter 14, [microservices notes](../../../microservices-patterns/chapters/11-event-driven/README.md)).
+- Sending emails in a plain listener inside a transaction that later rolls back — use `@TransactionalEventListener`.
 
 ---
 
 ## 2.13 Null-safety with JSpecify (Framework 7)
 
 ### What it is
-`NullPointerException` is Java's most common runtime error. Java has no built-in way to say "this may be null". **JSpecify** (`org.jspecify.annotations`) is a standard set of annotations agreed by several vendors (Google, JetBrains, Uber, Spring, ...):
+`NullPointerException` is Java's most common runtime error, and Java can't express "this may be null". **JSpecify** (`org.jspecify.annotations`) is a standard annotation set agreed by several vendors (Google, JetBrains, Uber, Spring, ...):
 
 | Annotation | Meaning |
 |---|---|
-| `@NullMarked` (on a package, class or module) | "In here, every type is non-null unless marked otherwise" |
+| `@NullMarked` (package, class or module) | "In here, every type is non-null unless marked otherwise" |
 | `@Nullable` | This field/parameter/return value may be `null` |
 | `@NonNull` | Explicitly non-null (rarely needed inside `@NullMarked`) |
 | `@NullUnmarked` | Opt a part back out |
 
-**Spring Framework 7 and Boot 4** annotate their whole codebase with JSpecify, replacing Spring's own `org.springframework.lang.Nullable`/`NonNull` (deprecated since 7.0). IDEs (IntelliJ IDEA) and build-time checkers such as **NullAway** (an Error Prone plugin — Error Prone is Google's extra compiler checks) read the annotations and warn when you might dereference `null` (call a method or read a field through a `null` reference); Kotlin sees Spring APIs with correct nullable/non-null types. `jspecify` comes transitively (as a dependency of a dependency) with `spring-core`.
+**Spring Framework 7 and Boot 4** annotate their whole codebase with JSpecify, replacing `org.springframework.lang.Nullable`/`NonNull` (deprecated since 7.0). IDEs and build-time checkers such as **NullAway** (an Error Prone plugin — Google's extra compiler checks) warn when you might dereference `null`; Kotlin sees Spring APIs with correct nullable/non-null types. `jspecify` comes transitively with `spring-core`.
 
 ### Example
 ```java
@@ -970,31 +903,27 @@ public class ReportService {
 }
 ```
 
-There is no `Translator` bean in the context:
+With no `Translator` bean in the context:
 ```
 no Translator bean -> title = Q3 sales, findTitle(2) = null
 ```
 
 ### How it works
-1. `@NullMarked` on the package makes every unannotated type in it non-null by *contract*.
-2. `@Nullable` marks the exceptions. Tools, not the JVM, enforce the contract — at runtime these annotations do nothing by themselves.
-3. **Spring's container reads them for injection**: an injection point annotated with an annotation named `Nullable` is treated as optional, so a missing bean gives `null` instead of a startup failure (like `Optional<T>`).
-4. Add NullAway to your build to turn the contract into compile errors (optional; Spring itself does this).
+1. `@NullMarked` makes every unannotated type in the package non-null by *contract*; `@Nullable` marks exceptions. Tools enforce it — at runtime the annotations do nothing.
+2. **Spring's container reads them for injection**: an injection point annotated with any annotation named `Nullable` is optional, so a missing bean gives `null` instead of a startup failure (like `Optional<T>`).
+3. Add NullAway to your build to turn the contract into compile errors (optional; Spring itself does this).
 
 ### Common mistakes
-- Thinking `@Nullable` adds runtime checks — it doesn't; it documents and enables tooling.
-- Mixing old `org.springframework.lang.Nullable` with JSpecify in new code. Use `org.jspecify.annotations`.
-- Putting `@Nullable` before a qualified type in the wrong place: JSpecify annotations are *type-use* annotations (they attach to a type, wherever a type is written, rather than to a declaration), so an array or nested type is written `String @Nullable []` or `Outer.@Nullable Inner`.
-
-### TL;DR
-Framework 7 / Boot 4 use JSpecify: `@NullMarked` package + `@Nullable` exceptions. Tools check it; Spring also treats `@Nullable` injection points as optional.
+- Thinking `@Nullable` adds runtime checks — it only documents and enables tooling.
+- Mixing old `org.springframework.lang.Nullable` with JSpecify in new code.
+- Misplacing `@Nullable`: JSpecify annotations are *type-use* annotations (attached to a type wherever it is written), so arrays and nested types are written `String @Nullable []` or `Outer.@Nullable Inner`.
 
 ---
 
 ## 2.14 Programmatic registration with `BeanRegistrar` (Framework 7)
 
 ### What it is
-`@Bean` methods register a *fixed* set of beans. When the set depends on runtime data — "one client bean per configured channel" — Framework 7's **`BeanRegistrar`** lets you register beans with ordinary code (loops, `if`s), in a form that also works with AOT/native images.
+`@Bean` methods register a *fixed* set of beans. When the set depends on runtime data — "one client bean per configured channel" — Framework 7's **`BeanRegistrar`** registers beans with ordinary code (loops, `if`s), in a form that also works with AOT/native images.
 
 ```java
 public class ChannelRegistrar implements BeanRegistrar {
@@ -1024,7 +953,7 @@ registered: emailChannel, smsChannel, pushChannel, router
 router -> Router[channels=[Channel[name=email], Channel[name=sms], Channel[name=push]]]
 ```
 
-The `spec` offers the same options as annotations: `primary()`, `fallback()`, `lazyInit()`, `prototype()`, `scope(...)`, `order(...)`, `description(...)`, `supplier(...)` (whose context can fetch other beans with `bean(...)`/`beanProvider(...)`). Use it for libraries and dynamic setups; for normal application code, `@Component` and `@Bean` remain simpler.
+The `spec` offers the same options as annotations: `primary()`, `fallback()`, `lazyInit()`, `prototype()`, `scope(...)`, `order(...)`, `description(...)`, `supplier(...)` (whose context fetches other beans with `bean(...)`/`beanProvider(...)`). Use it for libraries and dynamic setups; in application code `@Component` and `@Bean` remain simpler.
 
 ---
 
@@ -1051,17 +980,13 @@ The `spec` offers the same options as annotations: `primary()`, `fallback()`, `l
 
 ## Chapter TL;DR
 
-- **DI**: classes declare dependencies (constructor parameters); the **`ApplicationContext`** creates beans in dependency order, eagerly, at startup.
-- **Define beans** by scanning (`@Component`, `@Service`, `@Repository`, `@Controller`), with `@Bean` methods (third-party classes), `@Import`, or Framework 7's `BeanRegistrar`.
-- **Full `@Configuration`** is a CGLIB subclass (inter-bean calls return singletons); **lite** mode is plain Java. Pass dependencies as parameters and it doesn't matter.
-- **Constructor injection** with `final` fields is the default choice.
+(The §2.15 table is the question-by-question recap.)
+
+- **DI**: classes declare dependencies as constructor parameters (`final` fields); the **`ApplicationContext`** creates beans eagerly, in dependency order, at startup.
+- **Define beans** by scanning stereotypes, `@Bean` methods (third-party classes; full `@Configuration` = CGLIB subclass, lite = plain calls — pass dependencies as parameters), `@Import`, or Framework 7's `BeanRegistrar`.
 - **Picking a bean**: type → `@Qualifier` → `@Primary` → `@Fallback` → parameter name; `List`/`Map` for all; `Optional`/`ObjectProvider`/`@Nullable` for optional.
-- **Scopes**: singleton (shared, stateless!), prototype (new per lookup, no destroy callbacks), request/session (via scoped proxies).
-- **Lifecycle**: construct → inject → aware → BPP-before → `@PostConstruct` → `afterPropertiesSet` → init-method → BPP-after (proxies) → `SmartLifecycle.start` → `ContextRefreshedEvent` ... `@PreDestroy` → `destroy` → destroy-method.
-- **Post-processors** implement Spring's annotations; BPPs can replace beans with proxies. Declare them `static`.
-- **Circular dependencies**: constructor cycles fail, Boot rejects field cycles — redesign, use events, or `@Lazy`.
-- **Lazy init** trades startup errors for faster startup; **`@Conditional`/`@Profile`** choose beans per environment.
-- **Events**: `publishEvent` + `@EventListener`, synchronous and ordered.
-- **Framework 7**: JSpecify `@NullMarked`/`@Nullable` everywhere; `BeanRegistrar` for programmatic registration.
+- **Scopes**: singleton (shared, keep stateless), prototype (new per lookup, no destroy callbacks), request/session via scoped proxies.
+- **Lifecycle & post-processors**: BPP-after-init is where proxies appear; declare post-processors `static`. Constructor cycles fail, Boot rejects field cycles.
+- **Lazy init**, **`@Conditional`/`@Profile`**, synchronous **events**, and Framework 7's **JSpecify** null-safety round out the container.
 
 Next: [Chapter 3 — Configuration and Auto-configuration](../03-configuration-and-auto-configuration/README.md) shows where property values come from and how Boot uses conditions to configure beans for you.

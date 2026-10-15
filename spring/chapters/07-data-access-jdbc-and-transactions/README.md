@@ -1,19 +1,8 @@
 # Chapter 7 — Data Access with JDBC and Transactions
 
-Almost every Spring application stores data in a relational database (a database that keeps data in tables of rows and columns and is queried with SQL, e.g. PostgreSQL). This chapter covers the plumbing under all of it. You will see how Spring Boot creates a **connection pool**, how to run SQL with **`JdbcClient`** and **`JdbcTemplate`**, and how Spring turns database errors into one family of exceptions. Most of the chapter is about **transactions** (a group of database changes that are saved together or not at all): what `@Transactional` really does, the seven propagation types (what happens when one transactional method calls another), rollback rules (when changes are undone), isolation (how much concurrent transactions see of each other), read-only and timeouts, and the pitfalls that make `@Transactional` silently do nothing.
+Almost every Spring application stores data in a relational database (tables of rows queried with SQL, e.g. PostgreSQL). This chapter covers the plumbing: how Boot creates a **connection pool**, running SQL with **`JdbcClient`** and **`JdbcTemplate`**, and translating database errors into one exception family. Most of it is about **transactions** (changes saved together or not at all): what `@Transactional` really does, the seven propagation types (what happens when one transactional method calls another), rollback rules, isolation (how much concurrent transactions see of each other), read-only and timeouts, and the pitfalls that make `@Transactional` silently do nothing.
 
-This is not a SQL course. What a transaction is at the database level (ACID — Atomicity, Consistency, Isolation, Durability, the four guarantees of a transaction; isolation anomalies — wrong results caused by concurrent transactions; MVCC — multi-version concurrency control, where readers see a snapshot instead of waiting for writers; locks — marks that stop others from changing a row you are using) is taught in the SQL book: [SQL ch13 — Transactions and concurrency](../../../sql/chapters/13-transactions-and-concurrency/README.md). Here we look at the Spring side: who opens the transaction, on which connection, and when it commits (makes its changes permanent).
-
-**What you'll learn**
-
-- How `DataSource`, HikariCP, the JDBC driver (the database vendor's library that speaks its network protocol) and Spring's helpers fit together
-- `JdbcClient` (the modern fluent API) and `JdbcTemplate` (the classic one): queries, parameters, generated keys (ids the database creates on insert), batches (many statements sent together)
-- Schema (the table definitions)/data initialization with `schema.sql` / `data.sql`
-- Spring's `DataAccessException` hierarchy (exception translation)
-- `@Transactional`: every attribute, every propagation type, rollback rules, isolation, `readOnly`, `timeout`
-- The pitfalls: self-invocation, `final`/`private` methods, the wrong layer, checked exceptions, catching an inner failure
-- Programmatic transactions with `TransactionTemplate`
-- `@TransactionalEventListener`: run code only after a commit
+This is not a SQL course. Transactions at the database level (ACID — Atomicity, Consistency, Isolation, Durability; isolation anomalies; MVCC — multi-version concurrency control, readers see a snapshot instead of waiting for writers; locks) are taught in the SQL book: [SQL ch13 — Transactions and concurrency](../../../sql/chapters/13-transactions-and-concurrency/README.md). Here we look at the Spring side: who opens the transaction, on which connection, and when it commits (makes its changes permanent).
 
 **The code** (Spring Boot 4.1.1, Spring Framework 7.0, Java 25):
 
@@ -22,7 +11,7 @@ This is not a SQL course. What a transaction is at the database level (ACID — 
 | [`code/jdbc-basics`](code/jdbc-basics) | H2 in memory | HikariCP settings, `JdbcClient`/`JdbcTemplate`, batch, exception translation, `@JdbcTest` |
 | [`code/tx-demos`](code/tx-demos) | the book's private PostgreSQL 14 (port 5544) | propagation, rollback rules, pitfalls, isolation, read-only, timeout, events, `TransactionTemplate` |
 
-The transaction demos use real PostgreSQL. H2 (a small Java database that can run in memory) would hide some behaviour, such as how read-only transactions and serialization failures (the database refusing a transaction because a concurrent one changed the same data) act. The `tx-demos` test run creates a database called `spring_ch07_tx` before the tests and drops it afterwards (see [7.7](#77-how-a-spring-transaction-works)). Every result below was printed by a test and checked by an assertion. Run everything with `bash tools_run_spring.sh spring '07-*'` from the repository root. Start PostgreSQL first with `bash tools_pg.sh start`.
+The transaction demos use real PostgreSQL; H2 (a small in-memory Java database) would hide how read-only transactions and serialization failures (the database refusing a transaction because a concurrent one changed the same data) act. The `tx-demos` test run creates a database called `spring_ch07_tx` before the tests and drops it afterwards (see [7.7](#77-how-a-spring-transaction-works)). Every result below was printed by a test and checked by an assertion. Run everything with `bash tools_run_spring.sh spring '07-*'` from the repository root. Start PostgreSQL first with `bash tools_pg.sh start`.
 
 ---
 
@@ -30,7 +19,7 @@ The transaction demos use real PostgreSQL. H2 (a small Java database that can ru
 
 ### What it is
 
-When your code runs `SELECT`, the call passes through several layers. Each layer has one job:
+A `SELECT` passes through several layers, each with one job:
 
 ```mermaid
 flowchart TB
@@ -47,7 +36,7 @@ flowchart TB
 | **JDBC** (Java Database Connectivity) | The standard Java API for SQL: `Connection`, `PreparedStatement`, `ResultSet` | the driver from your dependencies |
 | **DataSource** | A factory for connections. In practice it is a **pool** that keeps connections open and lends them out | `HikariDataSource`, set up from `spring.datasource.*` |
 | **Spring JDBC helpers** | Take away the boilerplate (repetitive setup code): open/close, loops over `ResultSet`, turning `SQLException` into something useful | `JdbcTemplate`, `NamedParameterJdbcTemplate`, `JdbcClient` beans |
-| **Transaction manager** | Starts, commits and rolls back transactions. Keeps the current connection on the current thread (a thread is one independent path of execution; each request usually runs on its own thread) so every helper call in one transaction uses the same connection | `JdbcTransactionManager` (JDBC) or `JpaTransactionManager` (JPA, [ch08](../08-spring-data-jpa-and-hibernate/README.md)) |
+| **Transaction manager** | Starts, commits and rolls back transactions. Keeps the current connection on the current thread (each request usually runs on its own thread) so every helper call in one transaction uses the same connection | `JdbcTransactionManager` (JDBC) or `JpaTransactionManager` (JPA, [ch08](../08-spring-data-jpa-and-hibernate/README.md)) |
 
 Plain JDBC (without Spring) is covered in the SQL book: [SQL 14.11 — Using SQL from Java (JDBC)](../../../sql/chapters/14-advanced-sql-and-using-sql-from-code/README.md#1411-using-sql-from-java-jdbc). Compared with that code, Spring adds three things: a pool, much less boilerplate, and declarative transactions (you mark a method with an annotation instead of writing begin/commit code).
 
@@ -56,8 +45,8 @@ Plain JDBC (without Spring) is covered in the SQL book: [SQL 14.11 — Using SQL
 | Need | Use |
 |---|---|
 | Hand-written SQL, full control, reporting queries | `JdbcClient` (or `JdbcTemplate`) — this chapter |
-| Simple aggregates (a root object plus the objects it owns, saved as one unit), no ORM (Object-Relational Mapper: a library that maps objects to tables and writes SQL for you), SQL you can predict | Spring Data JDBC — [ch09](../09-spring-data-beyond-jpa-and-caching/README.md) |
-| Rich domain model (classes that model the business) with relationships, change tracking (the library notices which objects you modified) | JPA / Hibernate + Spring Data JPA — [ch08](../08-spring-data-jpa-and-hibernate/README.md) |
+| Simple aggregates (a root object plus the objects it owns, saved as one unit), no ORM (Object-Relational Mapper, which maps objects to tables and writes SQL for you), predictable SQL | Spring Data JDBC — [ch09](../09-spring-data-beyond-jpa-and-caching/README.md) |
+| Rich domain model with relationships, change tracking (the library notices which objects you modified) | JPA / Hibernate + Spring Data JPA — [ch08](../08-spring-data-jpa-and-hibernate/README.md) |
 
 You can mix them in one application. A `JdbcClient` query and a JPA repository call can even share one transaction when the `JpaTransactionManager` is in charge.
 
@@ -67,13 +56,13 @@ You can mix them in one application. A `JdbcClient` query and a JPA repository c
 
 ### What it is
 
-A **connection pool** keeps a set of open database connections and lends one to each piece of work. Think of a car-rental desk: opening a new connection takes a TCP handshake (the network round trips that set up a connection), authentication and session setup, which is like building a car for each customer. The pool keeps a fleet of cars ready to hand out. **HikariCP** is the pool Spring Boot picks first whenever it is on the classpath (the set of jars the app runs with). `spring-boot-starter-jdbc` and `spring-boot-starter-data-jpa` both bring it in.
+A **connection pool** keeps a set of open database connections and lends one to each piece of work, because opening a connection (TCP handshake, authentication, session setup) is expensive. **HikariCP** is the pool Spring Boot picks first whenever it is on the classpath. `spring-boot-starter-jdbc` and `spring-boot-starter-data-jpa` both bring it in.
 
 ### How Boot builds it
 
 1. You add a starter plus a driver (`org.postgresql:postgresql`, `com.h2database:h2`).
 2. Boot's `DataSourceAutoConfiguration` reads `spring.datasource.url`, `username` and `password`.
-3. If you give **no URL** and an embedded database (one that runs inside your Java process: H2, HSQLDB, Derby) is on the classpath, Boot creates an in-memory database. Its name is unique per application context (Spring container instance) (`spring.datasource.generate-unique-name=true` by default).
+3. If you give **no URL** and an embedded database (runs inside your Java process: H2, HSQLDB, Derby) is on the classpath, Boot creates an in-memory database whose name is unique per application context (`spring.datasource.generate-unique-name=true` by default), so test contexts never see each other's tables.
 4. Pool settings go under `spring.datasource.hikari.*`.
 
 ```properties
@@ -106,35 +95,29 @@ DataSource class = HikariDataSource, pool = shop-pool, maxPoolSize = 5, connecti
 | Property (`spring.datasource.hikari.`) | HikariCP default | Meaning |
 |---|---|---|
 | `maximum-pool-size` | 10 | Most connections the pool will ever open |
-| `minimum-idle` | same as max | Idle (open but unused) connections kept ready. Leaving it unset gives a fixed-size pool, which HikariCP recommends |
-| `connection-timeout` | 30 000 ms | How long a thread waits for a free connection before it gets an exception |
+| `minimum-idle` | same as max | Idle (open but unused) connections kept ready. Leaving it unset gives a fixed-size pool, which HikariCP recommends — it never has to open connections during a traffic spike |
+| `connection-timeout` | 30 000 ms | How long a thread waits for a free connection; then `SQLTransientConnectionException`, which Spring wraps as `CannotGetJdbcConnectionException` |
 | `idle-timeout` | 600 000 ms | Idle connections above `minimum-idle` are closed after this |
-| `max-lifetime` | 1 800 000 ms | Connections are retired after this. Keep it shorter than any database or firewall (network device that filters and may cut connections) idle limit |
+| `max-lifetime` | 1 800 000 ms | Connections are retired after this. Keep it shorter than any database or firewall idle limit |
 | `keepalive-time` | 120 000 ms | Pings idle connections so network gear does not drop them |
-| `leak-detection-threshold` | 0 (off) | Logs a stack trace (the chain of method calls at that moment) when a connection is held longer than this. Good for finding leaks (connections borrowed and never returned) in staging (a production-like test environment) |
+| `leak-detection-threshold` | 0 (off) | Logs a stack trace when a connection is held longer than this. Good for finding leaks (connections never returned) in staging |
 
 Boot 4.1 added `spring.datasource.connection-fetch=lazy`. It wraps the pool in Spring's `LazyConnectionDataSourceProxy`, so a transaction takes a physical connection only when the first SQL statement runs. A `@Transactional` method that returns early without touching the database never borrows a connection.
 
 ### Pool sizing — the counter-intuitive part
 
-A bigger pool is not faster. The database has a fixed number of CPU cores (units that can each run one task at a time) and disks. Hundreds of connections all running at once make it switch between them and fight over locks. HikariCP's own guidance starts from a small pool, roughly *cores × 2 + effective disks*, and then measures. Two rules follow from this:
+A bigger pool is not faster. The database has a fixed number of CPU cores and disks. Hundreds of connections all running at once make it switch between them and fight over locks. HikariCP's own guidance starts from a small pool, roughly *cores × 2 + effective disks*, and then measures. Two rules follow from this:
 
-- **Sum across instances.** 20 application pods (running copies of the app, in Kubernetes terms) × pool 10 = 200 connections, and the default PostgreSQL `max_connections` is 100.
+- **Sum across instances.** 20 application pods (running copies) × pool 10 = 200 connections, and the default PostgreSQL `max_connections` is 100.
 - **Hold connections briefly.** A transaction that calls a slow HTTP API keeps its connection the whole time (see [7.13](#713-transaction-pitfalls)).
 
 More on pooling in general: [SQL 14.12 — Connection pooling](../../../sql/chapters/14-advanced-sql-and-using-sql-from-code/README.md#1412-connection-pooling).
 
 ### Common mistakes
 
-- Setting `maximum-pool-size=100` "to be safe", then running out of database connections as soon as you scale out (run more copies of the app).
+- Setting `maximum-pool-size=100` "to be safe", then running out of database connections as soon as you scale out.
 - Leaving `connection-timeout` at 30 s in a user-facing API. Requests hang for 30 s when the pool is exhausted, when failing fast would be better.
-- Forgetting the pool when you add virtual threads (cheap JVM-managed threads, so you can have thousands) ([ch15](../15-observability-and-production/README.md)). Thousands of virtual threads still share, say, 10 connections, and the pool becomes the limit.
-
-### Self-check
-
-1. Why does Boot give each test context its own H2 database? → `generate-unique-name=true`, so contexts never see each other's tables.
-2. What happens when all 5 connections are busy and a sixth thread asks? → It waits up to `connection-timeout` (2 s here), then gets a `SQLTransientConnectionException`, which Spring wraps as `CannotGetJdbcConnectionException`.
-3. Why is `minimum-idle` best left unset? → The pool stays at a fixed size, so it never has to open connections during a traffic spike.
+- Forgetting the pool when you add virtual threads (cheap JVM-managed threads) ([ch15](../15-observability-and-production/README.md)). Thousands of virtual threads still share, say, 10 connections, and the pool becomes the limit.
 
 ---
 
@@ -144,7 +127,7 @@ More on pooling in general: [SQL 14.12 — Connection pooling](../../../sql/chap
 
 Both run SQL you write yourself. They open and close the connection, bind parameters, loop over rows, map each row to an object, and translate errors.
 
-- **`JdbcTemplate`** (since Spring 1.x): the classic API with many overloaded methods (same name, different parameters), `?` placeholders (markers in the SQL that are filled with values safely), and a `RowMapper` (a function that turns one result row into an object) for mapping.
+- **`JdbcTemplate`** (since Spring 1.x): the classic API with many overloaded methods, `?` placeholders (filled with values safely), and a `RowMapper` (a function turning one result row into an object).
 - **`NamedParameterJdbcTemplate`**: the same, with `:name` placeholders.
 - **`JdbcClient`** (Spring Framework 6.1+): one fluent API that covers both styles. Boot auto-configures it from the `NamedParameterJdbcTemplate`. It is the recommended default for new code.
 
@@ -228,7 +211,7 @@ Output:
 generated id = 6, rows updated = 1, now = Product[id=6, sku=HD-01, name=Headset, price=59.90, inStock=5]
 ```
 
-Why 6 and not 4, when only three rows exist? Earlier tests inserted rows and were rolled back, but **identity and sequence values (the database's auto-increment id counters) are never rolled back**. The database hands out numbers without waiting to see whether the transaction commits, so gaps in ids are normal. Never use ids to count rows or to assume ordering without gaps.
+Why 6, with only three rows? Earlier tests inserted rows and were rolled back, but **identity and sequence values (auto-increment id counters) are never rolled back** — the database hands out numbers without waiting for the commit, so gaps are normal. Never use ids to count rows or assume gap-free ordering.
 
 ### The same with JdbcTemplate, plus a batch
 
@@ -255,7 +238,7 @@ batch update counts = [1, 1, 0]
 in stock >= 13: [KB-01, MN-27, MS-01]
 ```
 
-The batch returns one count per parameter set. `NOPE` matched no row, so its count is 0. A batch sends all the statements in one network round trip (one request to the database and its reply). For 10 000 rows that is the difference between 10 000 round trips and a handful.
+The batch returns one count per parameter set (`NOPE` matched no row → 0). It sends the statements in one network round trip — for 10 000 rows, a handful of round trips instead of 10 000.
 
 ### Trade-offs
 
@@ -265,11 +248,11 @@ The batch returns one count per parameter set. `NOPE` matched no row, so its cou
 | Style | overloaded methods | overloaded methods | fluent chain |
 | Record/bean mapping | `DataClassRowMapper` by hand | same | automatic with `query(Type.class)` |
 | Batch updates | `batchUpdate` | `batchUpdate` | not in the fluent API. Use `JdbcTemplate` |
-| Stored procedures (functions stored and run inside the database) | `SimpleJdbcCall` | — | — |
+| Stored procedures | `SimpleJdbcCall` | — | — |
 
 ### Common mistakes
 
-- **String concatenation in SQL** (`"... WHERE sku = '" + sku + "'"`). This is SQL injection (an attacker putting SQL into an input so it runs as code). Always bind parameters. See [SQL 14.9 — SQL injection](../../../sql/chapters/14-advanced-sql-and-using-sql-from-code/README.md#149-sql-injection-and-parameterized-queries).
+- **String concatenation in SQL** (`"... WHERE sku = '" + sku + "'"`) → SQL injection (attacker input runs as SQL). Always bind parameters. See [SQL 14.9 — SQL injection](../../../sql/chapters/14-advanced-sql-and-using-sql-from-code/README.md#149-sql-injection-and-parameterized-queries).
 - Using `.single()` when "no row" is a normal case. Use `.optional()`.
 - `SELECT *` into a record. A column added later breaks nothing, but a renamed one fails at runtime. List the columns.
 - Loading a million rows with `.list()`. Stream them, or page with keyset pagination ([SQL 12.14](../../../sql/chapters/12-indexes-storage-and-query-performance/README.md#1214-offset-vs-keyset-pagination)).
@@ -280,16 +263,6 @@ The batch returns one count per parameter set. `NOPE` matched no row, so its cou
 
 - *How does `JdbcTemplate` know about the current transaction?* → It gets its connection through `DataSourceUtils.getConnection`, which first checks `TransactionSynchronizationManager` for a connection already bound to this thread.
 - *Is `JdbcTemplate` thread-safe?* → Yes. After configuration it holds no per-call state, so one shared bean is fine.
-
-### Self-check
-
-1. Which API maps rows to a record without a `RowMapper`? → `JdbcClient` with `query(Product.class)`.
-2. What does `update()` return? → The number of affected rows.
-3. Why can a generated id "skip" numbers? → Identity/sequence values are not rolled back.
-
-### TL;DR
-
-Use `JdbcClient` for new code: `sql(...)`, `param(...)`, `query(Type.class).list()/optional()/single()`, or `update()`. Use `JdbcTemplate.batchUpdate` for batches. Always bind parameters.
 
 ---
 
@@ -330,7 +303,7 @@ In production the schema changes over time, and a script that only ever creates 
 
 ### The problem it solves
 
-JDBC reports every failure as a checked (must be caught or declared) `SQLException` carrying a vendor error code (a number specific to that database product) and an SQLState (a standard five-character error code). To tell "duplicate key" from "deadlock" (two transactions each waiting for a lock the other holds, so neither can go on) you would have to check vendor codes such as PostgreSQL's `23505` or MySQL's `1062`. Spring translates them into one **unchecked** hierarchy that is the same for every database and every data-access technology (JDBC, JPA — Java's standard object/database mapping API, R2DBC — a non-blocking database API, ...).
+JDBC reports every failure as a checked `SQLException` carrying a vendor error code and an SQLState (a standard five-character code). Telling "duplicate key" from "deadlock" (two transactions each waiting for the other's lock) would mean checking vendor codes like PostgreSQL's `23505` or MySQL's `1062`. Spring translates them into one **unchecked** hierarchy, the same for every database and data-access technology (JDBC, JPA, R2DBC — a non-blocking database API, ...).
 
 ```java
 assertThatThrownBy(() -> repo.insert("KB-01", "Duplicate", BigDecimal.ONE, 1))
@@ -370,7 +343,7 @@ classDiagram
 | Exception | Typical cause | Retry? |
 |---|---|---|
 | `DuplicateKeyException` | unique/primary key violated | no — fix the data |
-| `DataIntegrityViolationException` | NOT NULL, CHECK, foreign key (a column that must point to an existing row in another table) | no |
+| `DataIntegrityViolationException` | NOT NULL, CHECK, foreign key | no |
 | `BadSqlGrammarException` | typo in SQL, missing table | no — bug |
 | `CannotAcquireLockException`, `PessimisticLockingFailureException` | lock timeout, deadlock, PostgreSQL serialization failure | **yes**, the whole transaction |
 | `OptimisticLockingFailureException` | `@Version` conflict (someone else saved the row since you read it) ([8.14](../08-spring-data-jpa-and-hibernate/README.md#814-locking-optimistic-and-pessimistic)) | yes, after reloading |
@@ -385,7 +358,7 @@ For JPA repositories the same translation is applied by a proxy around `@Reposit
 
 ## 7.6 Testing JDBC code with @JdbcTest
 
-`@JdbcTest` is a **test slice** (a test that starts only one layer of the app): it starts only the JDBC parts of the application (`DataSource`, `JdbcTemplate`, `JdbcClient`, the transaction manager, SQL init) and none of your services or controllers. Two defaults matter:
+`@JdbcTest` is a **test slice**: it starts only the JDBC parts of the application (`DataSource`, `JdbcTemplate`, `JdbcClient`, the transaction manager, SQL init) and none of your services or controllers. Two defaults matter:
 
 1. It replaces your `DataSource` with a fresh embedded database. `@AutoConfigureTestDatabase(replace = Replace.NONE)` keeps yours, which is how the Hikari settings above could be checked.
 2. **Every test method runs in a transaction that is rolled back afterwards**, so tests do not see each other's changes.
@@ -420,13 +393,13 @@ In Boot 4 the slice annotations moved with the modules: `org.springframework.boo
 
 A **database transaction** groups statements so they all commit or all roll back (see [SQL 13.1](../../../sql/chapters/13-transactions-and-concurrency/README.md#131-what-a-transaction-is)). On one JDBC connection that means `setAutoCommit(false)`, the statements, then `commit()` or `rollback()`. A **Spring transaction** does that work for you and adds three things:
 
-1. **One connection per transaction, bound to the thread.** Every `JdbcClient`, `JdbcTemplate` or JPA call made inside the transaction, in any class, finds that connection through `TransactionSynchronizationManager`, which works like a `ThreadLocal` (a variable holding a separate value for each thread) map.
+1. **One connection per transaction, bound to the thread.** Every `JdbcClient`, `JdbcTemplate` or JPA call inside the transaction, in any class, finds that connection through `TransactionSynchronizationManager`, which works like a `ThreadLocal` (per-thread variable) map.
 2. **Declarative boundaries.** `@Transactional` on a method means "wrap this method in a transaction".
 3. **Rules** for what to do when a transactional method calls another one (propagation), when to roll back, which isolation level to use, and more.
 
 ### How @Transactional works, step by step
 
-Spring does not change your class. It puts a **proxy** (a generated stand-in object that intercepts calls and then forwards them) in front of the bean (AOP — see [ch04](../04-aop-and-proxies/README.md)). Other beans are injected with the proxy, not your object.
+Spring does not change your class. It puts a **proxy** in front of the bean (AOP — see [ch04](../04-aop-and-proxies/README.md)). Other beans are injected with the proxy, not your object.
 
 ```mermaid
 sequenceDiagram
@@ -460,7 +433,7 @@ sequenceDiagram
 |---|---|---|
 | JDBC only (`spring-boot-starter-jdbc`) | `JdbcTransactionManager` | a `DataSourceTransactionManager` that also translates commit errors to `DataAccessException` |
 | JPA (`spring-boot-starter-data-jpa`) | `JpaTransactionManager` | also manages the `EntityManager`. JDBC calls on the same `DataSource` join its transactions |
-| Several resources (JMS — Java's messaging API — + DB) | none by default | a JTA (Java Transaction API) manager, or better, avoid distributed transactions (one transaction spanning several systems, which is slow and fragile) (see the outbox idea in [ch14](../14-messaging-async-and-scheduling/README.md)) |
+| Several resources (JMS — Java's messaging API — + DB) | none by default | a JTA (Java Transaction API) manager, or better, avoid distributed transactions (slow and fragile; see the outbox idea in [ch14](../14-messaging-async-and-scheduling/README.md)) |
 | Reactive (R2DBC) | `R2dbcTransactionManager` | `ReactiveTransactionManager`, context-bound instead of thread-bound ([ch13](../13-reactive-and-webflux/README.md)) |
 
 ### Seeing it
@@ -518,13 +491,13 @@ The tests extend a base class that is **not** `@Transactional`. Commits and roll
 
 ### What it is
 
-**Propagation** answers one question: *this method is transactional, and a transaction may already be running. What now?* Picture meetings. REQUIRED joins the meeting already in progress. REQUIRES_NEW steps out into a separate room and comes back. NESTED stays in the meeting but saves a checkpoint to return to.
+**Propagation** answers: *this method is transactional, and a transaction may already be running. What now?*
 
 | Propagation | Transaction already running | No transaction running | Typical use |
 |---|---|---|---|
 | `REQUIRED` (default) | **join** it | start one | almost everything |
 | `REQUIRES_NEW` | **suspend** it, start an independent one (new connection) | start one | audit logs that must survive a rollback, id generators |
-| `NESTED` | create a **savepoint** (a marker inside a transaction you can roll back to without undoing everything) inside it | start one | "try this part, undo just this part on failure" (JDBC only) |
+| `NESTED` | create a **savepoint** (a marker you can roll back to without undoing everything) inside it | start one | "try this part, undo just this part on failure" (JDBC only) |
 | `MANDATORY` | join it | **throw** `IllegalTransactionStateException` | methods that must never run on their own |
 | `SUPPORTS` | join it | run **without** | read helpers that do not care |
 | `NOT_SUPPORTED` | suspend it, run without | run without | slow non-transactional work inside a transactional flow |
@@ -667,7 +640,7 @@ Fixes: let the exception propagate. Or make the inner call `REQUIRES_NEW`/`NESTE
 
 ### Common mistakes
 
-- Using REQUIRES_NEW everywhere "for safety". It doubles connection use and breaks atomicity (the all-or-nothing guarantee), because parts commit independently.
+- REQUIRES_NEW everywhere "for safety" doubles connection use and breaks atomicity, because parts commit independently.
 - Expecting propagation to apply to calls inside the same class. It does not ([7.13](#713-transaction-pitfalls)).
 - Expecting a transaction to follow work into another thread (`@Async`, `CompletableFuture`, parallel streams). Transactions are bound to one thread, so the new thread has none.
 
@@ -679,23 +652,13 @@ Fixes: let the exception propagate. Or make the inner call `REQUIRES_NEW`/`NESTE
 - *REQUIRES_NEW vs NESTED?* → REQUIRES_NEW is a separate physical transaction that commits independently, even if the outer one rolls back later. NESTED is a savepoint in the same transaction, so if the outer transaction rolls back, the nested work is lost too.
 - *Risk of REQUIRES_NEW?* → Two connections per thread, which can exhaust the pool. It can also deadlock if the inner transaction waits for a row lock the outer one holds.
 
-### Self-check
-
-1. Which propagations never run inside the caller's transaction? → REQUIRES_NEW (new one), NOT_SUPPORTED (none), NEVER (throws instead).
-2. Why did NOT_SUPPORTED show a different pid? → Without the transaction's bound connection, the query borrowed any free pool connection.
-3. What does "rollback-only" mean? → A flag on the shared transaction saying that it may only roll back. Any later commit attempt rolls back instead.
-
-### TL;DR
-
-REQUIRED joins, REQUIRES_NEW isolates on a second connection, NESTED uses a savepoint. A failure inside a *joined* transaction dooms the whole transaction, even if you catch the exception.
-
 ---
 
 ## 7.10 Rollback rules
 
 ### What it is
 
-When an exception leaves a `@Transactional` method, Spring must choose between rollback and commit. The default rule copies EJB (Enterprise JavaBeans, the older Java EE component model):
+When an exception leaves a `@Transactional` method, Spring chooses rollback or commit. The default copies EJB (Enterprise JavaBeans, the older Java EE component model):
 
 - **`RuntimeException` and `Error` → rollback.**
 - **Checked exceptions (`Exception` subclasses that are not runtime exceptions) → commit.**
@@ -762,6 +725,7 @@ Rules match **subclasses** too: `rollbackFor = Exception.class` covers every che
 
 - Catching an exception, logging it, and not rethrowing. The method ends normally and **commits**. If you must swallow it, call `TransactionAspectSupport.currentTransactionStatus().setRollbackOnly()`, or better, use `TransactionTemplate`.
 - Wrapping a runtime exception into a checked one on the way out, which silently switches the outcome to commit.
+- Your own JDBC code throwing raw `SQLException` (checked) → commit; Spring's helpers throw unchecked `DataAccessException`s, which do roll back.
 - Assuming `@Transactional(rollbackFor = ...)` on an interface method is honoured by every proxy type. Annotate the class.
 
 ### In the interview
@@ -770,22 +734,13 @@ Rules match **subclasses** too: `rollbackFor = Exception.class` covers every che
 
 - *My method threw an `IOException` but the data was saved. Why?* → `IOException` is checked, so the default rule commits. Add `rollbackFor` or switch the global default.
 
-### Self-check
-
-1. Does `@Transactional` roll back for `SQLException` thrown from your own JDBC code? → No, it is checked. (Spring's own helpers throw unchecked `DataAccessException`s, which do roll back.)
-2. What happens if you catch the exception inside the method? → The proxy sees a normal return and commits.
-
-### TL;DR
-
-Unchecked → rollback, checked → **commit** by default. Use `rollbackFor`, or `rollbackOn = ALL_EXCEPTIONS` (6.2+).
-
 ---
 
 ## 7.11 Isolation levels
 
 ### What it is
 
-**Isolation** controls what one transaction can see of other transactions that run at the same time. The anomalies (dirty read, non-repeatable read, phantom, lost update, write skew — each a different way concurrent transactions can see or produce wrong data) and how PostgreSQL implements each level with MVCC are taught in [SQL 13.4 — Isolation](../../../sql/chapters/13-transactions-and-concurrency/README.md#134-isolation--anomalies-and-isolation-levels) and [SQL 13.7 — Lost updates](../../../sql/chapters/13-transactions-and-concurrency/README.md#137-lost-updates-and-how-to-prevent-them). In Spring you only choose the level:
+**Isolation** controls what one transaction can see of other transactions that run at the same time. The anomalies (dirty read, non-repeatable read, phantom, lost update, write skew) and how PostgreSQL implements each level with MVCC are taught in [SQL 13.4 — Isolation](../../../sql/chapters/13-transactions-and-concurrency/README.md#134-isolation--anomalies-and-isolation-levels) and [SQL 13.7 — Lost updates](../../../sql/chapters/13-transactions-and-concurrency/README.md#137-lost-updates-and-how-to-prevent-them). In Spring you only choose the level:
 
 ```java
 @Transactional(isolation = Isolation.REPEATABLE_READ)
@@ -812,6 +767,8 @@ public List<Long> readTwiceReadCommitted() {
 READ_COMMITTED  reads alice twice: [100, 150]  (non-repeatable read)
 REPEATABLE_READ reads alice twice: [100, 100]  (same snapshot)
 ```
+
+PostgreSQL's REPEATABLE READ takes one snapshot at the first query; every later read uses it.
 
 ### Demo — the lost update
 
@@ -849,11 +806,6 @@ Under REPEATABLE READ, PostgreSQL notices that the row changed after this transa
 - Using SERIALIZABLE without a retry loop. Serialization failures are *expected* at that level.
 - Relying on H2 to test isolation. Its behaviour differs from PostgreSQL's, which is why these demos use a real server.
 
-### Self-check
-
-1. Why did REPEATABLE READ return `[100, 100]`? → PostgreSQL takes one snapshot at the first query and every later read uses it.
-2. Which exception tells you to retry? → Anything in `TransientDataAccessException`, such as `CannotAcquireLockException` here.
-
 ---
 
 ## 7.12 readOnly and timeout
@@ -865,8 +817,8 @@ Under REPEATABLE READ, PostgreSQL notices that the row changed after this transa
 | Stack | Effect |
 |---|---|
 | JDBC (`JdbcTransactionManager`) | calls `Connection.setReadOnly(true)`. The PostgreSQL driver then starts the transaction as `READ ONLY`, so writes **fail** |
-| JPA / Hibernate | the session becomes read-only and flush mode goes to manual (flushing = sending pending changes to the database). No snapshots for dirty checking (comparing objects with their loaded copies to find changes), no automatic flush (faster reads, [8.4](../08-spring-data-jpa-and-hibernate/README.md#84-the-persistence-context-and-dirty-checking)) |
-| Routing `DataSource` | can send read-only transactions to a replica (a read-only copy of the database kept in sync with the main one; see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)) (a custom `AbstractRoutingDataSource` that checks `TransactionSynchronizationManager.isCurrentTransactionReadOnly()`) |
+| JPA / Hibernate | the session becomes read-only and flush mode goes to manual (flushing = sending pending changes to the database). No snapshots for dirty checking, no automatic flush (faster reads, [8.4](../08-spring-data-jpa-and-hibernate/README.md#84-the-persistence-context-and-dirty-checking)) |
+| Routing `DataSource` | can send read-only transactions to a replica (a read-only synced copy; see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)) (a custom `AbstractRoutingDataSource` that checks `TransactionSynchronizationManager.isCurrentTransactionReadOnly()`) |
 
 On PostgreSQL:
 
@@ -980,7 +932,7 @@ With JDK interface proxies, only methods of the interface are intercepted. Sprin
 
 ### Pitfall 3 — the transaction on the wrong layer
 
-A transaction should cover one **use case**, "transfer money", not each individual SQL call. Here every DAO (Data Access Object: a class that wraps database calls) method is its own transaction, which is what you get by default with Spring Data repository methods:
+A transaction should cover one **use case**, "transfer money", not each individual SQL call. Here every DAO (Data Access Object) method is its own transaction, which is what you get by default with Spring Data repository methods:
 
 ```java
 @Repository
@@ -1014,7 +966,7 @@ public void placeOrder(Order o) {
 }
 ```
 
-The connection is held for the whole HTTP call. If the payment succeeds and the commit then fails, the customer has been charged and no order exists. Keep transactions short and database-only. Make remote calls before or after the transaction, or publish an event after commit ([7.15](#715-transactionaleventlistener)), or use the transactional outbox (write the outgoing message to a table in the same transaction; a separate process sends it later) ([ch14](../14-messaging-async-and-scheduling/README.md), [event-driven patterns](../../../microservices-patterns/chapters/11-event-driven/README.md)).
+The connection is held for the whole HTTP call. If the payment succeeds and the commit then fails, the customer has been charged and no order exists. Keep transactions short and database-only. Make remote calls before or after the transaction, or publish an event after commit ([7.15](#715-transactionaleventlistener)), or use the transactional outbox (write the outgoing message to a table in the same transaction; a separate process sends it) ([ch14](../14-messaging-async-and-scheduling/README.md), [event-driven patterns](../../../microservices-patterns/chapters/11-event-driven/README.md)).
 
 ### Pitfall 5 — other threads
 
@@ -1037,16 +989,6 @@ A transaction is bound to the thread that started it. Work handed to `@Async` me
 
 - *How do you fix self-invocation?* → Move the method to another bean, annotate the entry method, or use `TransactionTemplate`.
 - *Why not put `@Transactional` on the controller?* → It widens the transaction to include request parsing, serialization and remote calls, holding connections and locks longer. The service layer is the use-case boundary.
-
-### Self-check
-
-1. Why did `importAll` leave two rows? → `this.saveAll()` bypassed the proxy, so each insert auto-committed.
-2. Why did the `final` method throw `NullPointerException` rather than just running without a transaction? → It ran on the proxy object, whose injected fields are `null`.
-3. Where should `@Transactional` go? → On the service method that represents the whole use case.
-
-### TL;DR
-
-No proxy, no transaction. Watch for self-calls, `private`/`final` methods, transactions that are too small (DAO) or too big (controller, remote calls), and work moved to other threads.
 
 ---
 
@@ -1126,8 +1068,8 @@ Good fits for `TransactionTemplate`: batch jobs that commit every N items, loops
 | Phase | Runs when | Typical use |
 |---|---|---|
 | `BEFORE_COMMIT` | just before commit (can still write, can still fail the commit) | last validations, flushing extra data |
-| `AFTER_COMMIT` (default) | after a successful commit | e-mails, messages, cache eviction (removing stale entries from a cache) |
-| `AFTER_ROLLBACK` | after a rollback | compensation (undoing earlier side effects), alerts |
+| `AFTER_COMMIT` (default) | after a successful commit | e-mails, messages, cache eviction |
+| `AFTER_ROLLBACK` | after a rollback | compensation (undoing side effects), alerts |
 | `AFTER_COMPLETION` | after commit **or** rollback | cleanup |
 
 ```java
@@ -1165,11 +1107,6 @@ In the last line the event was published with no transaction active, so the tran
 ### In the interview
 
 **30-second answer:** "`@TransactionalEventListener` defers an event listener to a transaction phase, by default after commit. So side effects like e-mails or messages only happen when the data is really saved. If no transaction is active the listener is skipped unless `fallbackExecution` is true. If the listener must write to the database it needs `REQUIRES_NEW`. For guaranteed delivery you still need an outbox, because the event is only in memory."
-
-### Self-check
-
-1. Which listener ran on rollback? → `@EventListener` (immediately), then AFTER_ROLLBACK and AFTER_COMPLETION.
-2. What happens to an AFTER_COMMIT listener when there is no transaction? → It is skipped, unless `fallbackExecution = true`.
 
 ---
 

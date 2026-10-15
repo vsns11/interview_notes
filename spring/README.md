@@ -78,7 +78,7 @@ Details and links per component: [§19.2](chapters/19-cheatsheet-and-glossary/RE
 ## What's in here
 | Path | Purpose |
 |---|---|
-| `Spring-Handbook.pdf` | The whole book as one PDF, with a cover and a table of contents (built by `tools/regen_pdfs.sh`). |
+| `Spring-Handbook-Vol1.pdf`, `Spring-Handbook-Vol2.pdf` | The whole book in two PDFs (each under 350 pages), with cover and clickable contents. Vol 1: Spring core, configuration, AOP, MVC and REST, REST clients, data access and transactions, Spring Data JPA, caching (Ch 1–9). Vol 2: security, testing, reactive, messaging, observability, Spring Cloud, Spring AI and what's new, interview questions, cheat sheet, question bank (Ch 10–20). |
 | `interview/Spring-Interview-Edition.pdf` | **Interview Edition** (~18k words, 41 pages): every chapter's must-know terms, comparison tables, top questions and gotchas for fast revision. Source: `interview/INTERVIEW.md`. |
 | `capstones/CAPSTONES.md` + `capstones/Spring-Capstone-Projects.pdf` | **Capstone Projects**: 40 build-it-yourself design briefs, beginner to advanced (notes API and URL shortener → JWT blog, Kafka notifications, Framework 7 API versioning → multi-tenant SaaS, saga with outbox, Spring AI RAG, Modulith, Authorization Server), each with requirements, architecture, data model, milestones, trade-offs and interview Q&A linked to the chapters. |
 | `chapters/NN-name/README.md` + `ChapterNN-Notes.pdf` | One chapter (Markdown source and its PDF). |
@@ -165,7 +165,7 @@ Timings (startup, request rates, cache hits) depend on the machine; the chapters
 Requires Node 18+ and Google Chrome (the path is set in `tools/md2pdf.mjs`). The script installs `tools/node_modules` on first run.
 
 ```bash
-bash tools/regen_pdfs.sh      # every ChapterNN-Notes.pdf + Spring-Handbook.pdf (cover title "Spring Handbook")
+bash tools/regen_pdfs.sh      # every ChapterNN-Notes.pdf + Spring-Handbook-Vol1.pdf + Spring-Handbook-Vol2.pdf (cover title "Spring Handbook")
 
 # one chapter only
 node tools/md2pdf.mjs chapters/07-data-access-jdbc-and-transactions/Chapter07-Notes.pdf chapters/07-data-access-jdbc-and-transactions/README.md

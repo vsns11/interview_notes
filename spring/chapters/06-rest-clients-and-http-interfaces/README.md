@@ -1,18 +1,6 @@
 # Chapter 6 — REST Clients and HTTP Interfaces
 
-[Chapter 5](../05-spring-mvc-and-rest/README.md) built an API. Real services also **call** APIs: a payment provider, another team's microservice (a small, independently deployed service that owns one business area), a search engine. Calling over the network brings problems you never have with a local method call — slowness, timeouts (giving up after a set wait), partial failures (some calls or servers fail while others work), error bodies, versioning, retries. This chapter covers Spring's HTTP clients and how to use them safely:
-
-**What you'll learn**
-
-1. The four Spring HTTP clients — `RestClient`, `RestTemplate`, `WebClient`, HTTP interfaces — and which to choose (including `RestTemplate`'s deprecation timeline).
-2. `RestClient` in depth: requests, bodies, `retrieve()` vs `exchange()`, `ResponseEntity`, generics.
-3. Error handling: Spring's exception hierarchy, status handlers, reading Problem Details from error bodies, mapping to your own exceptions.
-4. Timeouts and the underlying HTTP library (the code that actually opens connections and sends bytes: the JDK's built-in client, Apache HttpClient, Jetty, Reactor Netty) — Boot 4's `spring.http.clients.*`.
-5. Interceptors (code that wraps every outgoing request) for cross-cutting concerns — things every call needs, such as headers, logging, tracing (following one request across services).
-6. **HTTP service interfaces** (`@HttpExchange`) and **Boot 4's HTTP service client auto-configuration** (`@ImportHttpServices`, `spring.http.serviceclient.*`).
-7. Client-side **API versioning** (Framework 7).
-8. **Retries** with Framework 7 `@Retryable` — and when not to retry.
-9. Testing clients: `@RestClientTest` + `MockRestServiceServer`, and tests against a real local server.
+[Chapter 5](../05-spring-mvc-and-rest/README.md) built an API. Real services also **call** APIs: a payment provider, another team's microservice (a small, independently deployed service that owns one business area), a search engine. Calling over the network brings problems a local call never has — slowness, timeouts, partial failures (some calls fail while others work), error bodies, versioning, retries. This chapter covers Spring's HTTP clients and how to use them safely.
 
 Code: [`code/rest-clients/`](code/rest-clients/) — Spring Boot 4.1.1, Framework 7.0, Java 25. To make the tests hit a *real* HTTP server without the internet, the project also contains a small "remote" catalog API ([`CatalogServerController`](code/rest-clients/src/main/java/ch06/catalog/CatalogServerController.java)) that the test starts on a free local port; imagine it belongs to another team. All output shown is real.
 
@@ -53,20 +41,14 @@ flowchart TD
     L["Existing RestTemplate code"] --> M["Wrap with RestClient.create(template) then migrate"]
 ```
 
-### Self-check
-
-1. Which client should new blocking code use? → `RestClient` (directly or behind an HTTP interface).
-2. When is `RestTemplate` scheduled to be removed? → Framework 8.0; formally deprecated from 7.1.
-3. Do you need WebFlux to use HTTP interfaces? → No; they run on `RestClient` too.
-
 ---
 
 ## 6.2 `RestClient` basics
 
 ### How it works
 
-1. Get a **builder**. In Boot, inject `RestClient.Builder` — a **prototype** bean (a new instance for every injection point) pre-configured with Boot's message converters (Jackson 3, which turns Java objects into JSON and back), the chosen HTTP library, timeouts from `spring.http.clients.*`, and (when Micrometer, Spring's metrics library, is present) observability (metrics and traces for each call). Each injection point gets a fresh builder, so configuring one does not affect others. (Outside Boot: `RestClient.builder()` or `RestClient.create("https://...")`.)
-2. Set shared settings (`baseUrl`, `defaultHeader`, `defaultStatusHandler`, `requestInterceptor`, `requestFactory`) and `build()`. A `RestClient` is **immutable** (cannot change after it is built) **and thread-safe** (many threads may use it at the same time) — build it once (e.g. in a constructor) and reuse it.
+1. Get a **builder**. In Boot, inject `RestClient.Builder` — a **prototype** bean (fresh per injection point, so configuring one doesn't affect others) pre-configured with Boot's message converters (Jackson 3), the chosen HTTP library, timeouts from `spring.http.clients.*`, and (with Micrometer) observability — metrics and traces per call. (Outside Boot: `RestClient.builder()` or `RestClient.create("https://...")`.)
+2. Set shared settings (`baseUrl`, `defaultHeader`, `defaultStatusHandler`, `requestInterceptor`, `requestFactory`) and `build()`. A `RestClient` is **immutable and thread-safe** — build it once (e.g. in a constructor) and reuse it.
 3. Per call: choose the method (`get()`, `post()`, `put()`, `patch()`, `delete()`, `method(...)`), the `uri(...)`, headers, body.
 4. Finish with **`retrieve()`** (then `body(...)`, `toEntity(...)`, `toBodilessEntity()`) or **`exchange(...)`**.
 
@@ -92,16 +74,16 @@ toEntity(List) -> 200 OK 2 books
 
 What each part does:
 
-- `uri("/catalog/books/{id}", 1)` — a **URI template**; variables are URL-encoded (special characters like spaces turned into `%20`-style codes) for you. Never build URLs by string concatenation with user input.
+- `uri("/catalog/books/{id}", 1)` — a **URI template**; variables are URL-encoded for you (spaces → `%20` etc.). Never build URLs by string concatenation with user input.
 - `uri(b -> b.path(...).queryParam("author", "Martin Fowler").build())` — the `UriBuilder` form for query parameters (the space is encoded).
-- `body(BookDto.class)` — deserialises (turns the JSON text back into an object) the JSON body into your record. Your DTO (Data Transfer Object: a plain class/record that just carries data) only needs the fields you use; unknown fields are ignored (Jackson 3 default).
-- `ParameterizedTypeReference<List<BookDto>>` — Java erases generics (type parameters such as `<BookDto>`) at runtime, so `List.class` would give you a list of maps; the anonymous subclass (the `{}` at the end creates a one-off subclass) captures the full type.
+- `body(BookDto.class)` — deserialises the JSON body into your record. Your DTO only needs the fields you use; unknown fields are ignored (Jackson 3 default).
+- `ParameterizedTypeReference<List<BookDto>>` — Java erases generics at runtime, so `List.class` would give a list of maps; the anonymous subclass (`{}`) captures the full type. Same with `body(new ParameterizedTypeReference<List<BookDto>>() {})`.
 - `toEntity(...)` returns `ResponseEntity<T>`: status + headers + body. `toBodilessEntity()` when you only care about the status.
 - `requiredBody(...)` (Framework 7.0.4+) is like `body(...)` but throws if the body is empty instead of returning `null`.
 
 ### A hand-written client class
 
-Wrap the calls in a small class so the rest of your code talks in domain terms (the language of the business — books, orders — rather than HTTP) ([`CatalogClient.java`](code/rest-clients/src/main/java/ch06/client/CatalogClient.java)):
+Wrap the calls in a small class so the rest of your code talks in domain terms (books, orders — not HTTP) ([`CatalogClient.java`](code/rest-clients/src/main/java/ch06/client/CatalogClient.java)):
 
 ```java
 @Component
@@ -173,13 +155,7 @@ create        -> 201 CREATED Location=/catalog/books/102 body=BookDto[id=102, ti
 | Body handling | `body`, `toEntity`, `toBodilessEntity` | `res.bodyTo(...)`, `res.getHeaders()`, anything |
 | Use when | almost always | different body types per status, streaming, very custom handling |
 
-A lesson from writing this chapter: the first version of `findBook` used `exchange()` and treated 404 specially, assuming the 5xx (HTTP status codes 500–599: server-side failures) `defaultStatusHandler` would still fire. It does not — `exchange()` bypasses status handlers — so a 503 silently became `Optional.empty()`. The `@RestClientTest` in section 6.8 caught it. If you use `exchange()`, handle **every** status yourself.
-
-### Self-check
-
-1. Why inject `RestClient.Builder` instead of calling `RestClient.builder()` in Boot? → Boot's builder carries the auto-configured converters, HTTP library, timeouts and observability.
-2. Is a `RestClient` safe to share between threads? → Yes, it is immutable and thread-safe once built.
-3. How do you deserialise a `List<BookDto>`? → `body(new ParameterizedTypeReference<List<BookDto>>() {})`.
+A lesson from writing this chapter: the first version of `findBook` used `exchange()` and treated 404 specially, assuming the 5xx `defaultStatusHandler` would still fire. It does not — `exchange()` bypasses status handlers — so a 503 silently became `Optional.empty()`. The `@RestClientTest` in section 6.8 caught it. If you use `exchange()`, handle **every** status yourself.
 
 ### More request features (quick reference)
 
@@ -217,11 +193,11 @@ classDiagram
 | Exception | Meaning | Retry? |
 |---|---|---|
 | `HttpClientErrorException` (4xx) with nested types `.NotFound`, `.BadRequest`, `.Conflict`, `.TooManyRequests`, ... | the **request** was wrong or not allowed | no (except 429 "too many requests" after waiting the `Retry-After` header's delay, and 408 "request timeout") |
-| `HttpServerErrorException` (5xx) with `.InternalServerError`, `.BadGateway`, `.ServiceUnavailable`, `.GatewayTimeout` | the server failed | often yes (transient — likely to pass on its own), if the operation is idempotent (safe to repeat: doing it twice has the same effect as once — see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)) |
-| `ResourceAccessException` | I/O (input/output, here network) problem: connection refused, **timeout**, DNS (the system that turns host names into IP addresses) | often yes |
-| `UnknownContentTypeException` | no converter for the response type | no — a bug or contract change (the other side changed its API) |
+| `HttpServerErrorException` (5xx) with `.InternalServerError`, `.BadGateway`, `.ServiceUnavailable`, `.GatewayTimeout` | the server failed | often yes (transient), if the operation is idempotent (doing it twice = doing it once — see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)) |
+| `ResourceAccessException` | network I/O problem: connection refused, **timeout** (cause e.g. `HttpTimeoutException` for the JDK client), DNS | often yes |
+| `UnknownContentTypeException` | no converter for the response type | no — a bug or contract change |
 
-All are **unchecked** (you are not forced to catch or declare them: `RestClientException extends RuntimeException`). `RestClientResponseException` gives you `getStatusCode()`, `getResponseHeaders()`, `getResponseBodyAsString()`, and **`getResponseBodyAs(Class)`** — which can decode an RFC 9457 error body directly:
+All are **unchecked** (`RestClientException extends RuntimeException`). `RestClientResponseException` gives you `getStatusCode()`, `getResponseHeaders()`, `getResponseBodyAsString()`, and **`getResponseBodyAs(Class)`** — which can decode an RFC 9457 error body directly:
 
 ```java
 assertThatThrownBy(() -> rest.get().uri("/catalog/books/{id}", 999).retrieve().body(BookDto.class))
@@ -260,24 +236,18 @@ Callers of `CatalogClient` should not need to know it uses HTTP. Translate at th
 - Treating every 4xx as retryable — a 400 will fail the same way every time.
 - Forgetting that **no timeout = wait forever**-ish (next section).
 
-### Self-check
-
-1. A call times out. Which exception? → `ResourceAccessException` (its cause is the library's timeout exception, e.g. `HttpTimeoutException` for the JDK client).
-2. How do you read an RFC 9457 error body from a failed call? → `ex.getResponseBodyAs(ProblemDetail.class)` on the `RestClientResponseException`.
-3. Where should HTTP exceptions be translated into domain exceptions? → At the client edge (status handlers or the client class), so business code never sees HTTP types.
-
 ---
 
 ## 6.4 Timeouts and the underlying HTTP library
 
 ### What it is
 
-`RestClient` does not open sockets (an operating-system network connection endpoint) itself; it delegates to a **`ClientHttpRequestFactory`** wrapping a real HTTP library. Two timeouts matter:
+`RestClient` does not open sockets itself; it delegates to a **`ClientHttpRequestFactory`** wrapping a real HTTP library. Two timeouts matter:
 
-- **Connect timeout** — how long to wait for the TCP (the protocol that sets up a reliable connection) and TLS (the encryption layer behind `https`) connection to be established.
+- **Connect timeout** — how long to wait for the TCP + TLS (`https` encryption) connection to be established.
 - **Read timeout** — how long to wait for response data once connected.
 
-Why it matters: without timeouts, a slow downstream service (one that *you* call) makes your request threads pile up waiting, until your service also stops answering — a **cascading failure** (one failure spreading to the services that depend on it). Every remote call needs a timeout shorter than your own callers' timeout. See also [Circuit breaker](../../../microservices-patterns/chapters/06-circuit-breaker/README.md) and [Bulkhead](../../../microservices-patterns/chapters/07-bulkhead/README.md).
+Why it matters: without timeouts, a slow downstream service makes your request threads pile up waiting until your service also stops answering — a **cascading failure** (one failure spreading to the services that depend on it). Every remote call needs a timeout shorter than your own callers' timeout. See also [Circuit breaker](../../../microservices-patterns/chapters/06-circuit-breaker/README.md) and [Bulkhead](../../../microservices-patterns/chapters/07-bulkhead/README.md).
 
 ### Which library does Boot pick?
 
@@ -322,19 +292,13 @@ slow endpoint -> ResourceAccessException caused by HttpTimeoutException after ~3
 
 For HTTP service groups (section 6.6) the timeouts can be set per group: `spring.http.serviceclient.<group>.read-timeout=2s`.
 
-**Choosing values:** measure the downstream's normal latency (how long one call takes; p99 = the time that 99% of calls stay under) and set the read timeout a bit above it; keep the total (timeout × attempts + back-off — the waits between retries) below what *your* caller will wait. Connection **pooling** (keeping open connections and reusing them) (Apache/Jetty/Netty pool by default; the JDK client keeps connections alive) avoids paying TCP/TLS setup on every call.
-
-### Self-check
-
-1. Connect vs read timeout? → Connect: establishing the connection. Read: waiting for response data after connecting.
-2. Which HTTP library does Boot use if you add nothing? → The JDK `java.net.http.HttpClient`.
-3. Boot 4 property for a global read timeout? → `spring.http.clients.read-timeout` (the Boot 3 name `spring.http.client.read-timeout` is deprecated).
+**Choosing values:** measure the downstream's latency (p99 = the time 99% of calls stay under) and set the read timeout a bit above it; keep the total (timeout × attempts + back-off waits) below what *your* caller will wait. Connection **pooling** (reusing open connections; Apache/Jetty/Netty pool by default, the JDK client keeps connections alive) avoids TCP/TLS setup on every call.
 
 ---
 
 ## 6.5 Interceptors
 
-A **`ClientHttpRequestInterceptor`** wraps every request a client sends — the client-side twin of a servlet filter. Uses: auth headers (tokens — strings proving who the caller is), correlation ids (one id carried through all calls of a request so logs can be joined), logging, metrics.
+A **`ClientHttpRequestInterceptor`** wraps every request a client sends — the client-side twin of a servlet filter. Uses: auth headers (tokens), correlation ids (one id carried through all calls of a request so logs can be joined), logging, metrics.
 
 ```java
 RestClient rest = builder.baseUrl(baseUrl())
@@ -354,8 +318,8 @@ interceptor: GET /catalog/books/1 -> 200
 interceptor: GET /catalog/books/3 -> 200
 ```
 
-- You rarely need interceptors for **tracing**: when Micrometer observability is set up (Actuator, [Chapter 15](../15-observability-and-production/README.md)), Boot instruments the auto-configured builder with an observation customizer that records `http.client.requests` metrics and propagates trace headers (passes the current trace id on to the next service). This only works if you build from the injected builder — `RestClient.create()` skips it.
-- For OAuth2 bearer tokens (access tokens sent as `Authorization: Bearer ...`; OAuth2 is the standard protocol for issuing them), Spring Security provides `OAuth2ClientHttpRequestInterceptor` ([Chapter 11](../11-spring-security-2-tokens-and-oauth2/README.md)).
+- You rarely need interceptors for **tracing**: when Micrometer observability is set up (Actuator, [Chapter 15](../15-observability-and-production/README.md)), Boot instruments the auto-configured builder to record `http.client.requests` metrics and propagate trace headers to the next service. This only works if you build from the injected builder — `RestClient.create()` skips it.
+- For OAuth2 bearer tokens (`Authorization: Bearer ...`), Spring Security provides `OAuth2ClientHttpRequestInterceptor` ([Chapter 11](../11-spring-security-2-tokens-and-oauth2/README.md)).
 - Don't read the response body in an interceptor unless you buffer it (`BufferingClientHttpRequestFactory`); a body can normally be read only once.
 - To customise **all** builders Boot creates, declare a `RestClientCustomizer` bean.
 
@@ -365,7 +329,7 @@ interceptor: GET /catalog/books/3 -> 200
 
 ### What it is
 
-An **HTTP service interface** is a Java interface whose methods are annotated with the HTTP method, path and parameters. Spring generates a **proxy** that implements it by turning each call into an HTTP request (the same proxy idea as [Chapter 4](../04-aop-and-proxies/README.md)). It is Spring's built-in answer to Feign-style declarative clients (Feign/OpenFeign is a popular library that does the same from annotated interfaces) — no extra library. Analogy: a TV remote. You press "channel 5"; you do not care which infrared codes are sent.
+An **HTTP service interface** is a Java interface whose methods are annotated with the HTTP method, path and parameters. Spring generates a **proxy** that implements it by turning each call into an HTTP request (the same proxy idea as [Chapter 4](../04-aop-and-proxies/README.md)). It is Spring's built-in answer to Feign-style declarative clients (OpenFeign is a popular library doing the same) — no extra library.
 
 ```java
 @HttpExchange("/catalog")
@@ -459,25 +423,19 @@ CatalogApi manual = factory.createClient(CatalogApi.class);
 manual proxy get(3) -> Patterns of Enterprise Application Architecture
 ```
 
-Useful in plain Spring, in tests, or in libraries.
+(`WebClientAdapter` does the same on `WebClient`.) Useful in plain Spring, in tests, or in libraries.
 
 ### Trade-offs
 
 | | HTTP interface | Hand-written `RestClient` class | OpenFeign (Spring Cloud) |
 |---|---|---|---|
 | Boilerplate | minimal | more | minimal |
-| Custom per-call logic (fallbacks, `Optional` on 404) | needs a wrapper or default methods (interface methods with a body) | natural | via fallbacks (alternative answers returned when the call fails) |
-| Dependencies | none beyond Spring | none | Spring Cloud OpenFeign (in maintenance mode — bug fixes only, no new features; Spring recommends HTTP interfaces) |
+| Custom per-call logic (fallbacks, `Optional` on 404) | needs a wrapper or default methods | natural | via fallbacks (alternative answers on failure) |
+| Dependencies | none beyond Spring | none | Spring Cloud OpenFeign (maintenance mode — bug fixes only; Spring recommends HTTP interfaces) |
 | Config per remote service | `spring.http.serviceclient.<group>.*` (Boot 4) | your own properties | `spring.cloud.openfeign.client.config.*` |
-| Can share the interface with the server? | technically, but couples client and server release cycles (neither can ship a change without the other) | — | same caveat |
+| Can share the interface with the server? | technically, but couples client and server release cycles | — | same caveat |
 
 Common approach: an HTTP interface for the raw calls + a thin service class on top for domain translation (`Optional`, own exceptions, retries).
-
-### Self-check
-
-1. What does `@ImportHttpServices(group = "catalog", types = CatalogApi.class)` do? → Registers a `CatalogApi` proxy bean backed by a `RestClient` for group `catalog`, configured from `spring.http.serviceclient.catalog.*`.
-2. Which class creates the proxy under the hood? → `HttpServiceProxyFactory` with a `RestClientAdapter` (or `WebClientAdapter`).
-3. How would you add an interceptor to only one group? → A `RestClientHttpServiceGroupConfigurer` bean using `groups.filterByName("catalog").forEachClient(...)`.
 
 ---
 
@@ -527,7 +485,7 @@ public class StockService {
 }
 ```
 
-The `/catalog/flaky` endpoint answers 503 twice, then 200:
+With `maxRetries = 3` there are at most 4 HTTP calls. The `/catalog/flaky` endpoint answers 503 twice, then 200:
 
 ```output
 checkStock() -> ok on call 3
@@ -537,16 +495,10 @@ checkStock() -> ok on call 3
 
 1. **Only transient failures:** 5xx (especially 502/503/504), timeouts/`ResourceAccessException`, 429 (respect `Retry-After`). Never 400/401/403/404/409/422.
 2. **Only idempotent operations** — GET, PUT, DELETE — or POSTs protected by an **idempotency key** header that the server uses to de-duplicate (the way payment APIs such as Stripe do).
-3. **Exponential back-off + jitter** (waits that grow each time, plus a small random amount) so thousands of clients don't hammer a recovering service in sync.
+3. **Exponential back-off + jitter** (growing waits plus a small random amount) so thousands of clients don't hammer a recovering service in sync.
 4. **Bound the total time**: attempts × read timeout + delays must fit your own deadline (`@Retryable(timeout = ...)` since 7.0.2 caps the total).
-5. **Retry in one layer only**, and combine with a **circuit breaker** (a switch that stops calling a failing service for a while; Resilience4j is a common library for it) so a dead dependency is not retried forever — see [Chapter 16](../16-spring-cloud-and-microservices/README.md) and [Retry pattern](../../../microservices-patterns/chapters/08-retry/README.md).
+5. **Retry in one layer only**, and combine with a **circuit breaker** (stops calling a failing service for a while; e.g. Resilience4j) so a dead dependency is not retried forever — see [Chapter 16](../16-spring-cloud-and-microservices/README.md) and [Retry pattern](../../../microservices-patterns/chapters/08-retry/README.md).
 6. `@Retryable` is proxy-based: it must be on a Spring bean method called from **another** bean.
-
-### Self-check
-
-1. Should you retry a `POST /payments` after a read timeout? → Only if the request carries an idempotency key the server honours; otherwise you may charge twice.
-2. With `maxRetries = 3`, how many HTTP calls at most? → 4.
-3. Does the server's `spring.mvc.apiversion.use.header` configure your clients? → No; configure `apiVersionInserter` or the service-group `apiversion.*` properties.
 
 ---
 
@@ -554,7 +506,7 @@ checkStock() -> ok on call 3
 
 ### Option 1 — `@RestClientTest` + `MockRestServiceServer` (fast, no network)
 
-`@RestClientTest` is a **test slice** (a test that starts only a small part of the application): it starts only the listed components, Jackson and the `RestClient.Builder`/`RestTemplateBuilder` auto-configuration, and binds a **`MockRestServiceServer`** to the builder. Requests never leave the JVM; the mock checks each request against expectations and returns canned responses (fixed answers prepared in the test). Boot 4 dependency: `spring-boot-starter-restclient-test`.
+`@RestClientTest` is a **test slice**: it starts only the listed components, Jackson and the `RestClient.Builder`/`RestTemplateBuilder` auto-configuration, and binds a **`MockRestServiceServer`** to the builder. Requests never leave the JVM; the mock checks each request against expectations and returns canned responses; `server.verify()` checks every expected request was made. Boot 4 dependency: `spring-boot-starter-restclient-test`.
 
 ```java
 @RestClientTest(components = CatalogClient.class, properties = "catalog.base-url=http://catalog.test")
@@ -617,15 +569,9 @@ abstract class LiveServerTest {
 }
 ```
 
-The port is picked **before** the context starts so the client base URLs can be set as properties (with `RANDOM_PORT` the port is only known after the clients were created). In real projects the "remote" side is usually a **WireMock** server (a standalone HTTP stub server, i.e. a fake server returning prepared responses; often run via Testcontainers, a library that starts Docker containers for tests) or a Spring Cloud Contract stub (a fake generated from an agreed API contract) — see [Chapter 12](../12-testing-spring-apps/README.md).
+The port is picked **before** the context starts so the client base URLs can be set as properties (with `RANDOM_PORT` the port is only known after the clients were created). In real projects the "remote" side is usually a **WireMock** stub server (often via Testcontainers) or a Spring Cloud Contract stub (generated from an agreed API contract) — see [Chapter 12](../12-testing-spring-apps/README.md).
 
 For testing **your own** endpoints over HTTP, Boot 4 offers **`RestTestClient`** (`@AutoConfigureRestTestClient`), the `RestClient`-based successor of `TestRestTemplate` (which now needs `@AutoConfigureTestRestTemplate` and the `spring-boot-resttestclient` module).
-
-### Self-check
-
-1. What does `server.verify()` check? → That every expected request was actually made.
-2. Why also test against a real (stub) server? → Mocks skip the real HTTP layer: timeouts, encoding, headers, connection handling.
-3. Which Boot 4 starter provides `@RestClientTest`? → `spring-boot-starter-restclient-test`.
 
 ---
 
@@ -682,7 +628,7 @@ Same shape as `RestClient`, but returns `Mono`/`Flux` and never blocks a thread.
 | New `RestClient` per request | loses connection pooling, slower, more sockets | build once, reuse |
 | `RestClient.create()` in a Boot app | no Boot converters/timeouts/observability | inject `RestClient.Builder` |
 | No timeouts | thread pile-up, cascading failure | `spring.http.clients.*-timeout` or per-group/per-client settings |
-| String-concatenated URLs | broken encoding, injection (attacker-controlled text changing the meaning of the URL) | URI templates / `UriBuilder` |
+| String-concatenated URLs | broken encoding, injection (attacker text changing the URL's meaning) | URI templates / `UriBuilder` |
 | Using `exchange()` and expecting status handlers | errors silently treated as success | handle statuses yourself or use `retrieve()` |
 | Retrying POSTs / 4xx | duplicate orders, wasted calls | retry only idempotent + transient |
 | Leaking `HttpClientErrorException` into business code | HTTP details spread everywhere | translate at the client edge |
@@ -701,7 +647,7 @@ Same shape as `RestClient`, but returns `Mono`/`Flux` and never blocks a thread.
 
 - *How do HTTP interfaces get implemented?* → `HttpServiceProxyFactory` creates a JDK dynamic proxy; in Boot 4 `@ImportHttpServices` registers groups and `spring.http.serviceclient.<group>.*` configures each group's client.
 - *How do you handle errors?* → `retrieve()` throws `HttpClientErrorException`/`HttpServerErrorException` (with nested per-status types) and `ResourceAccessException` for I/O/timeouts; I map them to domain exceptions with `onStatus`/`defaultStatusHandler` and read `ProblemDetail` bodies with `getResponseBodyAs`.
-- *What timeouts do you set?* → Connect and read timeouts on every client (`spring.http.clients.connect-timeout/read-timeout` or per group), sized from downstream p99 and my own SLA (Service Level Agreement: the response time/availability promised to callers).
+- *What timeouts do you set?* → Connect and read timeouts on every client (`spring.http.clients.connect-timeout/read-timeout` or per group), sized from downstream p99 and my own SLA (the response time/availability promised to my callers).
 
 **Q: How do you make remote calls resilient?** → Timeouts, retries with exponential back-off + jitter only for idempotent/transient failures (`@Retryable` in Framework 7), circuit breaker + bulkhead (Resilience4j / `@ConcurrencyLimit`), fallbacks where acceptable, and idempotency keys for writes.
 
