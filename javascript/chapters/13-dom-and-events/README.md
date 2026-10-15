@@ -1,45 +1,42 @@
 # Chapter 13 — The DOM and Events
 
-A web page, as JavaScript sees it, is a tree of objects called the **DOM**. Every interactive feature on the web — a dropdown opening, a todo item ticked off, a form refusing an invalid email — is JavaScript finding nodes in that tree, changing them, and reacting to **events** such as clicks and key presses. This chapter teaches the DOM API (the set of objects and functions JavaScript uses to read and change the page) from the ground up, the event system in full (including the capture/bubble path — the down-then-up route an event travels through the page — that trips up many developers), forms, and the performance rules that keep pages smooth.
+To JavaScript, a web page is a tree of objects called the **DOM**. Every interactive feature — a dropdown opening, a todo ticked off, a form rejecting an invalid email — is JavaScript finding nodes in that tree, changing them, and reacting to **events** such as clicks and key presses. This chapter covers the DOM API (the objects and functions for reading and changing the page), the full event system including the capture/bubble path, forms, and the performance rules that keep pages smooth.
 
 **What you'll learn**
 
-1. What the DOM is: nodes, elements, the tree, and how HTML (the tag-based markup language web pages are written in) becomes a DOM.
+1. The DOM: nodes, elements, the tree, and how HTML becomes a DOM.
 2. Selecting elements and walking the tree.
 3. Creating, inserting, moving and removing nodes; `textContent` vs `innerHTML`; templates and fragments.
-4. Attributes vs properties; `classList`, `dataset` and styles.
+4. Attributes vs properties; `classList`, `dataset`, styles.
 5. Events: listeners, the event object, listener options, custom events.
-6. Propagation: capture, target and bubble phases; stopping propagation.
+6. Propagation: capture, target and bubble phases; stopping it.
 7. Event delegation — one listener for many elements.
 8. Default actions, `preventDefault`, passive listeners.
 9. Forms: `submit`, `FormData`, the Constraint Validation API, `input` vs `change`.
-10. Watching the DOM with `MutationObserver`.
-11. Rendering performance: reflow, repaint and layout thrashing (measured in Chrome).
+10. `MutationObserver`.
+11. Rendering performance: reflow, repaint, layout thrashing (measured in Chrome).
 12. When scripts run: `DOMContentLoaded`, `load`, `defer`.
 
-**Before you start.** You'll use closures ([Chapter 4](../04-functions-scope-and-closures/README.md)) and `this` in handlers ([Chapter 9 §9.1](../09-this-prototypes-and-classes/README.md#91-this--the-call-time-context)). Event listeners run as tasks on the event loop ([Chapter 12](../12-asynchronous-javascript/README.md#122-the-event-loop)). The HTML and CSS (the language that styles a page) side — semantic elements (tags chosen for meaning, like `<nav>` or `<button>`), forms markup, selectors (patterns like `.title` or `#app` that pick out elements) — is in the HTML & CSS Handbook ([`../../../html-css/`](../../../html-css/)).
+**Before you start.** Closures ([Chapter 4](../04-functions-scope-and-closures/README.md)), `this` in handlers ([Chapter 9 §9.1](../09-this-prototypes-and-classes/README.md#91-this--the-call-time-context)); listeners run as tasks on the event loop ([Chapter 12](../12-asynchronous-javascript/README.md#122-the-event-loop)). HTML and CSS — semantic elements, forms markup, selectors (patterns like `.title` or `#app`) — are in the HTML & CSS Handbook ([`../../../html-css/`](../../../html-css/)).
 
-**How the code runs.** Node has no DOM, so the `.mjs` programs in [`code/`](code/) start with `import '../../../../tools_dom.mjs';`, which creates a **jsdom** document (a JavaScript implementation of the DOM standard used by test tools) and exposes `document`, `window` etc. as globals (variables available everywhere without importing). jsdom implements the DOM and events faithfully but has **no layout engine** (the part of a browser that works out sizes and positions — so no sizes, no painting). For those parts, small `.html` pages were run in real headless Chrome (Chrome running with no visible window, controlled by a script) and screenshotted after a scripted interaction. All outputs are real.
+**How the code runs.** Node has no DOM, so the `.mjs` programs in [`code/`](code/) start with `import '../../../../tools_dom.mjs';`, which creates a **jsdom** document (a JavaScript implementation of the DOM standard used by test tools) and exposes `document`, `window` etc. as globals. jsdom implements DOM and events faithfully but has **no layout engine** (no sizes, no painting); for those parts, small `.html` pages were run in headless Chrome and screenshotted after a scripted interaction. All outputs are real.
 
 ---
 
 ## 13.1 The DOM tree
 
 ### What it is
-The **Document Object Model (DOM)** is the browser's live, in-memory representation of a page: a **tree** of **nodes**, with an API (defined by the WHATWG — the browser makers' group that maintains the web standards — DOM and HTML standards) for reading and changing it. Change the tree and the browser updates the screen.
+The **Document Object Model (DOM)** is the browser's live, in-memory representation of a page: a **tree** of **nodes** with an API (WHATWG — the browser makers' standards group — DOM and HTML standards) to read and change it. Change the tree and the screen updates. "View Source" shows the original HTML; DevTools' Elements panel shows the current DOM.
 
-Analogy: the HTML file is the architect's blueprint; the DOM is the actual building. JavaScript renovates the building, not the blueprint — "View Source" still shows the original HTML, while DevTools' Elements panel shows the current DOM.
-
-Terms:
-- **Node** — any item in the tree. Main types: **element** (`<li>`, nodeType 1), **text** (3), **comment** (8), **document** (9), **document fragment** (11).
+- **Node** — any item in the tree. Types: **element** (`<li>`, nodeType 1), **text** (3), **comment** (8), **document** (9), **document fragment** (11).
 - **Element** — a node created from a tag; has attributes and can have children.
-- **Parent / child / sibling / ancestor / descendant** — family relations in the tree.
-- `document` — the root object; `document.documentElement` is `<html>`, plus `document.head` and `document.body`.
+- **Parent / child / sibling / ancestor / descendant** — tree relations.
+- `document` — the root; `document.documentElement` is `<html>`, plus `document.head` and `document.body`.
 
 ### How it works
-1. The browser's HTML **parser** (the component that reads text and understands its structure) reads the HTML text and builds the tree, fixing errors in standard ways (unclosed tags, missing `<tbody>`).
-2. Whitespace between tags becomes **text nodes** — they exist even though they show nothing.
-3. Scripts query and change the tree through the DOM API; the changes are live everywhere.
+1. The HTML **parser** builds the tree, fixing errors in standard ways (unclosed tags, missing `<tbody>`).
+2. Whitespace between tags becomes **text nodes** — present though invisible.
+3. Scripts change the tree through the DOM API; changes are live everywhere.
 
 [`code/01_dom_tree.mjs`](code/01_dom_tree.mjs) — key parts:
 
@@ -102,31 +99,13 @@ parser auto-inserted <tbody>: true
 parsed body: <table><tbody><tr><td>cell</td></tr></tbody></table><p>unclosed</p>
 ```
 
-```mermaid
-flowchart TD
-    D["document"] --> H["html"]
-    H --> HE["head"]
-    H --> B["body"]
-    B --> M["main#app"]
-    M --> H1["h1.title"]
-    H1 --> T1["#quot;Groceries#quot; text"]
-    M --> C["comment"]
-    M --> U["ul#list"]
-    U --> L1["li data-id=1"]
-    U --> L2["li data-id=2"]
-    L1 --> T2["#quot;Milk#quot; text"]
-    L2 --> T3["#quot;Bread#quot; text"]
-```
-
-*The tree for the snippet above (whitespace text nodes omitted).*
-
 ### Common mistakes
-- Using `childNodes`/`firstChild`/`nextSibling` and getting whitespace text nodes. Prefer the **element-only** versions: `children`, `firstElementChild`, `nextElementSibling`.
-- Assuming the DOM equals the HTML source — the parser inserts, moves and closes elements.
-- Running a script in `<head>` that queries `document.body` elements before they're parsed (§13.12).
+- `childNodes`/`firstChild`/`nextSibling` return whitespace text nodes. Prefer **element-only** versions: `children`, `firstElementChild`, `nextElementSibling`.
+- Assuming the DOM equals the source — the parser inserts, moves and closes elements.
+- A `<head>` script querying body elements before they're parsed (§13.12).
 
 ### TL;DR
-The DOM is a live tree of nodes (elements, text, comments) built by the parser from HTML. Use element-only navigation properties to skip whitespace text nodes.
+The DOM is a live tree of nodes (elements, text, comments) built by the parser. Use element-only navigation to skip whitespace text nodes.
 
 ---
 
@@ -139,12 +118,12 @@ The DOM is a live tree of nodes (elements, text, comments) built by the parser f
 | `el.querySelector(css)` | First match or `null` | Any CSS selector; searches descendants of `el` |
 | `el.querySelectorAll(css)` | **Static** `NodeList` (snapshot) | Has `forEach`; spread to an array for `map`/`filter` |
 | `el.getElementsByClassName(c)` / `getElementsByTagName(t)` | **Live** `HTMLCollection` | Updates automatically; no `forEach` |
-| `document.forms.name.elements.field` | Form controls by `name` | See §13.9 |
+| `document.forms.name.elements.field` | Form controls by `name` | §13.9 |
 | `el.closest(css)` | Nearest ancestor **or itself** matching, or `null` | Key to event delegation |
 | `el.matches(css)` | `true`/`false` | "Does this element match?" |
 | `parent.contains(node)` | `true`/`false` | Includes `parent` itself |
 
-Traversal properties: `parentElement`, `children`, `firstElementChild`, `lastElementChild`, `previousElementSibling`, `nextElementSibling` (and the node-level `parentNode`, `childNodes`, `firstChild`, `nextSibling`…).
+Traversal: `parentElement`, `children`, `firstElementChild`, `lastElementChild`, `previousElementSibling`, `nextElementSibling` (node-level: `parentNode`, `childNodes`, `firstChild`, `nextSibling`…).
 
 [`code/02_select_traverse.mjs`](code/02_select_traverse.mjs) — key parts:
 
@@ -170,47 +149,35 @@ try { document.querySelector('a[href=/]'); } catch (e) { console.log('\nbad sele
 try { document.querySelector('#123'); } catch (e) { console.log('id starting w/ digit:', e.name, '-> use getElementById("123") or CSS.escape'); }
 ```
 
-Output:
+Output (lines for the code shown):
 ```
-getElementById      : menu
 querySelector       : Home
 querySelectorAll    : [ 'Home', 'Blog', 'About' ]
 attribute selector  : About
 :not + :nth-child   : [ 'Blog', 'About' ]
-scoped query        : 3
-forms collection    : email
 no match            : null 0
 
 after adding an <li>: static 3 | live 4
-NodeList has forEach: function | HTMLCollection has forEach: undefined
-
-parentElement       : LI
 closest("nav")      : menu
-closest(".missing") : null
 matches(":not(.x)") : true
-previousElementSibling: Home
-nextElementSibling  : About
 nextSibling (a node): "\n    " <- whitespace text node
-firstElementChild   : Home
-contains            : true
 
 bad selector        : SyntaxError
 id starting w/ digit: SyntaxError -> use getElementById("123") or CSS.escape
 ```
 
 ### Common mistakes
-- `document.querySelector('.item').classList.add(…)` when nothing matches → `TypeError: Cannot read properties of null`. Check for `null`, or use optional chaining (`?.`, which returns `undefined` instead of throwing when the left side is `null`/`undefined`) when absence is fine.
-- Calling `.map` on a `NodeList` — it has `forEach` but not `map`; use `[...list]` or `Array.from(list)`.
-- Looping over a **live** collection while removing items from it — indexes shift and items are skipped. Loop over a static copy.
-- Unquoted attribute values containing `/` or starting with digits in selectors → `SyntaxError`. Quote them: `a[href="/"]`.
+- `document.querySelector('.item').classList.add(…)` with no match → `TypeError: Cannot read properties of null`. Check for `null`, or use `?.` when absence is fine.
+- `.map` on a `NodeList` — it has `forEach` only; use `[...list]` or `Array.from(list)`.
+- Removing items while looping a **live** collection — indexes shift, items are skipped. Loop a static copy.
+- Unquoted attribute values containing `/` or ids starting with digits → `SyntaxError`. Quote: `a[href="/"]`.
 
 ### Self-check
-1. Which selection method returns a live collection? → `getElementsBy…`. `querySelectorAll` is static.
-2. `el.closest('li')` when `el` itself is an `<li>`? → Returns `el`.
-3. How do you get the next *element*, skipping text? → `nextElementSibling`.
+1. Which returns a live collection? → `getElementsBy…`; `querySelectorAll` is static.
+2. `el.closest('li')` when `el` is an `<li>`? → `el`.
 
 ### TL;DR
-`querySelector(All)` with CSS selectors for almost everything; `getElementById` for ids; `closest`/`matches`/`contains` for relationships. `querySelectorAll` is a static snapshot; `getElementsBy*` collections are live.
+`querySelector(All)` for almost everything; `getElementById` for ids; `closest`/`matches`/`contains` for relationships. `querySelectorAll` = static snapshot; `getElementsBy*` = live.
 
 ---
 
@@ -224,11 +191,11 @@ id starting w/ digit: SyntaxError -> use getElementById("123") or CSS.escape
 | Insert beside | `el.before(...)`, `el.after(...)` |
 | Remove / replace | `el.remove()`, `el.replaceWith(...)` |
 | Insert HTML string | `el.insertAdjacentHTML('beforebegin' / 'afterbegin' / 'beforeend' / 'afterend', html)` |
-| Copy | `el.cloneNode(true)` (deep = with all descendants) |
+| Copy | `el.cloneNode(true)` (deep = with descendants) |
 | Text | `el.textContent = '...'` (safe, never parsed) |
 | Markup | `el.innerHTML = '...'` / `el.outerHTML` (parsed as HTML) |
 
-Older equivalents you'll see in legacy code (older code that is still in use): `appendChild`, `insertBefore`, `removeChild`, `replaceChild` (they accept only nodes, not strings).
+Legacy equivalents: `appendChild`, `insertBefore`, `removeChild`, `replaceChild` (nodes only, no strings).
 
 [`code/03_create_modify.mjs`](code/03_create_modify.mjs) — key parts:
 
@@ -281,31 +248,31 @@ Output:
 ### `textContent` vs `innerText` vs `innerHTML`
 | Property | Reads | Writes | Cost / safety |
 |---|---|---|---|
-| `textContent` | All text of all descendants, including hidden elements and `<script>` text | Replaces children with one text node | Fast; **safe** for user data |
-| `innerText` | Only *rendered* text (respects CSS `display:none`, line breaks) | Like textContent but `\n` → `<br>` | Needs layout → slower; not in jsdom |
-| `innerHTML` | Serialized HTML of the children (turned back into a string) | **Parses** the string as HTML and replaces children | **XSS risk** (cross-site scripting — attacker code injected into your page) with untrusted strings; destroys existing child nodes and their listeners |
+| `textContent` | All descendant text, incl. hidden elements and `<script>` text | Replaces children with one text node | Fast; **safe** for user data |
+| `innerText` | Only *rendered* text (respects `display:none`, line breaks) | Like textContent but `\n` → `<br>` | Needs layout → slower; not in jsdom |
+| `innerHTML` | Serialized HTML of the children | **Parses** the string, replaces children | **XSS** risk (cross-site scripting — attacker code injected into your page) with untrusted strings; destroys existing children and their listeners |
 
-Line 3 of the output shows why `textContent` is safe: the "image" became harmless text (`&lt;img …`). Assigning the same string to `innerHTML` would create a real `<img>` whose `onerror` runs attacker code — the **XSS** attack covered in [Chapter 14 §14.10](../14-browser-apis-and-security/README.md#1410-cross-site-scripting-xss-and-sanitizing).
+Line 3: with `textContent` the "image" became harmless text (`&lt;img …`). Via `innerHTML` it would be a real `<img>` whose `onerror` runs attacker code — see [Chapter 14 §14.10](../14-browser-apis-and-security/README.md#1410-cross-site-scripting-xss-and-sanitizing).
 
 ### Why fragments and templates
-- A **`DocumentFragment`** is a lightweight, parentless container. Appending it moves its children in one operation (the fragment ends up empty — see line 5), so the page does one update instead of N.
-- A **`<template>`** holds inert markup (not rendered, scripts don't run, images don't load). `template.content.cloneNode(true)` stamps out copies — this is how frameworks-free apps and Web Components (the browser's built-in way to define your own reusable HTML tags) render lists. Fill clones with `textContent`, not string concatenation.
+- A **`DocumentFragment`** is a lightweight, parentless container. Appending it moves all its children in one operation (it ends up empty — line 5): one page update instead of N.
+- A **`<template>`** holds inert markup (not rendered, scripts don't run, images don't load). `template.content.cloneNode(true)` stamps copies — how framework-free apps and Web Components (the browser's built-in custom HTML tags) render lists. Fill clones with `textContent`.
 
 ### Common mistakes
-- `el.innerHTML += '<li>…</li>'` in a loop: re-parses the whole content each time and wipes listeners and input state on existing children. Use `append` or `insertAdjacentHTML('beforeend', …)`.
-- Forgetting that appending an existing node **moves** it (line 2). Clone it if you want a copy.
-- `cloneNode` doesn't copy listeners added with `addEventListener`.
+- `el.innerHTML += '<li>…</li>'` in a loop re-parses everything and wipes listeners and input state. Use `append` or `insertAdjacentHTML('beforeend', …)`.
+- Appending an existing node **moves** it (line 2); clone for a copy.
+- `cloneNode` doesn't copy `addEventListener` listeners.
 
 ### TL;DR
-`createElement` + `textContent` + `append`/`before`/`after`/`remove`/`replaceWith`. Use `textContent` for data, `innerHTML` only for trusted markup. Batch many inserts with a fragment; stamp repeated markup from a `<template>`.
+`createElement` + `textContent` + `append`/`before`/`after`/`remove`/`replaceWith`. `textContent` for data, `innerHTML` only for trusted markup. Batch inserts with a fragment; stamp repeated markup from a `<template>`.
 
 ---
 
 ## 13.4 Attributes, properties, classes, data and styles
 
 ### What it is
-- An **attribute** is what's written in the HTML (`<input value="1">`); read/write with `getAttribute`, `setAttribute`, `hasAttribute`, `removeAttribute`, `toggleAttribute`. Always strings.
-- A **property** is a field on the JavaScript element object (`input.value`). Most standard attributes are **reflected** as properties with the same name, but properties can be typed (booleans, numbers), normalized (absolute URLs — the full address including `https://` and the domain) and can hold **live state** that the attribute doesn't.
+- An **attribute** is what's written in the HTML (`<input value="1">`) — always a string; `getAttribute`, `setAttribute`, `hasAttribute`, `removeAttribute`, `toggleAttribute`.
+- A **property** is a field on the element object (`input.value`). Most standard attributes are **reflected** as same-named properties, but properties can be typed (booleans, numbers), normalized (absolute URLs) and hold **live state** the attribute doesn't.
 
 [`code/04_attributes_properties.mjs`](code/04_attributes_properties.mjs) — key parts:
 
@@ -336,7 +303,7 @@ buy.style.setProperty('--accent', 'teal');       // custom properties need setPr
 console.log('computed color      :', getComputedStyle(buy).color);
 ```
 
-Output:
+Output (lines for the code shown):
 ```
 value property       : 5 | value attribute: 1 | defaultValue: 1
 valueAsNumber        : 5 number
@@ -344,72 +311,53 @@ href property        : http://localhost/docs?page=2 (resolved, absolute)
 href attribute       : /docs?page=2
 checked prop / attr : false / true
 disabled="false"    : true
-after remove        : false
-className           : btn primary
-classList           : [ 'button', 'loading' ] | contains loading: true
 dataset             : { productId: '42', inStock: 'true' }
-inStock is a string : string true
-new attribute       : blue
-style attribute     : color: red; background-color: yellow; --accent: teal;
 computed color      : rgb(255, 0, 0)
-attributes          : [
-  'id',
-  'class',
-  'data-product-id',
-  'data-in-stock',
-  'style',
-  'data-variant-color'
-]
 ```
 
 ### Key rules
 | Rule | Example |
 |---|---|
-| For form controls, the **attribute is the initial/default value**; the **property is the current value** | `value`/`defaultValue`, `checked`/`defaultChecked` |
+| Form controls: **attribute = initial/default value**, **property = current value** | `value`/`defaultValue`, `checked`/`defaultChecked` |
 | **Boolean attributes**: present = true, whatever the value | `disabled="false"` is still disabled; use `el.disabled = false` or `removeAttribute` |
 | Some names differ | `class` → `className` / `classList`; `for` → `htmlFor` |
 | URL properties are absolute | `a.href`, `img.src` |
-| `data-*` → `el.dataset.camelCase` (words joined, later ones capitalised), always strings | `data-in-stock` → `dataset.inStock === 'true'` |
+| `data-*` → `el.dataset.camelCase`, always strings | `data-in-stock` → `dataset.inStock === 'true'`; read numbers with `Number(el.dataset.userId)` |
 | `el.style` = **inline** style only; `getComputedStyle(el)` = final values from all CSS | Computed values are resolved (`rgb(255, 0, 0)`) |
 
-Prefer toggling **classes** over setting many inline styles: the look stays in CSS, and one class change is one style recalculation. Inline `style` is best for truly dynamic values (positions, a progress width), ideally through CSS custom properties (CSS variables, named with a leading `--`): `el.style.setProperty('--progress', '40%')`.
+Prefer toggling **classes** over many inline styles: the look stays in CSS and one class change is one style recalculation. Inline `style` suits truly dynamic values, ideally via CSS custom properties (`--name` variables): `el.style.setProperty('--progress', '40%')`.
 
 ### Self-check
 1. User types "7" into `<input value="1">`. `getAttribute('value')`? → `"1"`; `input.value` is `"7"`.
-2. How do you un-disable a button? → `btn.disabled = false` (or `removeAttribute('disabled')`), not `setAttribute('disabled', 'false')`.
-3. `data-user-id="9"` → how to read it as a number? → `Number(el.dataset.userId)`.
+2. Un-disable a button? → `btn.disabled = false` (or `removeAttribute('disabled')`), not `setAttribute('disabled', 'false')`.
 
 ### TL;DR
-Attributes = HTML text (strings, initial values); properties = live typed state. Use `classList` for classes, `dataset` for `data-*`, `style` for inline styles and `getComputedStyle` to read final styles.
+Attributes = HTML strings (initial values); properties = live typed state. `classList` for classes, `dataset` for `data-*`, `style` for inline, `getComputedStyle` to read final styles.
 
 ---
 
 ## 13.5 Events and listeners
 
 ### What it is
-An **event** is a notification that something happened — a click, a key press, a form submission, a resource finishing loading. An **event listener** (handler) is a function registered to run when a given event type reaches a given **target** (element, `document`, `window`, or any `EventTarget` — the built-in base type for every object that can receive events).
-
-Analogy: a doorbell. `addEventListener('click', fn)` wires a chime to the button; when someone presses it, every wired chime rings in the order it was installed.
+An **event** is a notification that something happened — click, key press, form submission, resource loaded. An **event listener** (handler) is a function registered to run when an event type reaches a **target** (element, `document`, `window`, or any `EventTarget` — the base type of everything that can receive events). Multiple listeners run in registration order.
 
 ### How it works
 1. `target.addEventListener(type, listener, options?)` registers.
-2. The event occurs (user action, network, or `target.dispatchEvent(event)` from code).
-3. The browser builds an **event object** and sends it along a path through the tree (§13.6), calling matching listeners with it.
-4. User-generated events arrive as **tasks** on the event loop; `dispatchEvent` calls listeners **synchronously**, before it returns.
-
-The event object's most-used members:
+2. The event occurs (user action, network, or `target.dispatchEvent(event)`).
+3. The browser builds an **event object** and sends it along a path through the tree (§13.6), calling matching listeners.
+4. User-generated events arrive as **tasks**; `dispatchEvent` calls listeners **synchronously**, before it returns.
 
 | Member | Meaning |
 |---|---|
 | `type` | `'click'`, `'keydown'`, … |
-| `target` | The element where the event originated (the deepest one clicked) |
-| `currentTarget` | The element whose listener is running now (= `this` in a non-arrow listener) |
+| `target` | Where the event originated (deepest element clicked) |
+| `currentTarget` | Element whose listener is running now (= `this` in a non-arrow listener) |
 | `eventPhase` | 1 capture, 2 at target, 3 bubble |
-| `preventDefault()` / `defaultPrevented` | Cancel the browser's default action (§13.8) |
+| `preventDefault()` / `defaultPrevented` | Cancel the default action (§13.8) |
 | `stopPropagation()` / `stopImmediatePropagation()` | Stop the journey (§13.6) |
-| `isTrusted` | `true` only for real user/browser-generated events |
-| `key`, `code`, `ctrlKey`, `shiftKey`, `altKey`, `metaKey` | Keyboard info (`key` = character/meaning, `code` = physical key) |
-| `clientX/Y`, `button` | Mouse/pointer position and button |
+| `isTrusted` | `true` only for real user/browser events |
+| `key`, `code`, `ctrlKey`, `shiftKey`, `altKey`, `metaKey` | Keyboard (`key` = character/meaning, `code` = physical key) |
+| `clientX/Y`, `button` | Pointer position and button |
 | `detail` | Data on a `CustomEvent` |
 
 [`code/05_events_basics.mjs`](code/05_events_basics.mjs) — key parts:
@@ -478,43 +426,41 @@ Output:
 |---|---|
 | `capture: true` | Run during the capture phase (§13.6). Must match when removing. |
 | `once: true` | Auto-remove after the first call |
-| `passive: true` | Promise not to call `preventDefault()` — lets the browser scroll without waiting (§13.8) |
-| `signal: abortSignal` | Remove the listener when the signal aborts — great for removing many at once ([Ch. 12 §12.11](../12-asynchronous-javascript/README.md#1211-cancellation-abortcontroller-and-abortsignal)) |
+| `passive: true` | Promise not to call `preventDefault()` — the browser can scroll without waiting (§13.8) |
+| `signal: abortSignal` | Remove when the signal aborts — removes many at once ([Ch. 12 §12.11](../12-asynchronous-javascript/README.md#1211-cancellation-abortcontroller-and-abortsignal)) |
 
 ### `addEventListener` vs `on…` properties vs inline attributes
 | Style | Multiple handlers? | Notes |
 |---|---|---|
 | `el.addEventListener('click', fn)` | Yes | Options, removable — the standard choice |
 | `el.onclick = fn` | No — assigning replaces (line 5) | Fine for quick scripts |
-| `<button onclick="doIt()">` | — | Mixes JS into HTML, runs code from a string, blocked by a strict CSP (Content Security Policy — a rule list saying which scripts a page may run) ([Ch. 14](../14-browser-apis-and-security/README.md#1412-content-security-policy-csp)) — avoid |
+| `<button onclick="doIt()">` | — | JS in HTML, code from a string, blocked by a strict CSP (Content Security Policy — [Ch. 14](../14-browser-apis-and-security/README.md#1412-content-security-policy-csp)) — avoid |
 
 ### Common mistakes
-- `addEventListener('click', handle())` — calls `handle` immediately and registers its return value. Pass the function.
+- `addEventListener('click', handle())` calls `handle` now and registers its return value. Pass the function.
 - Removing with a *new* arrow function (line 3's no-op): keep a reference, or use `{ signal }`.
-- Arrow function listeners don't get `this = element`; use `event.currentTarget` — it works for both styles.
-- Listening for `'onclick'` — the event type has no `on` prefix.
+- Arrow listeners don't get `this = element`; `event.currentTarget` works for both styles.
+- The event type has no `on` prefix (`'click'`, not `'onclick'`).
 
 ### TL;DR
-`addEventListener(type, fn, { once, passive, signal, capture })`. The event object tells you `target` (origin), `currentTarget` (listener owner), and lets you cancel defaults or stop propagation. `dispatchEvent` + `CustomEvent` for your own events.
+`addEventListener(type, fn, { once, passive, signal, capture })`. `target` = origin, `currentTarget` = listener owner; cancel defaults or stop propagation from the event object. `dispatchEvent` + `CustomEvent` for your own events.
 
 ---
 
 ## 13.6 Propagation: capture, target, bubble
 
 ### What it is
-When you click a button inside nested boxes, you've also clicked each box, the body, the document and the window. The DOM delivers the event along that **propagation path** in three phases:
+Clicking a button inside nested boxes also clicks each box, the body, the document and the window. The event travels this **propagation path** in three phases:
 
-1. **Capture phase** — from `window` down through each ancestor toward the target; only listeners registered with `{ capture: true }` run.
-2. **Target phase** — at the target itself; listeners run in registration order (capture ones first in modern browsers).
+1. **Capture phase** — from `window` down through each ancestor; only `{ capture: true }` listeners run.
+2. **Target phase** — at the target; listeners in registration order (capture ones first in modern browsers).
 3. **Bubble phase** — back up from the target's parent to `window`; normal listeners run. Most events bubble; some don't.
 
-Analogy: a letter delivered down the chain of command (capture), read by the addressee (target), then the reply copied back up to every manager (bubble).
-
-The page [`code/propagation.html`](code/propagation.html) registers a capture and a bubble listener on `window`, `document`, `#outer`, `#inner` and the button, then clicks the button once:
+[`code/propagation.html`](code/propagation.html) registers a capture and a bubble listener on `window`, `document`, `#outer`, `#inner` and the button, then clicks once:
 
 ![Nested boxes and the ordered list of ten listener calls: four capture calls from window down to #inner, two at the target, four bubble calls back up to window](img/propagation.png)
 
-*Figure — one click, ten listener calls: capture (blue) goes down, target (green), bubble (orange) goes up. Screenshot from headless Chrome.*
+*Figure — one click, ten listener calls: capture (blue) down, target (green), bubble (orange) up. Headless Chrome.*
 
 [`code/06_propagation.mjs`](code/06_propagation.mjs) shows the same path in jsdom plus the ways to stop it:
 
@@ -554,42 +500,40 @@ Output:
 ### Stopping
 | Call | Effect |
 |---|---|
-| `stopPropagation()` | Finish the listeners on the current element, then stop travelling |
+| `stopPropagation()` | Finish listeners on the current element, then stop travelling |
 | `stopImmediatePropagation()` | Also skip the remaining listeners on the current element |
 | `preventDefault()` | Unrelated to propagation: cancels the default action only |
 
 ### Events that don't bubble
-`focus`/`blur` (an element gaining / losing **focus**, i.e. becoming / no longer being the one that receives keyboard input; use `focusin`/`focusout` to delegate), `mouseenter`/`mouseleave` (use `mouseover`/`mouseout`), `load`/`error` on elements like `<img>`, `scroll` on elements. Events you create with `new Event(type)` **don't bubble unless you pass `{ bubbles: true }`** (line 4) — a common reason a custom event "isn't heard" by a parent.
+`focus`/`blur` (element gaining/losing keyboard **focus**; delegate with `focusin`/`focusout`), `mouseenter`/`mouseleave` (use `mouseover`/`mouseout`), `load`/`error` on elements like `<img>`, `scroll` on elements. `new Event(type)` **doesn't bubble unless you pass `{ bubbles: true }`** (line 4) — a common reason a parent "doesn't hear" a custom event.
 
 ### When not to stop propagation
-`stopPropagation` is a blunt tool: it also blocks analytics listeners (code that records what users do), "click outside to close" handlers on `document`, and framework root listeners (React — a popular UI library — attaches its listeners at the root container). Prefer checking `event.target` in the outer handler, or `defaultPrevented` as a signal.
+`stopPropagation` also blocks analytics listeners, "click outside to close" handlers on `document`, and framework root listeners (React attaches its listeners at the root container). Prefer checking `event.target` in the outer handler, or `defaultPrevented` as a signal.
 
 ### In the interview
 **30-second answer:** "Events travel in three phases: capture from window down to the target, the target phase, then bubbling back up. `addEventListener` listens in the bubble phase by default; `{capture: true}` switches to capture. `stopPropagation` halts the journey, `stopImmediatePropagation` also skips other listeners on the same element, and `preventDefault` is separate — it only cancels the browser's default action."
 
 - *Q: `target` vs `currentTarget`?* A: `target` is where the event started; `currentTarget` is the element whose listener is running.
-- *Q: When would you use capture?* A: To see an event before children can stop it — e.g. a global "close menus on any click" or focus tracking.
+- *Q: When use capture?* A: To see an event before children can stop it — global "close menus on any click", focus tracking.
 
 ### TL;DR
-Capture (down, `{capture:true}`) → target → bubble (up, default). Most events bubble; `focus`, `mouseenter`, element `load` don't. Stop sparingly.
+Capture (down, `{capture:true}`) → target → bubble (up, default). `focus`, `mouseenter`, element `load` don't bubble. Stop sparingly.
 
 ---
 
 ## 13.7 Event delegation
 
 ### What it is
-**Event delegation** means putting **one** listener on a common ancestor instead of one per child, and using `event.target` (usually with `closest`) to find which child was acted on. It works because events bubble.
+**Event delegation**: **one** listener on a common ancestor instead of one per child, using `event.target` (usually with `closest`) to find which child was acted on. It works because events bubble.
 
 ### The problem it solves
-- A list of 1,000 rows with 1,000 listeners costs memory and setup time.
-- Items added later (from `fetch` — the browser function for network requests — or from the user) would need listeners attached each time — and removed ones should be cleaned up.
-- With delegation, new items are handled automatically.
+1,000 rows with 1,000 listeners cost memory and setup time, and items added later (from `fetch` or the user) need listeners attached — and removed ones cleaned up. With delegation, new items are handled automatically.
 
 ### How it works
-1. Attach a listener to a stable container (`ul`, `table`, a component root — the outermost element of a UI component — or `document`).
+1. Attach a listener to a stable container (`ul`, `table`, a component root, or `document`).
 2. In the handler, `const item = event.target.closest('selector')`.
-3. If `item` is `null` (click was elsewhere) — or outside the container (`container.contains(item)`) — ignore it.
-4. Read what you need from the item (`item.dataset.id`) and act.
+3. Ignore `null` (click elsewhere) or items outside the container (`container.contains(item)`).
+4. Read what you need (`item.dataset.id`) and act.
 
 [`code/07_delegation.mjs`](code/07_delegation.mjs):
 
@@ -630,14 +574,14 @@ remaining: [ '1(done)', '3(done)' ]
 listeners attached to items: 0, to the list: 1
 ```
 
-The same idea as a real page, [`code/todo_delegation.html`](code/todo_delegation.html): one `click` listener on the `<ul>`, one `submit` listener on the form (with `preventDefault`), and new items built with `textContent` — note the task typed as `Call <b>mom</b>` is shown literally, not as bold HTML. The script adds two tasks, ticks two and deletes one, then the page was screenshotted:
+As a real page, [`code/todo_delegation.html`](code/todo_delegation.html): one `click` listener on the `<ul>`, one `submit` listener on the form (with `preventDefault`), new items built with `textContent` — so a task typed as `Call <b>mom</b>` shows literally. After adding two tasks, ticking two and deleting one:
 
 ![A todo app: two struck-through done items, one item showing the literal text Call <b>mom</b>, and an event log listing add, toggle and delete actions with target SPAN or BUTTON and currentTarget todos](img/todo_delegation.png)
 
-*Figure — event delegation in Chrome: `target` is the inner `SPAN`/`BUTTON`, `currentTarget` is always the list.*
+*Figure — `target` is the inner `SPAN`/`BUTTON`; `currentTarget` is always the list.*
 
 ### Why `closest` and not `event.target` directly
-`event.target` is the **deepest** element clicked — the `<span>` inside the `<li>`, or an `<svg>` icon inside a button. `closest('li')` climbs to the element you actually care about.
+`event.target` is the **deepest** element clicked — the `<span>` in the `<li>`, an `<svg>` icon in a button. `closest('li')` climbs to the element you care about.
 
 ### Trade-offs
 | | Delegation | Listener per element |
@@ -648,47 +592,46 @@ The same idea as a real page, [`code/todo_delegation.html`](code/todo_delegation
 | Handler complexity | Must route by selector | Simple |
 
 ### TL;DR
-One listener on the container + `event.target.closest(selector)` handles all current and future children. Use it for lists, tables and menus.
+One listener on the container + `event.target.closest(selector)` handles current and future children. Use for lists, tables, menus.
 
 ---
 
 ## 13.8 Default actions and `preventDefault`
 
 ### What it is
-Many events have a **default action** the browser performs after listeners run: a link navigates, a form submits (and reloads the page), a checkbox toggles, a key types a character, a wheel scrolls, a right-click opens the context menu. `event.preventDefault()` cancels it, if the event is **cancelable** (marked as allowed to be cancelled — most user-input events are). `dispatchEvent` returns `false` when a listener cancelled it.
+Many events have a **default action** the browser performs after listeners run: a link navigates, a form submits (reloading the page), a checkbox toggles, a key types, a wheel scrolls, a right-click opens the context menu. `event.preventDefault()` cancels it if the event is **cancelable** (most user-input events are). `dispatchEvent` returns `false` when a listener cancelled it.
 
 | Event | Default action | Typical reason to prevent |
 |---|---|---|
-| `submit` on a form | Send the form and navigate | Validate and send with `fetch` instead |
-| `click` on `<a href>` | Navigate | Client-side routing (switching views and URL without a page reload; [History API, Ch. 14](../14-browser-apis-and-security/README.md#147-the-history-api)) |
+| `submit` on a form | Send the form and navigate | Validate and send with `fetch` |
+| `click` on `<a href>` | Navigate | Client-side routing (change view and URL without reload; [History API, Ch. 14](../14-browser-apis-and-security/README.md#147-the-history-api)) |
 | `keydown` | Insert the character / browser shortcut | Custom shortcut like Ctrl+S |
 | `contextmenu` | Show the browser menu | Custom context menu |
 | `dragover` | Refuse drops | Allow dropping files |
 
-(Output lines for `preventDefault` are in the forms program, §13.9.)
+(`preventDefault` output lines are in the forms program, §13.9.)
 
 ### Passive listeners
-For `touchstart`, `touchmove` and `wheel`, the browser must wait for your listener to finish before scrolling, in case you call `preventDefault()`. That can make scrolling janky (stuttering instead of smooth). `{ passive: true }` promises you won't, so scrolling starts immediately. Browsers other than Safari already default `passive` to `true` for these events when the listener is on `window`, `document` or `body`; calling `preventDefault()` inside a passive listener is ignored (with a console warning).
+For `touchstart`, `touchmove` and `wheel`, the browser must wait for your listener before scrolling in case you call `preventDefault()` — janky scrolling. `{ passive: true }` promises you won't, so scrolling starts immediately. Browsers other than Safari already default `passive` to `true` for these on `window`, `document` or `body`; `preventDefault()` in a passive listener is ignored (with a console warning).
 
 ### Common mistakes
-- Using `return false` in an `addEventListener` handler — it does nothing there (it only works in `on…` properties).
-- Preventing the default of a link or button and forgetting keyboard and screen-reader users (people who use software that reads the page aloud) — use real `<button>`s for actions and `<a>` for navigation.
-- `preventDefault()` does **not** stop propagation, and `stopPropagation()` does **not** prevent the default.
+- `return false` in an `addEventListener` handler does nothing (works only in `on…` properties).
+- Preventing link/button defaults and forgetting keyboard and screen-reader users — use real `<button>`s for actions and `<a>` for navigation.
+- `preventDefault()` does **not** stop propagation; `stopPropagation()` does **not** prevent the default.
 
 ### TL;DR
-`preventDefault()` cancels the browser's built-in response (navigation, submit, typing, scrolling). Use passive listeners for scroll/touch.
+`preventDefault()` cancels the browser's built-in response (navigation, submit, typing, scrolling). Passive listeners for scroll/touch.
 
 ---
 
 ## 13.9 Forms
 
 ### What it is
-Forms are where most user data enters a web app. The DOM gives you:
-- `form.elements` — controls by `name` or index; `form.elements.email`.
-- **`submit` event** on the form (fires for Enter in a field and for submit buttons) — listen here, not to the button's `click`.
-- **`FormData`** — reads every successful control (named, enabled, checked where relevant) into key/value entries; sends directly as a `fetch` body.
-- The **Constraint Validation API** — HTML attributes (`required`, `type="email"`, `min`, `max`, `minlength`, `pattern`) produce a `validity` object; `checkValidity()`, `reportValidity()`, `setCustomValidity(msg)`.
-- **`input`** fires on every change of value; **`change`** fires when the change is committed (on blur for text, immediately for checkboxes/selects — a select is a dropdown).
+- `form.elements` — controls by `name` or index (`form.elements.email`).
+- **`submit` event** on the form (fires for Enter in a field and for submit buttons) — listen here, not on the button's `click`.
+- **`FormData`** — reads every successful control (named, enabled, checked where relevant) into key/value entries; usable directly as a `fetch` body.
+- The **Constraint Validation API** — `required`, `type="email"`, `min`, `max`, `minlength`, `pattern` produce a `validity` object; `checkValidity()`, `reportValidity()`, `setCustomValidity(msg)`.
+- **`input`** fires on every value change; **`change`** when the change is committed (on blur for text, immediately for checkboxes/selects).
 
 [`code/08_forms.mjs`](code/08_forms.mjs) — key parts:
 
@@ -749,42 +692,42 @@ Output:
    checkbox still checked after prevented click: true
 ```
 
-(jsdom's `validationMessage` is a generic "Constraints not satisfied"; browsers give localized messages — in the user's language — like "Please fill out this field.")
+(jsdom's `validationMessage` is a generic "Constraints not satisfied"; browsers give localized messages like "Please fill out this field.")
 
 ### The `validity` flags
 | Flag | Set when | Caused by |
 |---|---|---|
 | `valueMissing` | Empty required field | `required` |
 | `typeMismatch` | Not a valid email/URL | `type="email"`, `type="url"` |
-| `patternMismatch` | Regex (regular expression, a text pattern) doesn't match whole value | `pattern` |
+| `patternMismatch` | Regex doesn't match the whole value | `pattern` |
 | `tooShort` / `tooLong` | Length out of range (after user edits) | `minlength` / `maxlength` |
 | `rangeUnderflow` / `rangeOverflow` / `stepMismatch` | Number/date out of range | `min` / `max` / `step` |
-| `badInput` | Browser can't convert the input (letters in a number field) | input type |
-| `customError` | `setCustomValidity('msg')` was called with a non-empty message | your code |
+| `badInput` | Browser can't convert input (letters in a number field) | input type |
+| `customError` | `setCustomValidity('msg')` with a non-empty message | your code |
 | `valid` | None of the above | — |
 
-The page [`code/form_validation.html`](code/form_validation.html) uses `novalidate` (turning off the browser's own bubbles) and renders its own accessible messages (usable by everyone, including people on screen readers) from these flags — `aria-invalid` on the field and `aria-describedby` pointing to the message (ARIA attributes are extra HTML attributes that describe state and relationships to assistive technology). One delegated `input` listener on the form gives live feedback; the `submit` handler checks everything. After a scripted submit with a personal email, age 9 and no password:
+[`code/form_validation.html`](code/form_validation.html) uses `novalidate` (turns off the browser's bubbles) and renders its own accessible messages from these flags — `aria-invalid` on the field, `aria-describedby` pointing to the message (ARIA attributes describe state and relationships to assistive technology such as screen readers). One delegated `input` listener gives live feedback; the `submit` handler checks everything. After a scripted submit with a personal email, age 9 and no password:
 
 ![A sign-up form with three red-bordered fields and messages: use your work email, you must be at least 13, this field is required; status says fix the highlighted fields](img/form_validation.png)
 
 *Figure — custom validation messages driven by the Constraint Validation API (headless Chrome).*
 
 ### Common mistakes
-- Listening to the submit button's `click` → misses Enter-key submits. Listen to `submit` on the form.
-- `Object.fromEntries(new FormData(form))` for multi-value fields (checkbox groups, `<select multiple>`) — keeps only the last value; use `getAll`.
-- Client-side validation (checks running in the user's browser) as security. It's UX (user experience) only; **the server must validate everything again**.
-- Forgetting `name` attributes — unnamed controls are left out of `FormData`.
-- Calling `form.submit()` — it skips validation *and* the `submit` event. `requestSubmit()` behaves like a real submit.
+- Listening to the submit button's `click` → misses Enter-key submits. Listen to `submit`.
+- `Object.fromEntries(new FormData(form))` keeps only the last value of multi-value fields (checkbox groups, `<select multiple>`); use `getAll`.
+- Treating client-side validation as security — it's UX (user experience) only; **the server must validate everything again**.
+- Missing `name` attributes — unnamed controls are left out of `FormData`.
+- `form.submit()` skips validation *and* the `submit` event; `requestSubmit()` behaves like a real submit.
 
 ### TL;DR
-Listen to `submit`, `preventDefault`, read with `FormData`, validate with `validity`/`setCustomValidity` for UX, and validate again on the server. `input` = every keystroke, `change` = committed value.
+Listen to `submit`, `preventDefault`, read with `FormData`, validate with `validity`/`setCustomValidity` for UX, re-validate on the server. `input` = every keystroke, `change` = committed value.
 
 ---
 
 ## 13.10 Watching the DOM: `MutationObserver`
 
 ### What it is
-`MutationObserver` calls you back when the DOM changes — children added/removed, attributes changed, text edited. Records are **batched** (collected and handed over together) and delivered as a **microtask** (a small queued job the engine runs before handling the next event), after the current script finishes ([Ch. 12 §12.2](../12-asynchronous-javascript/README.md#122-the-event-loop)). It replaced the old, slow "mutation events".
+`MutationObserver` calls you back when the DOM changes — children added/removed, attributes changed, text edited. Records are **batched** and delivered as a **microtask** after the current script ([Ch. 12 §12.2](../12-asynchronous-javascript/README.md#122-the-event-loop)). It replaced the old, slow "mutation events".
 
 [`code/09_mutation_observer.mjs`](code/09_mutation_observer.mjs):
 
@@ -816,7 +759,7 @@ observer got 5 records: [
 done
 ```
 
-Uses: reacting to DOM changes made by third-party code (scripts you didn't write, such as ads or chat widgets), auto-initialising widgets (self-contained UI pieces) when they appear, test utilities that wait for elements (Testing Library — a popular UI-testing toolkit — and its `waitFor`/`findBy*` use it). Don't use it to watch your own changes — you already know when you make them. Observers for size and visibility (`ResizeObserver`, `IntersectionObserver`) are in [Chapter 14 §14.9](../14-browser-apis-and-security/README.md#149-intersectionobserver-and-resizeobserver).
+Uses: reacting to DOM changes by third-party code (ads, chat widgets), auto-initialising widgets when they appear, test utilities that wait for elements (Testing Library's `waitFor`/`findBy*`). Don't use it to watch your own changes. Size/visibility observers (`ResizeObserver`, `IntersectionObserver`): [Chapter 14 §14.9](../14-browser-apis-and-security/README.md#149-intersectionobserver-and-resizeobserver).
 
 ### TL;DR
 `new MutationObserver(cb).observe(node, { childList, attributes, subtree, characterData })`; batched microtask callbacks; `disconnect()` when done.
@@ -836,14 +779,14 @@ flowchart LR
     P --> C["Composite<br/>layers onto screen"]
 ```
 
-- **Reflow / layout** — computing geometry. Changing width, height, font size, adding elements, etc. dirties layout (marks it as needing recalculation) — often for the whole subtree (an element plus everything inside it) or document.
+- **Reflow / layout** — computing geometry. Changing width, height, font size, adding elements dirties layout — often for the whole subtree or document.
 - **Repaint** — redrawing pixels without geometry changes (color, background, shadow).
-- **Composite** — assembling layers (separately drawn sheets of the page that the GPU, the graphics chip, stacks together); changing only `transform` and `opacity` can often skip layout and paint entirely, which is why they're the go-to properties for animation.
+- **Composite** — assembling layers (separately drawn sheets the GPU stacks); changing only `transform` and `opacity` can often skip layout and paint — hence the go-to animation properties.
 
-Normally the browser **batches** all your changes and runs the pipeline once, just before the next frame (the next screen refresh, usually 60 per second; §12.2 step 3). But if you **read** a geometry property (`offsetWidth`, `offsetTop`, `clientHeight`, `scrollTop`, `getBoundingClientRect()`, `getComputedStyle(...)` values) after a write, the browser must run layout **synchronously** to give you a correct answer — a **forced synchronous layout**. Doing write → read → write → read in a loop forces a layout on every iteration: **layout thrashing**.
+The browser normally **batches** your changes and runs the pipeline once before the next frame (§12.2 step 3). But **reading** geometry (`offsetWidth`, `offsetTop`, `clientHeight`, `scrollTop`, `getBoundingClientRect()`, `getComputedStyle(...)` values) after a write forces layout **synchronously** — a **forced synchronous layout**. Write → read → write → read in a loop forces one per iteration: **layout thrashing**.
 
 ### Measured
-The page [`code/reflow.html`](code/reflow.html) widens 2,000 boxes by 10 px two ways, timing the median (middle value when sorted) of 7 runs in headless Chrome:
+[`code/reflow.html`](code/reflow.html) widens 2,000 boxes by 10 px two ways (median of 7 runs, headless Chrome):
 
 ```js
 // Interleaved (thrashing): each read forces a layout because of the previous write
@@ -856,16 +799,16 @@ boxes.forEach((b, i) => { b.style.width = (ws[i] + 10) + 'px'; });
 
 ![Benchmark table: interleaved read/write 346.3 ms versus batched reads then writes 1.5 ms, about 231 times slower](img/reflow.png)
 
-*Figure — the same result, two orders of magnitude (roughly 100×) apart (one run in headless Chrome on the author's machine; exact numbers vary, the gap doesn't).*
+*Figure — same result, two orders of magnitude apart (one run; exact numbers vary, the gap doesn't).*
 
 ### How to keep rendering fast
-1. **Batch reads, then writes.** Never interleave them in loops. Libraries like fastdom formalize this.
-2. **Change classes, not many individual styles**; let CSS do the rest.
-3. **Build off-DOM** (fragment/template) and insert once (§13.3).
-4. **Animate `transform` and `opacity`** instead of `top`/`left`/`width`, and use `requestAnimationFrame` for JS-driven animation ([Ch. 14 §14.5](../14-browser-apis-and-security/README.md#145-timers-and-requestanimationframe)).
-5. **Debounce/throttle** (run only after events stop / at most once per interval) high-frequency handlers (`scroll`, `resize`, `input`) and use passive listeners.
-6. **Virtualize** very long lists (render only visible rows) and consider CSS `content-visibility: auto` for long off-screen sections.
-7. **Measure** with the DevTools Performance panel — purple "Layout" blocks with a "Forced reflow" warning point straight at the culprit.
+1. **Batch reads, then writes** — never interleave in loops (fastdom formalizes this).
+2. **Change classes, not many individual styles.**
+3. **Build off-DOM** (fragment/template), insert once (§13.3).
+4. **Animate `transform` and `opacity`**, not `top`/`left`/`width`; `requestAnimationFrame` for JS animation ([Ch. 14 §14.5](../14-browser-apis-and-security/README.md#145-timers-and-requestanimationframe)).
+5. **Debounce/throttle** high-frequency handlers (`scroll`, `resize`, `input`); passive listeners.
+6. **Virtualize** long lists (render only visible rows); CSS `content-visibility: auto` for long off-screen sections.
+7. **Measure** in the DevTools Performance panel — purple "Layout" blocks with a "Forced reflow" warning point at the culprit.
 
 ### In the interview
 **30-second answer:** "The browser recalculates style, layout, paint and composite. It batches DOM writes until the next frame, but reading geometry like `offsetWidth` right after a write forces a synchronous layout. Doing that in a loop is layout thrashing. The fix is to batch all reads, then all writes, animate with `transform`/`opacity`, and use `requestAnimationFrame`."
@@ -880,15 +823,13 @@ Writes are cheap until you read layout. Batch reads then writes; animate `transf
 
 ## 13.12 When scripts run: `DOMContentLoaded`, `load` and `defer`
 
-A script can only find elements that have already been parsed. The page lifecycle:
+A script can only find elements already parsed.
 
 | Moment | Event | Meaning |
 |---|---|---|
-| HTML fully parsed, DOM ready, deferred scripts run | `DOMContentLoaded` on `document` | Safe to query any element |
-| Everything loaded (images, styles, iframes — pages embedded in the page) | `load` on `window` | Needed only for image sizes etc. |
+| HTML parsed, DOM ready, deferred scripts run | `DOMContentLoaded` on `document` | Safe to query any element |
+| Everything loaded (images, styles, iframes) | `load` on `window` | Needed only for image sizes etc. |
 | User leaves / tab hidden | `pagehide`, `visibilitychange` | Save state; `beforeunload` only to warn about unsaved changes |
-
-How `<script>` loading affects this:
 
 | Tag | Blocks parsing? | Runs when | Order |
 |---|---|---|---|
@@ -897,7 +838,7 @@ How `<script>` loading affects this:
 | `<script async src>` | No (pauses only to run) | As soon as downloaded | Unpredictable |
 | `<script type="module">` | No | Deferred by default | Document order |
 
-**Recommended:** put scripts in `<head>` with `defer` (or use `type="module"`, which is deferred automatically — [Chapter 10 §10.7](../10-modules-and-tooling/README.md#107-modules-in-the-browser)). Then the DOM is ready when your code runs, with no `DOMContentLoaded` wrapper needed. Use `async` for independent scripts like analytics.
+**Recommended:** scripts in `<head>` with `defer` (or `type="module"`, deferred automatically — [Chapter 10 §10.7](../10-modules-and-tooling/README.md#107-modules-in-the-browser)): the DOM is ready when your code runs, no `DOMContentLoaded` wrapper needed. `async` for independent scripts like analytics.
 
 ```html
 <!-- (HTML — not run) -->
@@ -907,23 +848,23 @@ How `<script>` loading affects this:
 ```
 
 ### TL;DR
-Use `defer` or modules so scripts run after parsing. `DOMContentLoaded` = DOM ready; `load` = all resources loaded.
+`defer` or modules so scripts run after parsing. `DOMContentLoaded` = DOM ready; `load` = all resources loaded.
 
 ---
 
 ## Chapter 13 TL;DR
 
-- **DOM** = live tree of nodes (element, text, comment) built by the parser; use element-only navigation (`children`, `nextElementSibling`).
-- **Select** with `querySelector(All)` / `getElementById`; relate with `closest`, `matches`, `contains`. `querySelectorAll` is static; `getElementsBy*` are live.
+- **DOM** = live tree of nodes (element, text, comment) built by the parser; element-only navigation (`children`, `nextElementSibling`).
+- **Select** with `querySelector(All)` / `getElementById`; relate with `closest`, `matches`, `contains`. `querySelectorAll` static; `getElementsBy*` live.
 - **Modify** with `createElement`, `append`/`prepend`/`before`/`after`/`replaceWith`/`remove`, `replaceChildren`. `textContent` for data; `innerHTML` only for trusted markup. Fragments and `<template>` for bulk rendering.
-- **Attributes vs properties**: attributes are initial HTML strings; properties are live typed state. `classList`, `dataset`, `style`, `getComputedStyle`.
+- **Attributes vs properties**: initial HTML strings vs live typed state. `classList`, `dataset`, `style`, `getComputedStyle`.
 - **Events**: `addEventListener(type, fn, { once, passive, signal, capture })`; `target` vs `currentTarget`; `CustomEvent` + `dispatchEvent` (synchronous).
-- **Propagation**: capture ↓, target, bubble ↑; `stopPropagation` sparingly; `focus`/`mouseenter` don't bubble; `new Event` needs `{ bubbles: true }`.
-- **Delegation**: one listener on the container + `event.target.closest()`.
+- **Propagation**: capture ↓, target, bubble ↑; stop sparingly; `focus`/`mouseenter` don't bubble; `new Event` needs `{ bubbles: true }`.
+- **Delegation**: one container listener + `event.target.closest()`.
 - **`preventDefault`** cancels default actions; passive listeners for scroll/touch.
-- **Forms**: listen to `submit`, use `FormData` (`getAll` for multi-values), the `validity` API and `setCustomValidity`; `requestSubmit()` not `submit()`; re-validate on the server.
-- **MutationObserver**: batched microtask callbacks for DOM changes.
+- **Forms**: `submit`, `FormData` (`getAll` for multi-values), `validity`, `setCustomValidity`; `requestSubmit()` not `submit()`; re-validate on the server.
+- **MutationObserver**: batched microtask callbacks.
 - **Performance**: batch reads then writes (thrashing measured ~230× slower), animate `transform`/`opacity`, `requestAnimationFrame`.
 - **Loading**: `defer`/modules; `DOMContentLoaded` vs `load`.
 
-Next: talking to servers, storing data, and keeping pages safe — [Chapter 14: Browser APIs and Security](../14-browser-apis-and-security/README.md).
+Next: talking to servers, storing data, keeping pages safe — [Chapter 14: Browser APIs and Security](../14-browser-apis-and-security/README.md).

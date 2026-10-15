@@ -1,6 +1,6 @@
 # Chapter 20 — Cheat Sheets and Glossary
 
-This last chapter squeezes Chapters 1–19 into pages you can scan in a minute or two: one **cheat sheet** per topic, **decision tables** for "which algorithm / which metric for this problem?", the **50 interview questions** that come up most often with short answers, and an alphabetical **glossary** of 914 terms. Nothing here is new. Every line points back to where the idea is taught properly, written like **§6.3** (= Chapter 6, section 6.3); if a line doesn't make sense, follow the reference. Every term and abbreviation used in the book also has a one-line plain-English definition in the glossary (§20.18) — look there first when a word on a sheet is new to you.
+This last chapter squeezes Chapters 1–19 into pages you can scan in a minute or two: one **cheat sheet** per topic, **decision tables** for "which algorithm / which metric for this problem?", the **50 interview questions** that come up most often with short answers, and an alphabetical **glossary** of 911 terms. Nothing here is new. Every line points back to where the idea is taught properly, written like **§6.3** (= Chapter 6, section 6.3); if a line doesn't make sense, follow the reference. Every term and abbreviation used in the book also has a one-line plain-English definition in the glossary (§20.18) — look there first when a word on a sheet is new to you.
 
 Every formula or number on a sheet that can be computed was recomputed by [`code/cheatsheet_checks.py`](code/cheatsheet_checks.py) (it also asserts the library defaults quoted here, for scikit-learn 1.9, PyTorch 2.x and NumPy 2.x):
 
@@ -21,29 +21,6 @@ OK  sheet_20_14_production
 OK  sheet_20_15_responsible
 all 14 cheat-sheet checks passed
 ```
-
-**What's inside**
-
-| # | Sheet | Built from |
-|---|---|---|
-| 20.1 | The ML workflow | Ch 1, 4, 6, 15, 16 |
-| 20.2 | Math essentials (key formulas) | Ch 2 |
-| 20.3 | NumPy, pandas and scikit-learn API | Ch 3, 4 |
-| 20.4 | Data preparation and feature engineering | Ch 4 |
-| 20.5 | Every algorithm in one table | Ch 5, 7–14 |
-| 20.6 | Loss functions | Ch 2, 5, 8, 10, 13, 14 |
-| 20.7 | Metrics: regression, classification, ranking and more | Ch 6, 9, 11, 13, 16 |
-| 20.8 | Validation and tuning | Ch 4, 6 |
-| 20.9 | Deep learning: layers, activations, optimizers, regularisation, debugging | Ch 10 |
-| 20.10 | CNN, RNN and attention: shapes and formulas | Ch 11, 12 |
-| 20.11 | Recommenders | Ch 13, 17 |
-| 20.12 | Reinforcement-learning update rules | Ch 14 |
-| 20.13 | ML system design: the 7-step framework and napkin math | Ch 15, 17, 18 |
-| 20.14 | Production and MLOps checklist | Ch 16 |
-| 20.15 | Responsible-ML checklist | Ch 19 |
-| 20.16 | Decision tables: which algorithm, which metric | all |
-| 20.17 | Top 50 interview questions | all |
-| 20.18 | Glossary (A–Z) | all |
 
 **Chapter links:** [1](../01-what-is-ml/README.md) · [2](../02-math-for-ml/README.md) · [3](../03-python-ml-stack/README.md) · [4](../04-data-eda-feature-engineering/README.md) · [5](../05-linear-and-logistic-regression/README.md) · [6](../06-evaluation-and-tuning/README.md) · [7](../07-trees-and-ensembles/README.md) · [8](../08-knn-svm-naive-bayes/README.md) · [9](../09-unsupervised-learning/README.md) · [10](../10-neural-networks-and-deep-learning/README.md) · [11](../11-cnns-and-computer-vision/README.md) · [12](../12-sequences-rnns-and-attention/README.md) · [13](../13-recommenders-and-embeddings/README.md) · [14](../14-reinforcement-learning/README.md) · [15](../15-ml-system-design-framework/README.md) · [16](../16-ml-in-production/README.md) · [17](../17-ml-case-studies-1/README.md) · [18](../18-ml-case-studies-2/README.md) · [19](../19-responsible-ml/README.md)
 
@@ -685,23 +662,7 @@ flowchart LR
 | Video indexing | 1 M uploads/day × 600 s ÷ 2 s per sampled frame | 300 M frame encodings/day ≈ 3,500/s — indexing, not querying, dominates | 17.4 |
 | Blurring batch | 5 M panoramas × 24 tiles × 10 ms | 1.2 M GPU-s/day ≈ 14 GPUs busy all day | 18.7 |
 
-**Thirteen case studies in one line each (§17.1–18.9)**
-
-| Design | Shape | Signature idea |
-|---|---|---|
-| Video recommendations | Multi-source retrieval → ranker → rules | Recall@K + watch time; cold start; position bias; judge sources by marginal recall |
-| Feed ranking | Social fan-in → multi-task heads → value formula → integrity layer | Product-owned weights over calibrated heads; hide/report guardrails |
-| Search ranking | Query understanding → BM25 + semantic retrieval → L1/L2 rankers | NDCG on judged sets; IPW for position-biased clicks; relevance floor for ads |
-| Text-to-video search | Index title/ASR/OCR + CLIP-style frame vectors → fuse channels → ranker | Indexing dominates cost; learned fusion with channel-availability flags; segment vectors for moments |
-| Ad click prediction | Eligibility → retrieval → pCTR/pCVR → auction → pacing | **Calibration** per segment (bid × pCTR); delayed conversions |
-| Fraud detection | Rules + GBDT per transaction → two thresholds | Velocity/graph features; late and censored labels; PR-AUC and $ loss |
-| Harmful content | Hash/rules → fast classifiers → heavy models → humans (cascade) | Prevalence of violating **views**; action ladder; flag rate = compute bill |
-| People You May Know | FoF + affiliations + contacts + embeddings | Score = P(send) × P(accept \| sent); Adamic-Adar; privacy fails closed |
-| Music discovery | Weekly batch + online radio | Audio embeddings for new tracks; skip-driven re-ranking; diversity guardrail |
-| Visual search | Image/text encoder → ANN → light ranker | Shared image–text space (CLIP-style); the index churns; re-embed on encoder upgrade |
-| Privacy blurring | Tiled detector at a low threshold → context classifier → multi-view tracking → padded blur → audit | Recall per person across views and per pixel; fail closed; audits instead of A/B tests |
-| Event recommendation | Geo + time filter + content two-tower → GBDT → re-rank → capacity check | Every item is cold: score content, place, time, friends; point-in-time features; organiser exposure |
-| Similar listings | Per-market k-NN on session embeddings → availability filter → ranker | Skip-gram with booked-listing context and same-market negatives; averaged vectors for new listings |
+**Thirteen case studies:** the one-row-per-design comparison (task type, features, model, metrics, hardest challenge) is the table at the end of [Chapter 18](../18-ml-case-studies-2/README.md).
 
 ---
 
@@ -742,26 +703,7 @@ flowchart LR
 
 ## 20.15 Responsible-ML checklist (Ch 19)
 
-**Problem framing**
-- [ ] Is ML appropriate at all? Who is harmed by a wrong output? Is it high-risk (credit, hiring, …) under the EU AI Act or similar law? (§19.9)
-- [ ] Does the label measure what we care about (not arrests, past hires or cost as proxies)? (§19.1)
-- [ ] Which fairness criterion fits the harm — demographic parity, equal opportunity, equalized odds, calibration — agreed with legal and domain experts? (§19.2)
-
-**Data**
-- [ ] Datasheet: motivation, composition, collection, labelling, uses, distribution, maintenance (§19.8).
-- [ ] Coverage audit per group **and intersection**; lawful basis; PII minimised; sensitive attributes stored separately for auditing (§19.1, §19.6).
-- [ ] Provenance and poisoning checks on scraped or user-generated data (§19.7).
-
-**Model and evaluation**
-- [ ] Per-group selection rate, TPR, FPR, PPV and calibration with confidence intervals; disparate-impact ratio (< 0.8 is a warning); proxy test (predict the group from the features) (§19.3).
-- [ ] Mitigation chosen (reweighing w(g, y) = P(g)P(y)/P(g, y), fairness penalty, group thresholds on validation data), its accuracy cost measured, every criterion re-audited (§19.4).
-- [ ] Explanations: permutation importance on held-out data, PDP/ICE, SHAP (values add up to f(x) − E[f]), counterfactuals; reason codes for adverse decisions; never causal claims (§19.5).
-- [ ] Robustness (FGSM/PGD, adversarial training), membership-inference risk, DP-SGD / federated learning where needed (§19.6, §19.7).
-
-**Deployment and monitoring**
-- [ ] Model card with intended and out-of-scope uses and disaggregated metrics; human oversight and an appeal path (GDPR Art. 22) (§19.8, §19.9).
-- [ ] API hardening: authentication, rate limits, label-only outputs (§19.7).
-- [ ] Per-group monitoring, drift and feedback-loop checks, incident and rollback plan, scheduled re-audits (§19.11).
+Run the pre-launch checklist in [§19.11](../19-responsible-ml/README.md) (framing → data → model and evaluation → deployment and monitoring). Specifics to remember: pick the criterion by harm (demographic parity, equal opportunity, equalized odds, calibration) with legal input; audit per group **and intersection** with CIs, disparate-impact ratio < 0.8 as a warning, proxy test (predict the group from features); reweighing w(g, y) = P(g)P(y)/P(g, y), fairness penalty, or group thresholds fitted on validation data, then re-audit; SHAP values add up to f(x) − E[f], never causal; human oversight and appeal (GDPR Art. 22); authentication, rate limits, label-only outputs.
 
 Key formulas: disparate impact = P(Ŷ=1 \| B)/P(Ŷ=1 \| A) (0.35/0.50 = 0.70) · Chouldechova: FPR = p/(1−p)·(1−PPV)/PPV·(1−FNR) · ε-DP: P[M(D) ∈ O] ≤ e^ε·P[M(D′) ∈ O]; Laplace noise scale Δf/ε (count, ε 0.5 → 2); k queries at ε each cost kε · FGSM: x_adv = clip(x + ε·sign(∇ₓL), 0, 1) · FedAvg = data-size-weighted average of client weights.
 
@@ -893,7 +835,7 @@ Crisp answers; each points to the full treatment.
 
 ## 20.18 Glossary (A–Z)
 
-914 terms. Each entry: **term** — plain meaning — the section that teaches it (the link opens that chapter).
+911 terms. Each entry: **term** — plain meaning — the section that teaches it (the link opens that chapter).
 
 | Term | Meaning | Where |
 |---|---|---|
@@ -939,8 +881,7 @@ Crisp answers; each points to the full treatment.
 | Attribution window | Period after a click during which a conversion is credited to it | [18.1](../18-ml-case-studies-2/README.md) |
 | AUC (ROC-AUC) | Probability a random positive is scored above a random negative; 0.5 random, 1 perfect | [6.3](../06-evaluation-and-tuning/README.md) |
 | Autoencoder | Network trained to reconstruct its input through a narrow middle layer; large reconstruction error suggests an anomaly | [9.7](../09-unsupervised-learning/README.md) |
-| Autograd | Automatic differentiation that records tensor operations and runs backprop on `.backward()` | [10.9](../10-neural-networks-and-deep-learning/README.md) |
-| Automatic differentiation | Software computing exact derivatives by applying the chain rule to recorded operations | [10.4](../10-neural-networks-and-deep-learning/README.md) |
+| Autograd / automatic differentiation | Software computing exact derivatives by applying the chain rule to recorded tensor operations; PyTorch runs backprop on `.backward()` | [10.4](../10-neural-networks-and-deep-learning/README.md) |
 | Automatic speech recognition (ASR) | Converting speech audio into a (timestamped) transcript, e.g. to make videos searchable | [17.4](../17-ml-case-studies-1/README.md) |
 | Average pooling | Downsampling by averaging each window | [11.2](../11-cnns-and-computer-vision/README.md) |
 | Average precision (AP) | Area under the precision–recall curve, the usual PR-AUC; no-skill value equals the base rate | [6.3](../06-evaluation-and-tuning/README.md) |
@@ -948,10 +889,9 @@ Crisp answers; each points to the full treatment.
 | Backdoor (trojan) | Hidden trigger planted through poisoned training data that makes the model misbehave on command | [19.7](../19-responsible-ml/README.md) |
 | Backfill | Computing a new feature or table for past dates | [16.4](../16-ml-in-production/README.md) |
 | Backpressure | Slowing producers when consumers can't keep up, so queues don't overflow | [16.5](../16-ml-in-production/README.md) |
-| Backpropagation | Chain rule applied from the loss backwards to get every parameter's gradient efficiently | [10.4](../10-neural-networks-and-deep-learning/README.md) |
+| Backpropagation (backward pass) | Chain rule applied from the loss backwards to get every parameter's gradient efficiently | [10.4](../10-neural-networks-and-deep-learning/README.md) |
 | Backpropagation through time (BPTT) | Backprop through an RNN unrolled over the sequence; gradients summed over time steps | [12.2](../12-sequences-rnns-and-attention/README.md) |
 | Backtest | Replaying a model or policy on past data whose outcomes are already known | [18.2](../18-ml-case-studies-2/README.md) |
-| Backward pass | Running backpropagation from the loss to get every parameter's gradient | [10.4](../10-neural-networks-and-deep-learning/README.md) |
 | Bagging | Training copies of a model on bootstrap samples and averaging them to cut variance | [7.3](../07-trees-and-ensembles/README.md) |
 | Bag-of-words | Text representation counting each word's occurrences and ignoring order | [4.6](../04-data-eda-feature-engineering/README.md) |
 | Bandit (multi-armed) | One-state RL problem of choosing among arms with unknown payoffs; isolates exploration vs exploitation | [14.4](../14-reinforcement-learning/README.md) |
@@ -1313,13 +1253,12 @@ Crisp answers; each points to the full treatment.
 | Inter-annotator (inter-rater) agreement (IAA) | How often independent labellers agree; measured with e.g. Cohen's kappa | [4.1](../04-data-eda-feature-engineering/README.md) |
 | Interference (experiments) | Treated units affecting control units, which biases an A/B test | [16.9](../16-ml-in-production/README.md) |
 | Interleaving | Merging two rankers' results into one list and seeing whose items get clicked | [16.9](../16-ml-in-production/README.md) |
-| Interpretability | How directly a person can understand how a model works; often used as a synonym for explainability | [19.5](../19-responsible-ml/README.md) |
+| Interpretability | Synonym for explainability: how directly a person can understand how a model works | [19.5](../19-responsible-ml/README.md) |
 | Intersectional group | Group defined by several attributes at once (e.g. older women) | [19.2](../19-responsible-ml/README.md) |
 | Intra-list diversity | How different the items within one recommendation list are | [13.11](../13-recommenders-and-embeddings/README.md) |
 | Intrinsically interpretable model | Model readable directly, such as a linear model, small tree or GAM | [19.5](../19-responsible-ml/README.md) |
 | Invalid traffic | Clicks and impressions from bots or click farms, removed before billing and training | [18.1](../18-ml-case-studies-2/README.md) |
-| Inverse propensity scoring (IPS) | Same idea as IPW: re-weighting logged outcomes by 1/P(shown) to undo exposure bias | [13.11](../13-recommenders-and-embeddings/README.md) |
-| Inverse propensity weighting (IPW) | Weighting each logged example by 1/P(it was exposed/examined) to remove selection or position bias | [17.3](../17-ml-case-studies-1/README.md) |
+| Inverse propensity scoring / weighting (IPS / IPW) | Weighting each logged example by 1/P(it was shown/examined) to remove exposure, selection or position bias | [17.3](../17-ml-case-studies-1/README.md) |
 | Inverted dropout | Scaling surviving units by 1/(1 − p) during training so nothing changes at evaluation | [10.7](../10-neural-networks-and-deep-learning/README.md) |
 | Inverted index | Map from each word to the documents containing it; the core of keyword search | [17.3](../17-ml-case-studies-1/README.md) |
 | IoU (intersection over union) | Overlap of two boxes divided by their union; matches detections to ground truth | [11.7](../11-cnns-and-computer-vision/README.md) |
@@ -1776,7 +1715,7 @@ Crisp answers; each points to the full treatment.
 | Validation curve | Training and validation score vs one hyperparameter | [6.8](../06-evaluation-and-tuning/README.md) |
 | Validation set | Data used to compare models and tune hyperparameters | [1.6](../01-what-is-ml/README.md) |
 | Value formula | Product-owned weighted sum of predicted probabilities used as the final ranking score | [17.2](../17-ml-case-studies-1/README.md) |
-| Value function | Expected return from a state, V(s), or from a state–action pair, Q(s, a) | [14.3](../14-reinforcement-learning/README.md) |
+| Value function | See state-value / action-value function | [14.3](../14-reinforcement-learning/README.md) |
 | Value iteration | Repeating the Bellman optimality update until values converge | [14.5](../14-reinforcement-learning/README.md) |
 | Vanishing gradient | Gradients shrinking exponentially through many layers or time steps | [10.6](../10-neural-networks-and-deep-learning/README.md) |
 | Variance (model) | How much the model changes when trained on a different sample | [6.7](../06-evaluation-and-tuning/README.md) |

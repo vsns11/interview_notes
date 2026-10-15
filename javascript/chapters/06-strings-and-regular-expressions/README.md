@@ -1,35 +1,22 @@
 # Chapter 6 — Strings and Regular Expressions
 
-Text is everywhere: user names, URLs (web addresses), log lines (one-line records a program writes about what it did), CSV files (comma-separated values: spreadsheet-like data as plain text), chat messages, HTML. This chapter covers how JavaScript represents text (**strings**), the methods you use every day to search, cut, change and compare it, the Unicode details that trip up even experienced developers (why `'😀'.length` is 2), and **regular expressions** — a compact pattern language for finding and transforming text.
+Text is everywhere: user names, URLs (web addresses), log lines, CSV files (comma-separated values — spreadsheet-like plain text), chat messages, HTML. This chapter covers **strings** (how JavaScript represents text), the everyday methods to search, cut, change and compare it, the Unicode details that trip up experienced developers (why `'😀'.length` is 2), and **regular expressions** — a compact pattern language for finding and transforming text.
 
-**What you'll learn**
+**What you'll learn:** quotes, escapes, template literals (interpolation, multi-line, tags, `String.raw`); indexing, `length`, `at()`, immutability, coercion; primitives vs `String` objects; the methods table; Unicode (code units, code points, graphemes, normalization, `Intl.Segmenter`, well-formed strings); regex syntax, flags, lookaround; regex methods and the `lastIndex` trap; modern features (named groups, `d`/`u`/`v` flags, `RegExp.escape`, modifiers, duplicate named groups).
 
-1. Creating strings with single quotes, double quotes and backticks; quotes inside strings; escape sequences.
-2. Template literals: interpolation, multi-line strings, tagged templates and `String.raw`.
-3. Indexing, `length`, `at()`, immutability, and what happens with out-of-range indexes.
-4. String + number coercion and converting values to and from strings.
-5. String primitives vs `String` objects (and auto-boxing).
-6. The methods table: searching, extracting, case, whitespace, padding, splitting, replacing, comparing.
-7. Unicode: code units vs code points vs grapheme clusters, normalization, `Intl.Segmenter`, well-formed strings.
-8. Regular expressions: syntax, character classes, quantifiers, anchors, groups, flags, lookaround.
-9. Regex methods: `test`, `exec`, `match`, `matchAll`, `replace`/`replaceAll`, `search`, `split` — and the `lastIndex` trap.
-10. Modern regex features: named groups, `d`, `u` and `v` flags, `RegExp.escape`, modifiers, duplicate named groups.
+**Before you start:** variables and types ([Chapter 2](../02-variables-types-and-operators/README.md)), functions ([Chapter 4](../04-functions-scope-and-closures/README.md)); array methods like `map`/`join` are in [Chapter 7](../07-arrays/README.md).
 
-**Before you start.** You need variables and types ([Chapter 2](../02-variables-types-and-operators/README.md)) and functions/arrow functions ([Chapter 4](../04-functions-scope-and-closures/README.md)). Array methods such as `map` and `join` appear in examples; they are explained fully in [Chapter 7](../07-arrays/README.md).
-
-All code is in [`code/`](code/); files are ES modules (files using `import`/`export`, which always run in strict mode — the stricter variant of JavaScript from [Chapter 1](../01-introduction-and-setup/README.md)) and outputs are real, from Node 24.
+Code is in [`code/`](code/); files are ES modules (always strict mode — [Chapter 1](../01-introduction-and-setup/README.md)); outputs are real Node 24 output.
 
 ---
 
 ## 6.1 What a string is
 
 ### What it is
-A **string** is an ordered, **immutable** sequence of characters used to represent text. It is one of JavaScript's **primitive** types: `typeof 'hi'` is `'string'`. "Immutable" means no operation ever changes a string in place — every method returns a *new* string.
-
-More precisely, a JavaScript string is a sequence of **UTF-16 code units** (16-bit numbers). For everyday English text one code unit = one character; section 6.5 explains when that stops being true.
+A **string** is an ordered, **immutable** sequence of characters — a **primitive** (`typeof 'hi'` is `'string'`). No operation changes a string in place; every method returns a *new* string. Precisely, it is a sequence of **UTF-16 code units** (16-bit numbers); for everyday English one unit = one character (§6.5 covers when that breaks).
 
 ### Why it matters
-Most data that enters a program arrives as text — form fields, query strings (the `?key=value&…` part of a URL), JSON, files — and must be cleaned, validated, split and reformatted. String handling bugs (trailing spaces, case differences, emoji breaking a length limit) are among the most common bugs in web apps.
+Most input arrives as text — form fields, query strings (the `?key=value&…` part of a URL), JSON, files — and must be cleaned, validated, split and reformatted. Trailing spaces, case differences and emoji breaking length limits are among the most common web-app bugs.
 
 ---
 
@@ -39,16 +26,14 @@ Most data that enters a program arrives as text — form fields, query strings (
 
 | Delimiter | Example | Interpolation `${}` | Real line breaks allowed | Typical use |
 |---|---|---|---|---|
-| Single quotes `'…'` | `'It works'` | No | No | Plain strings (common style default in style guides — shared formatting rulebooks — e.g. Airbnb/StandardJS) |
+| Single quotes `'…'` | `'It works'` | No | No | Plain strings (common default in style guides — shared formatting rulebooks — e.g. Airbnb/StandardJS) |
 | Double quotes `"…"` | `"It works"` | No | No | Plain strings (Prettier's default); identical behaviour to single quotes |
 | Backticks `` `…` `` | `` `Hi ${name}` `` | **Yes** | **Yes** | Anything built from values, multi-line text, tagged templates |
 
-Single and double quotes are exactly equivalent; pick one and stay consistent (a formatter — a tool that rewrites code layout automatically — such as Prettier will enforce it — see [Chapter 10](../10-modules-and-tooling/README.md)).
+Single and double quotes are equivalent; a formatter (Prettier — [Chapter 10](../10-modules-and-tooling/README.md)) enforces one.
 
 ### Quotes inside strings
-To put a quote character inside a string, either surround the string with a *different* kind of quote or **escape** the inner quote with a backslash.
-
-From [`code/01_string_basics.mjs`](code/01_string_basics.mjs):
+Use a *different* outer quote, or **escape** the inner quote with a backslash. From [`code/01_string_basics.mjs`](code/01_string_basics.mjs):
 
 ```js
 console.log("She said 'hi'", '|', 'He said "bye"', '|', 'It\'s escaped', '|', `mix 'both' "kinds"`);
@@ -61,22 +46,22 @@ She said 'hi' | He said "bye" | It's escaped | mix 'both' "kinds"
 ```
 
 ### Escape sequences
-A backslash `\` inside a string starts an **escape sequence**: two or more characters in the source that stand for one special character in the value.
+A backslash starts an **escape sequence** — source characters standing for one special character.
 
 | Escape | Produces | Notes |
 |---|---|---|
 | `\'` `\"` `` \` `` | The quote character itself | Needed only when it matches the delimiter |
 | `\\` | One backslash | Windows paths: `'C:\\temp'` |
-| `\n` | Line feed (new line) | The normal line break on Linux/macOS and in most text protocols (agreed formats for messages between programs, like HTTP) |
+| `\n` | Line feed (new line) | The normal line break on Linux/macOS and in most text protocols (message formats like HTTP) |
 | `\r` | Carriage return | Windows line endings are `\r\n` |
 | `\t` | Horizontal tab | |
-| `\b` | Backspace (U+0008) | Rare. Careful: inside a **regex** (regular expression, section 6.7), `\b` means "word boundary" |
+| `\b` | Backspace (U+0008) | Rare. Careful: inside a **regex** (§6.7), `\b` means "word boundary" |
 | `\f` | Form feed (U+000C) | Rare (old printers) |
 | `\v` | Vertical tab (U+000B) | Rare; supported by all modern engines |
 | `\0` | Null character (U+0000) | Must not be followed by a digit (`'\01'` is a legacy octal — base-8 — escape, a `SyntaxError` in strict mode) |
-| `\xHH` | Character with hex (hexadecimal, base-16: digits 0–9 then A–F) code HH (2 digits) | `'\x41'` is `'A'` |
+| `\xHH` | Character with hex (base-16) code HH (2 digits) | `'\x41'` is `'A'` |
 | `\uXXXX` | UTF-16 code unit with hex code XXXX (4 digits) | `'\u00e9'` is `'é'` |
-| `\u{X…}` | Any Unicode code point (the number Unicode gives a character, section 6.5; 1–6 hex digits), ES2015 | `'\u{1F600}'` is `'😀'` |
+| `\u{X…}` | Any Unicode code point (§6.5; 1–6 hex digits), ES2015 | `'\u{1F600}'` is `'😀'` |
 | `\` + line break | Line continuation (no character added) | Old way to split a long literal across lines |
 
 ```js
@@ -94,18 +79,17 @@ Line 2
 "a\r\nb\u0000c" 4
 ```
 
-`'a\r\nb'.length` is 4: each escape is a single character in the final string, however many characters it took to type.
+Each escape is one character in the value: `'a\r\nb'.length` is 4.
 
 ---
 
 ## 6.3 Template literals
 
 ### What it is
-A **template literal** (ES2015) is a string written between backticks. It adds three abilities that quoted strings lack:
-
-1. **Interpolation** — `${expression}` inserts the value of *any* JavaScript expression, converted to a string.
-2. **Multi-line text** — real line breaks in the source become line breaks in the value.
-3. **Tags** — a function name placed before the backtick receives the pieces and values and can build any result.
+A **template literal** (ES2015, backticks) adds:
+1. **Interpolation** — `${expression}` inserts any expression's value, converted to string.
+2. **Multi-line text** — real line breaks are kept.
+3. **Tags** — a function before the backtick receives the pieces and values and builds any result.
 
 ### How it works
 
@@ -125,14 +109,14 @@ Dear user,
   your order has shipped.
 ```
 
-- `$${…}`: the first `$` is a literal dollar sign; `${` starts interpolation.
-- Any expression is allowed inside `${}`: arithmetic, method calls, ternaries (`cond ? a : b`), even nested templates.
-- In a multi-line template, **indentation is part of the string** — the two spaces before "your" are kept.
+- In `$${…}` the first `$` is literal; `${` starts interpolation.
+- Any expression works inside `${}` — arithmetic, calls, ternaries, nested templates.
+- **Indentation inside a multi-line template is part of the string.**
 
-Before ES2015, multi-line text needed `\n` escapes and `+` concatenation: `'This is line 1\n' + 'This is line 2'`. Templates made that obsolete.
+Templates replaced the pre-ES2015 `'line 1\n' + 'line 2'` style.
 
 ### Tagged templates and `String.raw`
-A **tag** is a function called with (a) an array of the literal text pieces and (b) the interpolated values as further arguments. Libraries use tags to escape HTML, build SQL (the language for querying databases) safely, or define CSS (styled-components' `` styled.div`…` ``, GraphQL's `` gql`…` `` (GraphQL is a query language for APIs), lit-html's `` html`…` ``).
+A **tag** is called with (a) an array of literal text pieces and (b) the interpolated values. Libraries use tags to escape HTML, build SQL (database query language) safely, or define CSS: styled-components' `` styled.div`…` ``, GraphQL's (an API query language) `` gql`…` ``, lit-html's `` html`…` ``.
 
 ```js
 function highlight(strings, ...values) {
@@ -149,19 +133,19 @@ Hello [Ana], you have [3] messages
 C:\new\table | 10 12
 ```
 
-`strings` is `['Hello ', ', you have ', ' messages']` and `values` is `['Ana', 3]`: there is always one more string piece than values. The built-in tag **`String.raw`** returns the text *without* processing escapes — `\n` stays a backslash and an `n` — which is handy for Windows paths and regex sources. The normal string `'C:\new\table'` has only 10 characters because `\n` and `\t` became a newline and a tab.
+`strings` is `['Hello ', ', you have ', ' messages']`, `values` `['Ana', 3]` — always one more piece than values. **`String.raw`** returns text *without* processing escapes (handy for Windows paths and regex sources); the normal `'C:\new\table'` has 10 characters because `\n` and `\t` became newline and tab.
 
 ### Common mistakes
-- Using `'${name}'` (normal quotes) and wondering why nothing is substituted — only backticks interpolate.
-- Building HTML with templates from user input without escaping → **XSS** (cross-site scripting). Escape or use `textContent` ([Chapter 14](../14-browser-apis-and-security/README.md)).
-- Building SQL by interpolation → SQL injection (an attacker's input gets run as part of your database command). Use parameterised queries (the database receives the command and the values separately, so values are never treated as code).
+- `'${name}'` in normal quotes — only backticks interpolate.
+- HTML from user input via templates without escaping → **XSS** (cross-site scripting). Escape or use `textContent` ([Chapter 14](../14-browser-apis-and-security/README.md)).
+- SQL by interpolation → **SQL injection** (attacker input runs as part of your command). Use parameterised queries (command and values sent separately, so values are never code).
 
 ---
 
 ## 6.4 Working with strings: indexing, immutability, coercion, String objects
 
 ### Indexing, `length` and `at()`
-Characters are numbered from **0**. Read one with bracket notation `str[i]`, `str.charAt(i)`, or `str.at(i)` (ES2022), which also accepts **negative** indexes counting from the end.
+Characters are numbered from **0**: `str[i]`, `str.charAt(i)`, or `str.at(i)` (ES2022), which accepts **negative** indexes from the end.
 
 ```js
 const greeting = 'Hello, World!';
@@ -174,9 +158,7 @@ Output:
 13 H W ! undefined true
 ```
 
-- `length` counts code units, including spaces and punctuation: `'Hello, World!'` has 13.
-- The first character is at `0`; the last is at `length - 1` (or `at(-1)`).
-- An index past the end gives `undefined` with brackets, and an empty string `''` with `charAt`.
+`length` counts code units (spaces and punctuation included); last index is `length - 1` (or `at(-1)`); past the end, brackets give `undefined`, `charAt` gives `''`.
 
 ### Strings are immutable
 
@@ -193,27 +175,13 @@ assigning s[0] -> TypeError
 cat bat
 ```
 
-Assigning to an index never changes a string. In **sloppy** (non-strict) scripts the assignment is silently ignored; in **strict** mode (modules, classes) it throws a `TypeError`. To "change" a string, build a new one.
+Index assignment is silently ignored in **sloppy** scripts and throws `TypeError` in **strict** mode. Build a new string instead.
 
 ### Concatenation and coercion
-The `+` operator means **addition** for two numbers but **concatenation** as soon as either side is a string — the other side is converted to a string first. Other arithmetic operators (`-`, `*`, `/`) convert strings to numbers instead.
-
-```js
-console.log('The number is ' + 5, '|', '5' + 3, '5' - 3, '5' * '2', 1 + 2 + '3', '1' + 2 + 3);
-console.log(String(42), (42).toString(), `${null} ${undefined}`, String([1, 2]), String({}));
-```
-
-Output:
-
-```text
-The number is 5 | 53 2 10 33 123
-42 42 null undefined 1,2 [object Object]
-```
-
-`+` is evaluated left to right: `1 + 2 + '3'` is `3 + '3'` = `'33'`, but `'1' + 2 + 3` is `'12' + 3` = `'123'`. To convert **to** a string use `String(x)` (safe for `null`/`undefined`) or a template; `x.toString()` throws on `null`/`undefined`. To convert **from** a string see the `Number`/`parseInt` rows in section 6.6. The complete coercion table is in [Chapter 2](../02-variables-types-and-operators/README.md).
+`+` concatenates once either side is a string (`'5' + 3` → `'53'`; left to right, so `1 + 2 + '3'` is `3 + '3'` → `'33'` but `'1' + 2 + 3` is `'12' + 3` → `'123'`); `-`, `*`, `/` convert to numbers (`'5' - 3` → `2`) — full rules in [Chapter 2 §2.5](../02-variables-types-and-operators/README.md#25-arithmetic-operators). Convert **to** string with `String(x)` (safe for `null`/`undefined`; `String([1, 2])` → `'1,2'`, `String({})` → `'[object Object]'`) or a template; `x.toString()` throws on `null`/`undefined`.
 
 ### String primitives vs `String` objects
-JavaScript also has a `String` **wrapper object**, created with `new String('…')`. You essentially never want it.
+`new String('…')` creates a **wrapper object** — essentially never wanted.
 
 ```js
 const obj = new String('Hello');
@@ -236,10 +204,10 @@ HELLO methods work on primitives via temporary wrapper objects
 | `typeof` | `'string'` | `'object'` |
 | Equality | By value — two equal primitives are `===` | By reference — two wrappers are never `===`, even with the same text |
 | Truthiness | `''` is falsy | Every object is truthy — `new String('')` is truthy! |
-| Cost | Cheap; engines optimise heavily | Extra allocation (reserving memory for a new object) |
+| Cost | Cheap; engines optimise heavily | Extra allocation (memory for a new object) |
 | Methods | Available through **auto-boxing** | Available directly |
 
-**Auto-boxing**: when you call `'Hello'.toUpperCase()`, the engine behaves as if it briefly wrapped the primitive in a `String` object to find the method on `String.prototype` (the shared object where all strings' methods live — prototypes are explained in [Chapter 9](../09-this-prototypes-and-classes/README.md)), then throws the wrapper away. That is why primitives "have methods" without being objects. `String(123)` **without** `new` is a conversion function and returns a primitive.
+**Auto-boxing**: for `'Hello'.toUpperCase()` the engine briefly wraps the primitive to find the method on `String.prototype` (where all strings' methods live — [Chapter 9](../09-this-prototypes-and-classes/README.md)), then discards the wrapper. `String(123)` **without** `new` converts and returns a primitive.
 
 ### Comparing strings
 
@@ -253,20 +221,20 @@ Output:
 true true -1 [ 'e', 'z', 'é' ] [ 'e', 'é', 'z' ]
 ```
 
-`<`, `>` and the default `sort()` compare **code unit by code unit**. All uppercase letters come before all lowercase ones (`'Z'` is 90, `'a'` is 97), and accented letters sort after `z`. For human ordering use **`localeCompare`** or an `Intl.Collator` (section 6.6; `Intl` is the built-in internationalisation namespace for language-aware formatting and sorting).
+`<`, `>` and default `sort()` compare **code unit by code unit**: all uppercase before lowercase (`'Z'` 90, `'a'` 97), accented letters after `z`. For human ordering use **`localeCompare`** or `Intl.Collator` (§6.6; `Intl` is the built-in internationalisation namespace).
 
 ### Self-check
 1. `'abc'[-1]` vs `'abc'.at(-1)`? → `undefined` vs `'c'`.
-2. `'3' + 4 + 5`? → `'345'`. And `3 + 4 + '5'`? → `'75'`.
-3. Is `new String('') ? 'y' : 'n'` `'y'` or `'n'`? → `'y'` — objects are truthy.
-4. Why is `'B' < 'a'` true? → Code unit 66 < 97.
+2. `'3' + 4 + 5`? → `'345'`; `3 + 4 + '5'`? → `'75'`.
+3. `new String('') ? 'y' : 'n'`? → `'y'` (objects are truthy).
+4. Why is `'B' < 'a'`? → Code unit 66 < 97.
 
 ---
 
 ## 6.5 Unicode: code units, code points and graphemes
 
 ### The problem it solves
-Why is the length of `'😀'` 2? Why can reversing a string produce garbage? Why are `'café'` and `'café'` sometimes not equal? The answers are all about how text is encoded.
+Why is `'😀'.length` 2? Why can reversing a string produce garbage? Why are `'café'` and `'café'` sometimes unequal? All about encoding.
 
 ### Three levels of "character"
 
@@ -276,7 +244,7 @@ Why is the length of `'😀'` 2? Why can reversing a string produce garbage? Why
 | **Code point** | One Unicode character number (U+0000 … U+10FFFF) | `'😀'` = U+1F600 | `codePointAt`, `String.fromCodePoint`, `for…of`, `[...str]` |
 | **Grapheme cluster** | What a person sees as one character | `'👩‍👩‍👧'` = 5 code points, 1 grapheme | `Intl.Segmenter` |
 
-Code points up to U+FFFF (the **Basic Multilingual Plane**, which covers most living scripts) fit in one code unit. Code points above it — most emoji, rare CJK (Chinese, Japanese, Korean) characters, musical and math symbols — are stored as a **surrogate pair**: two code units in the ranges D800–DBFF ("high") then DC00–DFFF ("low"). A lone half of a pair is a **lone surrogate**, and a string containing one is **not well-formed**.
+Code points up to U+FFFF (the **Basic Multilingual Plane**, most living scripts) fit one code unit. Above it — most emoji, rare CJK (Chinese/Japanese/Korean) characters, music and math symbols — use a **surrogate pair**: a "high" unit D800–DBFF then a "low" DC00–DFFF. A lone half is a **lone surrogate**; a string containing one is **not well-formed**.
 
 From [`code/03_unicode.mjs`](code/03_unicode.mjs):
 
@@ -300,7 +268,7 @@ console.log('safer reverse :', [...word].reverse().join(''));
 Output:
 
 ```text
-café café false 4 5
+café café false 4 5
 true 5
 2 d83d de00
 1f600 true true
@@ -310,14 +278,12 @@ naive reverse : false
 safer reverse : !😀ih
 ```
 
-What this shows:
-
-1. **Normalization.** "é" can be one code point (U+00E9) or two (`e` + combining accent U+0301). They look identical but are not `===`. `str.normalize('NFC')` composes to the short form; `'NFD'` decomposes. Normalize user input before comparing or storing it (e.g. usernames). `'NFKC'`/`'NFKD'` additionally fold "compatibility" variants such as `ﬁ` → `fi`.
-2. **Surrogate pairs.** `'😀'.length` is 2, and `smile[0]` is a lone surrogate. `codePointAt` / `fromCodePoint` / `\u{…}` work with whole code points.
-3. **Iteration is by code point.** `for…of`, spread `[...str]` and `Array.from(str)` split correctly into code points; `split('')` splits into code units and can cut pairs in half, producing a broken string when reversed.
+1. **Normalization:** "é" can be one code point (U+00E9) or `e` + combining accent (U+0301) — identical-looking, not `===`. `normalize('NFC')` composes, `'NFD'` decomposes; normalize user input (e.g. usernames) before comparing/storing. `'NFKC'`/`'NFKD'` also fold "compatibility" variants (`ﬁ` → `fi`).
+2. **Surrogate pairs:** `smile[0]` is a lone surrogate; `codePointAt`/`fromCodePoint`/`\u{…}` handle whole code points.
+3. **Iteration by code point:** `for…of`, `[...str]`, `Array.from(str)` split correctly; `split('')` splits code units and can cut pairs, breaking a reversed string.
 
 ### Grapheme clusters and `Intl.Segmenter`
-Some visible characters are several code points joined together: family emoji (joined with the invisible **zero-width joiner** U+200D), flags (two "regional indicator" letters), skin-tone variants, letters plus combining accents. Even code-point iteration splits these. **`Intl.Segmenter`** (in all modern browsers and Node) splits text into graphemes, words or sentences according to Unicode rules:
+Some visible characters are several code points: family emoji (joined by the invisible **zero-width joiner** U+200D), flags (two "regional indicator" letters), skin tones, letters plus combining accents. **`Intl.Segmenter`** (modern browsers and Node) splits text into graphemes, words or sentences by Unicode rules:
 
 ```js
 const family = '👩‍👩‍👧';
@@ -340,7 +306,7 @@ Output:
 [ 'Hello', 'big', 'world' ]
 ```
 
-The family emoji is 8 code units, 5 code points, but **1** grapheme. Use grapheme counts for user-facing limits ("max 280 characters"), cursor movement and truncation.
+The family emoji: 8 code units, 5 code points, **1** grapheme. Use graphemes for user-facing limits ("max 280 characters"), cursor movement and truncation.
 
 ### Well-formed strings and byte length
 
@@ -365,27 +331,26 @@ café length 4 utf8 bytes 5
 😀 length 2 utf8 bytes 4
 ```
 
-- `isWellFormed()` / `toWellFormed()` (ES2024) detect and repair lone surrogates (replacing each with U+FFFD, the "replacement character" �). APIs that must encode text — `encodeURIComponent` (converts text into the `%XX` form safe inside a URL), `TextEncoder`, `fetch` bodies — either throw or silently substitute on broken strings.
-- Files, network payloads (the data carried in a message) and database columns are usually measured in **UTF-8 bytes**, not in `length`. (A **byte** is 8 bits; **UTF-8** is the most common text encoding on the web, using 1–4 bytes per character.) Use `new TextEncoder().encode(s).length` (browser) or `Buffer.byteLength(s)` (Node) when a byte limit matters.
+- `isWellFormed()`/`toWellFormed()` (ES2024) detect and repair lone surrogates (→ U+FFFD, the replacement character �). Encoding APIs — `encodeURIComponent` (text → URL-safe `%XX` form), `TextEncoder`, `fetch` bodies — throw or silently substitute on broken strings.
+- Files, network **payloads** (data in a message) and DB columns are measured in **UTF-8 bytes** (a **byte** is 8 bits; **UTF-8**, the web's common encoding, uses 1–4 bytes per character), not `length`. Use `new TextEncoder().encode(s).length` (browser) or `Buffer.byteLength(s)` (Node).
 
 ### In the interview
-**30-second answer:** "JS strings are UTF-16 code units. `length` and indexing count units, so characters beyond U+FFFF like most emoji count as 2. `for…of` and spread iterate code points; `Intl.Segmenter` gives user-perceived characters. Normalize with `normalize('NFC')` before comparing text."
+**30-second answer:** "JS strings are UTF-16 code units; `length` and indexing count units, so characters beyond U+FFFF like most emoji count as 2. `for…of` and spread iterate code points; `Intl.Segmenter` gives user-perceived characters. Normalize with `normalize('NFC')` before comparing."
 
-- *How do you reverse a string safely?* `[...s].reverse().join('')` is correct for code points; for combining marks and ZWJ emoji, reverse the graphemes from `Intl.Segmenter`.
-- *How do you count characters for a tweet-like limit?* Count graphemes, not `length`.
+- *Reverse safely?* `[...s].reverse().join('')` for code points; reverse `Intl.Segmenter` graphemes for combining marks and ZWJ emoji.
+- *Count characters for a tweet-like limit?* Graphemes, not `length`.
 
 ### Self-check
-1. `'😀'.length`? → 2.
-2. `[...'😀'].length`? → 1.
-3. Why might two identical-looking strings not be equal? → Different normalization forms (composed vs decomposed).
-4. Which API gives a word list for text in any language? → `Intl.Segmenter` with `granularity: 'word'`.
+1. `'😀'.length`? → 2. 2. `[...'😀'].length`? → 1.
+3. Identical-looking strings unequal? → Different normalization forms.
+4. Word list in any language? → `Intl.Segmenter` with `granularity: 'word'`.
 
 ---
 
 ## 6.6 String methods
 
 ### How to read this section
-Every string method **returns a new value** and leaves the original untouched. The table groups them by job; the code afterwards shows each in action. "Index" arguments are code-unit positions; an `end` index is **exclusive** (the character at `end` is not included).
+Every method **returns a new value**. Index arguments are code-unit positions; an `end` index is **exclusive**.
 
 | Job | Method | Returns | Notes |
 |---|---|---|---|
@@ -398,12 +363,12 @@ Every string method **returns a new value** and leaves the original untouched. T
 | | `includes(sub, from?)` | boolean | ES2015 |
 | | `startsWith(sub, pos?)` / `endsWith(sub, len?)` | boolean | ES2015 |
 | | `search(regex)` | index of first regex match or -1 | |
-| | `match(regex)` / `matchAll(regex)` | match info / iterator (an object that hands out results one at a time, [Chapter 8](../08-maps-sets-iterators-and-generators/README.md)) | section 6.8 |
+| | `match(regex)` / `matchAll(regex)` | match info / iterator (hands out results one at a time, [Chapter 8](../08-maps-sets-iterators-and-generators/README.md)) | §6.8 |
 | **Extract** | `slice(start, end?)` | substring; **negative** indexes count from end | the one to use |
 | | `substring(start, end?)` | substring; negatives become 0; swaps args if start > end | older |
 | | `substr(start, length?)` | substring by **length** | legacy (Annex B, the spec's appendix of old web-compatibility features, "normative optional") — avoid |
 | **Case** | `toUpperCase()` / `toLowerCase()` | new string | locale-independent Unicode rules |
-| | `toLocaleUpperCase(loc?)` / `toLocaleLowerCase(loc?)` | new string | locale-specific rules (a locale is a language + region setting such as `tr-TR`; e.g. Turkish dotted İ) |
+| | `toLocaleUpperCase(loc?)` / `toLocaleLowerCase(loc?)` | new string | locale-specific rules (a locale is a language + region such as `tr-TR`; e.g. Turkish dotted İ) |
 | **Whitespace** | `trim()` / `trimStart()` / `trimEnd()` | new string | removes spaces, tabs, newlines and other Unicode whitespace |
 | **Padding** | `padStart(len, fill?)` / `padEnd(len, fill?)` | new string of at least `len` | ES2017 |
 | **Build** | `repeat(n)` | `n` copies joined | |
@@ -412,7 +377,7 @@ Every string method **returns a new value** and leaves the original untouched. T
 | **Replace** | `replace(pattern, replacement)` | new string | string pattern → first occurrence only |
 | | `replaceAll(pattern, replacement)` (ES2021) | new string | every occurrence; a regex must have `g` |
 | **Compare** | `localeCompare(other, locale?, options?)` | negative / 0 / positive | language-aware ordering |
-| **Unicode** | `normalize(form?)`, `isWellFormed()`, `toWellFormed()` | string / boolean | section 6.5 |
+| **Unicode** | `normalize(form?)`, `isWellFormed()`, `toWellFormed()` | string / boolean | §6.5 |
 | **Convert** | `toString()` / `valueOf()` | the primitive string | mainly for `String` objects |
 
 ### Searching
@@ -433,7 +398,7 @@ true true true true
 6
 ```
 
-Use `includes` when you only need yes/no; `indexOf(...) !== -1` is the older idiom. A common bug is `if (s.indexOf(x))` — that is falsy when `x` is found **at index 0** and truthy (−1) when it is missing.
+Use `includes` for yes/no (`indexOf(...) !== -1` is the older idiom). Bug: `if (s.indexOf(x))` is falsy when found **at index 0** and truthy (−1) when missing.
 
 ### Extracting: `slice` vs `substring` vs `substr`
 
@@ -454,9 +419,9 @@ true World (substr: legacy, avoid)
 o ! 72 Hi
 ```
 
-- `slice(0, 5)` takes indexes 0–4 → `'Hello'`; the end index 5 (the comma) is excluded. Omit `end` to go to the end.
-- `slice` understands negative indexes (`-6` = 6 from the end); `substring` turns them into 0 and swaps reversed arguments; `slice` with start > end returns `''`.
-- `substr(7, 5)` means "5 characters starting at 7". It's kept only for old code — use `slice`.
+- `slice(0, 5)` → indexes 0–4 (end excluded); omit `end` to go to the end.
+- `slice` accepts negatives; `substring` turns them into 0 and swaps reversed arguments; `slice` with start > end gives `''`.
+- `substr(7, 5)` = "5 characters from 7" — legacy; use `slice`.
 
 ### Case, whitespace and padding
 
@@ -480,9 +445,9 @@ STRASSE ǆ
 007 ab...| ************4444
 ```
 
-- Case conversion is Unicode-aware and can change length (`ß` → `SS`). Turkish has a dotted capital `İ`, which only the locale-aware version produces.
-- For **case-insensitive comparison**, lowercasing both sides works for simple text; for accents and other languages prefer `a.localeCompare(b, undefined, { sensitivity: 'base' }) === 0`.
-- `padStart` is perfect for zero-padding (`'7'` → `'007'`) and masking card numbers.
+- Case conversion is Unicode-aware and can change length (`ß` → `SS`); only the locale-aware version produces Turkish `İ`.
+- **Case-insensitive comparison**: lowercase both for simple text; for accents/other languages `a.localeCompare(b, undefined, { sensitivity: 'base' }) === 0`.
+- `padStart` for zero-padding and masking card numbers.
 
 ### Building, splitting and replacing
 
@@ -501,8 +466,8 @@ ababab abc1 x-y-z
 dog, cat, cat | dog, dog, dog | cow, cow, cow
 ```
 
-- `split` keeps empty strings between consecutive separators (`'a,b,,c'` → 4 pieces); a regex separator like `/\s+/` collapses runs of whitespace. With no match you get a one-element array; the optional second argument limits how many pieces are returned.
-- **`replace` with a string pattern changes only the first occurrence** — the source of countless bugs. Use `replaceAll` or a regex with the `g` flag.
+- `split` keeps empty strings between consecutive separators; a regex like `/\s+/` collapses runs. No match → one-element array; the second argument limits pieces.
+- **`replace` with a string pattern changes only the first occurrence** — use `replaceAll` or a `/g` regex.
 
 ### Comparing with `localeCompare` and `Intl.Collator`
 
@@ -521,24 +486,10 @@ Output:
 [ 'file1', 'file10', 'file2' ] [ 'file1', 'file2', 'file10' ]
 ```
 
-`localeCompare` returns a negative number, 0, or a positive number — exactly what `sort` expects from a comparator (a function that says which of two items comes first). Order depends on the **language**: in German `ä` sorts with `a` (before `z`); in Swedish it's a separate letter after `z`. `sensitivity: 'base'` ignores accents and case. `numeric: true` gives **natural sort** (`file2` before `file10`). When sorting many strings, create one `Intl.Collator` and reuse its `compare` — it is much faster than calling `localeCompare` repeatedly.
+`localeCompare` returns negative/0/positive — exactly what `sort` expects from a **comparator** (function deciding which item comes first). Order depends on **language**: German sorts `ä` with `a`, Swedish after `z`. `sensitivity: 'base'` ignores accents and case; `numeric: true` gives **natural sort** (`file2` before `file10`). For many strings reuse one `Intl.Collator`'s `compare` — much faster than repeated `localeCompare`.
 
 ### Converting strings to numbers
-
-```js
-const wrapped = new String('boxed');
-console.log(wrapped.toString(), wrapped.valueOf(), typeof wrapped.valueOf());
-console.log(Number('42px'), parseInt('42px', 10), parseFloat('3.14abc'), Number(''), Number('  7 '));
-```
-
-Output:
-
-```text
-boxed boxed string
-NaN 42 3.14 0 7
-```
-
-`Number(str)` is strict — the whole string (ignoring surrounding whitespace) must be numeric, and `''` becomes `0`. `parseInt`/`parseFloat` read as many digits as they can and stop. Always pass the radix (the number base, e.g. 10 for decimal) to `parseInt` (`parseInt(s, 10)`).
+`Number(str)` is strict (`Number('42px')` → `NaN`; whole trimmed string must be numeric; `''` → `0`); `parseInt('42px', 10)` → `42` and `parseFloat('3.14abc')` → `3.14` read leading digits and stop. Always pass the **radix** (number base) to `parseInt`. Details: [Chapter 2 §2.10](../02-variables-types-and-operators/README.md#210-numbers-in-depth). (`toString()`/`valueOf()` on a `String` wrapper return the primitive.)
 
 ### Two real tasks
 
@@ -559,45 +510,43 @@ creme-brulee-10-tips-tricks
 The Quick Brown Fox
 ```
 
-`slugify` builds URL slugs (the readable last part of a web address, like `my-first-post`) the way blogs and CMSs (content management systems such as WordPress) do: trim, lowercase, decompose accented letters and delete the combining marks (range U+0300–U+036F), turn every run of non-alphanumerics into `-`, then strip leading/trailing dashes.
+`slugify` builds URL **slugs** (readable address endings like `my-first-post`) as blogs and CMSs (content management systems like WordPress) do: trim, lowercase, decompose accents and delete combining marks (U+0300–U+036F), turn non-alphanumeric runs into `-`, strip edge dashes.
 
 ### Performance note
-Because strings are immutable, `s += piece` in a loop *conceptually* creates a new string each time. Modern engines optimise this with internal "rope" structures (a tree of string pieces that is only joined into one string when needed), so it's fine for normal sizes; for building very large output, collecting pieces in an array and calling `join('')` once is a safe, predictable alternative.
+`s += piece` in a loop conceptually creates a new string each time, but engines optimise it with internal "rope" structures (trees of pieces joined only when needed). For very large output, pushing pieces to an array and `join('')` once is a predictable alternative.
 
 ### Common mistakes
 - `replace('a', 'b')` expecting every `a` to change.
 - `if (str.indexOf(x))` instead of `includes`.
-- Comparing user-entered text without `trim()` and case/accent normalization.
-- Using `substr` in new code, or confusing `substring(start, end)` with `substr(start, length)`.
-- Sorting names with the default `sort()` (uppercase before lowercase, accents last).
+- Comparing user text without `trim()` and case/accent normalization.
+- `substr` in new code; confusing `substring(start, end)` with `substr(start, length)`.
+- Sorting names with default `sort()`.
 
 ### In the interview
-**30-second answer:** "Strings are immutable primitives; methods return new strings. I use `slice` for extraction (supports negatives), `includes`/`startsWith` for tests, `split`/`join` to convert to arrays, `replaceAll` or a `/g` regex to replace everywhere, `padStart` for formatting, and `localeCompare`/`Intl.Collator` for human sorting."
+**30-second answer:** "Strings are immutable primitives; methods return new strings. `slice` for extraction (negatives OK), `includes`/`startsWith` for tests, `split`/`join` to convert to arrays, `replaceAll` or a `/g` regex to replace everywhere, `padStart` for formatting, `localeCompare`/`Intl.Collator` for human sorting."
 
-- *Check whether a string is a palindrome* (reads the same backwards, like "level"). `const t = s.toLowerCase().replace(/[^a-z0-9]/g, ''); t === [...t].reverse().join('')`.
-- *Count occurrences of a substring.* `s.split(sub).length - 1`, or `s.match(/sub/g)?.length ?? 0` (escape the pattern if it comes from input — `RegExp.escape`, section 6.9).
-- *Difference between `slice` and `substring`?* Negative indexes and argument swapping.
+- *Palindrome check* (reads the same backwards, like "level"): `const t = s.toLowerCase().replace(/[^a-z0-9]/g, ''); t === [...t].reverse().join('')`.
+- *Count occurrences:* `s.split(sub).length - 1`, or `s.match(/sub/g)?.length ?? 0` (escape input patterns — `RegExp.escape`, §6.9).
+- *`slice` vs `substring`?* Negative indexes and argument swapping.
 
 ### Self-check
 1. `'JavaScript'.slice(-6)`? → `'Script'`.
 2. `'a-b-c'.split('-', 2)`? → `['a', 'b']`.
 3. `'5'.padStart(3, '0')`? → `'005'`.
-4. Sort `['b', 'A', 'a']` case-insensitively. → `.sort((x, y) => x.localeCompare(y, undefined, { sensitivity: 'base' }))`.
+4. Case-insensitive sort of `['b', 'A', 'a']`? → `.sort((x, y) => x.localeCompare(y, undefined, { sensitivity: 'base' }))`.
 
 ---
 
 ## 6.7 Regular expressions: the pattern language
 
 ### What it is
-A **regular expression** (regex, regexp) is a small pattern that describes a set of strings — "five digits", "a word followed by `@`", "anything between `<` and `>`". JavaScript regexes are `RegExp` objects. You write them in two ways:
+A **regular expression** (regex, regexp) is a pattern describing a set of strings ("five digits", "anything between `<` and `>`"); in JS a `RegExp` object, run by the regex engine against text from left to right until the pattern fits. Two forms:
 
-- **Literal** `/pattern/flags` — compiled (turned into the engine's internal matching program) once when the script loads; use when the pattern is fixed.
-- **Constructor** `new RegExp('pattern', 'flags')` — built from a string at run time; use when the pattern depends on data. Backslashes must be doubled inside the string: `new RegExp('\\d+')`.
-
-Think of a regex as a tiny program that the regex engine runs against your text, trying positions from left to right until the pattern fits.
+- **Literal** `/pattern/flags` — compiled (into the engine's internal matcher) once at load; for fixed patterns.
+- **Constructor** `new RegExp('pattern', 'flags')` — built at run time from data; double the backslashes: `new RegExp('\\d+')`.
 
 ### Why it matters
-Validating form input, extracting fields from logs, search-and-replace across files, routing URLs (`/users/:id` becomes a regex inside routers — the code that decides which handler serves which address), syntax highlighting, tokenizers (programs that chop text into meaningful pieces such as words, numbers and symbols) — all use regexes. They are also easy to get wrong, so knowing the core syntax well pays off.
+Form validation, log extraction, search-and-replace, URL routing (`/users/:id` becomes a regex inside **routers**, which pick the handler for each address), syntax highlighting, **tokenizers** (chop text into words, numbers, symbols) — all use regexes, which are easy to get wrong.
 
 ### Syntax cheat sheet
 
@@ -689,10 +638,10 @@ true colou?r i /colou?r/i
 2024 07 04
 ```
 
-- `u?` makes the `u` optional, so both spellings match; the `i` flag ignores case.
-- The ZIP pattern is **anchored** with `^…$` — without anchors, `test` would accept `'abc12345xyz'` because a match *anywhere* counts. Validation regexes almost always need anchors.
-- `match` without `g` gives the full match, groups and position; with `g` it gives only the matched strings. Watch out: **no match returns `null`**, not an empty array — `str.match(re).length` crashes. Use `str.match(re) ?? []` or `matchAll`.
-- **Named groups** `(?<year>…)` make results self-documenting and combine nicely with destructuring.
+- `u?` makes `u` optional; `i` ignores case.
+- The ZIP pattern is **anchored** `^…$` — otherwise `test` accepts `'abc12345xyz'` (a match anywhere counts). Validation needs anchors.
+- `match` without `g`: full match, groups, position; with `g`: just strings. **No match returns `null`**, not `[]` — use `str.match(re) ?? []` or `matchAll`.
+- **Named groups** self-document and pair with destructuring.
 
 ### `replace` with patterns and functions
 
@@ -716,7 +665,7 @@ a/b/c xx
 [ 'one', 'two', 'three', 'four' ] [ '1', '+', '2', '-', '3' ]
 ```
 
-Special patterns inside a replacement **string**: `$1`…`$99` (numbered group), `$<name>` (named group), `$&` (whole match), `` $` `` / `$'` (text before / after the match), `$$` (a literal `$`). They apply even when the search pattern is a plain string — so a replacement containing user text should be passed through a **function** instead. A replacement **function** receives `(match, group1, group2, …, offset, fullString, groups)` and returns the text to insert — the most powerful form. If you split with a regex containing a **capturing group**, the captured separators are included in the result.
+Replacement-**string** patterns: `$1`…`$99`, `$<name>`, `$&` (whole match), `` $` ``/`$'` (text before/after), `$$` (literal `$`) — applied even for plain-string search patterns, so pass user text through a **function** instead. A replacement function receives `(match, group1, group2, …, offset, fullString, groups)` and returns the insert — the most powerful form. Splitting by a regex with a **capturing group** keeps the captured separators.
 
 ### Greedy vs lazy, anchors, flags in action
 
@@ -740,12 +689,12 @@ null [ 'id: 1', 'id: 2' ]
 false true
 ```
 
-- Quantifiers are **greedy** by default: `.+` grabs as much as it can and then backs off, so `<.+>` spans from the first `<` to the *last* `>`. Adding `?` makes it **lazy**. A negated class (`[^>]+`) is usually clearer and faster than a lazy dot.
-- `\b` stops `cat` from matching inside `concatenate`.
-- Without `m`, `^`/`$` refer to the whole input, so a multi-line text matches nothing; with `m` they work per line.
-- `.` doesn't match `\n` unless you add the `s` flag.
+- Quantifiers are **greedy**: `.+` grabs all it can then backs off, so `<.+>` runs to the *last* `>`; `?` makes it **lazy**. A negated class (`[^>]+`) is clearer and faster.
+- `\b` keeps `cat` from matching inside `concatenate`.
+- Without `m`, `^`/`$` mean the whole input; with `m`, each line.
+- `.` skips `\n` without the `s` flag.
 
-(Parsing real HTML with regexes is fragile — use `DOMParser` in the browser or a parser library; a **parser** reads text in a known format and builds a structured representation of it. The example only illustrates greediness.)
+(Real HTML needs a **parser** — reads a format into a structure — such as `DOMParser`; regexes are fragile.)
 
 ### Lookaround and backreferences
 
@@ -766,7 +715,7 @@ weakpass:false Str0ngPass:true Short1A:false
 [ 'is is', 'test test' ]
 ```
 
-**Lookarounds** check what is before or after a position *without including it* in the match. Stacking lookaheads at the start (`(?=.*[a-z])(?=.*[A-Z])(?=.*\d)`) expresses "must contain each of these" — the classic password-rule pattern. The backreference `\1` means "the same text group 1 captured", which finds doubled words.
+**Lookarounds** test what's before/after a position *without including it*. Stacked lookaheads (`(?=.*[a-z])(?=.*[A-Z])(?=.*\d)`) express "must contain each" — the classic password rule. Backreference `\1` = "same text as group 1" — finds doubled words.
 
 ### The `lastIndex` trap and `exec` loops
 
@@ -790,7 +739,7 @@ true 1 false 0 true
 12 null
 ```
 
-A regex with `g` (or `y`) remembers where its last match ended in its **`lastIndex`** property, and `test`/`exec` start searching from there. Reusing one global regex to `test` several strings therefore gives alternating `true`/`false` results — a notorious bug when a `/g` regex is stored in a constant and used for validation. Fixes: don't use `g` for `test`, or reset `lastIndex = 0`, or use `matchAll` (which copies the regex internally). The `while (exec)` loop is the pre-2020 way to walk all matches with details; `matchAll` replaces it. The **sticky** `y` flag only matches starting exactly at `lastIndex` — a building block for tokenizers.
+A `g` (or `y`) regex stores where its last match ended in **`lastIndex`**, and `test`/`exec` resume from there — so reusing one global regex to validate several strings alternates `true`/`false`. Fixes: no `g` for `test`, reset `lastIndex = 0`, or `matchAll` (which copies the regex). The `while (exec)` loop is the pre-2020 way to walk matches; `matchAll` replaces it. **Sticky** `y` matches only exactly at `lastIndex` — a tokenizer building block.
 
 ---
 
@@ -846,7 +795,7 @@ true false
 | Duplicate named groups | **ES2025** | The same group name may appear in different `|` alternatives |
 | Pattern modifiers `(?i:…)` | **ES2025** | Turn `i`, `m` or `s` on/off for part of a pattern |
 
-All of these run in Node 24 and current evergreen browsers (browsers that update themselves automatically). Without `RegExp.escape`, the user's `.` and `*` were treated as regex operators and matched the wrong text — an injection bug, and with patterns like `(a+)+` a potential **ReDoS** (regular-expression denial of service: a pattern that takes exponential time on certain inputs and freezes the thread).
+All run in Node 24 and current evergreen (self-updating) browsers. Without `RegExp.escape`, the user's `.` and `*` acted as operators and matched the wrong text — an injection bug, and with patterns like `(a+)+` a potential **ReDoS** (regular-expression denial of service: exponential-time matching that freezes the thread).
 
 ### Practical recipes
 
@@ -881,10 +830,10 @@ a@b.co:true no-at.com:false x@y:false sp ace@a.io:false
 Hi Ana, your code is X9. {unknown}
 ```
 
-1. **Log parsing**: `gm` flags + named groups + `matchAll` turn each line into an object. Real log pipelines (systems that collect, parse and ship logs from many servers — e.g. Logstash "grok" patterns, Fluent Bit parsers) are built on exactly this idea.
-2. **Email**: a *pragmatic* check ("something@something.tld", no spaces; the TLD — top-level domain — is the last part like `.com`). Fully validating RFC 5322 (the official email-format standard) addresses with a regex is impractical; the only real test is sending a confirmation email. HTML's `<input type="email">` uses a similar simplified rule.
-3. **Thousands separators**: the lookahead `(?=(\d{3})+(?!\d))` finds positions followed by groups of three digits — a neat trick, but `toLocaleString` / `Intl.NumberFormat` is correct for every locale.
-4. **Templating**: a replacer function looks each `{key}` up and leaves unknown keys untouched.
+1. **Log parsing**: `gm` + named groups + `matchAll` turn lines into objects — the idea behind log pipelines (Logstash "grok" patterns, Fluent Bit parsers).
+2. **Email**: a *pragmatic* check ("something@something.tld", no spaces; the **TLD** — top-level domain — is the last part like `.com`). Full RFC 5322 (the email-format standard) validation by regex is impractical; the real test is a confirmation email. `<input type="email">` uses a similar simplified rule.
+3. **Thousands separators**: lookahead `(?=(\d{3})+(?!\d))` finds positions before groups of three digits — neat, but `toLocaleString`/`Intl.NumberFormat` is correct for every locale.
+4. **Templating**: a replacer function looks up each `{key}`, leaving unknown keys.
 
 ### Trade-offs: regex or string methods?
 
@@ -896,45 +845,45 @@ Hi Ana, your code is X9. {unknown}
 | Human-language text (words, characters) | `Intl.Segmenter`, `\p{…}` with `u`/`v` |
 
 ### When not to use it
-Avoid giant "do everything" regexes nobody can read; split the job into steps or write a small parser. Never run a user-supplied pattern without a timeout — a limit after which the work is abandoned — (or a linear-time engine such as RE2, whose running time only grows in proportion to the input) — catastrophic backtracking (the engine trying an explosive number of ways to match, see the interview section below) can hang a Node server, which is how several real outages (for example Cloudflare's July 2019 outage) happened.
+Avoid giant unreadable regexes — split into steps or write a small parser. Never run a user-supplied pattern without a timeout (or a linear-time engine like RE2, whose time grows only in proportion to input): **catastrophic backtracking** can hang a Node server — the cause of real outages such as Cloudflare's July 2019 outage.
 
 ### Common mistakes
-- Forgetting anchors in validation (`/\d{5}/.test('abc123456')` is `true`).
-- Forgetting `g` in `replace`, or using `matchAll`/`replaceAll` with a non-global regex (both throw a `TypeError`).
-- Reusing a `/g` regex with `test` (the `lastIndex` trap).
-- Building `new RegExp(userText)` without `RegExp.escape`.
-- Writing `'\d'` instead of `'\\d'` in the `RegExp` constructor string.
-- Expecting `\w` to match `é` or `ñ` — it is ASCII-only; use `\p{L}` with `u`.
+- No anchors in validation (`/\d{5}/.test('abc123456')` is `true`).
+- Forgetting `g` in `replace`; `matchAll`/`replaceAll` with a non-global regex (both throw `TypeError`).
+- Reusing a `/g` regex with `test` (`lastIndex`).
+- `new RegExp(userText)` without `RegExp.escape`.
+- `'\d'` instead of `'\\d'` in the constructor string.
+- Expecting `\w` to match `é`/`ñ` — ASCII-only; use `\p{L}` with `u`.
 
 ### Real-world examples
-- **Routers**: Express (the most popular Node web-server framework) and many front-end routers compile `/users/:id` into a regex with a capture group.
-- **Linters and formatters** use regexes for simple rules; editors use the `d` flag's indices for highlighting.
-- **Form validation** with the HTML `pattern` attribute is a regex (evaluated with the `v` flag in modern browsers).
-- **Log processing** and **search tools** (ripgrep, VS Code search) are built on regex engines.
+- **Routers**: Express (the most popular Node web framework) and front-end routers compile `/users/:id` into a regex with a capture group.
+- **Linters/formatters** use regexes for simple rules; editors use `d` indices for highlighting.
+- HTML **`pattern` attribute** validation is a regex (evaluated with `v` in modern browsers).
+- **Search tools** (ripgrep, VS Code search) and log processing run on regex engines.
 
 ### In the interview
-**30-second answer:** "A regex is a pattern object — literal `/…/flags` or `new RegExp`. I use `test` for yes/no, `matchAll` with named groups to extract, and `replace` with a callback to transform. Key gotchas: anchors for validation, `g` needed for global replace, stateful `lastIndex` with `g`, greedy vs lazy quantifiers, and escaping user input with `RegExp.escape`."
+**30-second answer:** "A regex is a pattern object — `/…/flags` or `new RegExp`. `test` for yes/no, `matchAll` with named groups to extract, `replace` with a callback to transform. Gotchas: anchors for validation, `g` for global replace, stateful `lastIndex` with `g`, greedy vs lazy, and `RegExp.escape` for user input."
 
-- *What's the difference between `match` and `matchAll`?* `match` with `g` returns only the strings (or `null`); `matchAll` returns an iterator of full match objects with groups and indexes.
-- *How do you match a word in any language?* `/\p{L}+/u`.
-- *What is catastrophic backtracking?* Nested quantifiers like `(a+)+$` try exponentially many ways to split the input when it almost matches; avoid nested unbounded quantifiers.
+- *`match` vs `matchAll`?* `match` with `g` returns only strings (or `null`); `matchAll` an iterator of full matches with groups and indexes.
+- *Match a word in any language?* `/\p{L}+/u`.
+- *Catastrophic backtracking?* Nested quantifiers like `(a+)+$` try exponentially many splits on near-matches; avoid nested unbounded quantifiers.
 
 ### Self-check
-1. What does `/^\d{3}-\d{4}$/` match? → Exactly three digits, a dash, four digits — e.g. `555-1234`.
+1. `/^\d{3}-\d{4}$/` matches? → Three digits, dash, four digits (`555-1234`).
 2. `'aaa'.replace(/a/, 'b')`? → `'baa'`.
-3. How do you refer to named group `year` in a replacement string? → `$<year>`.
-4. Why is `/<.+>/` wrong for matching one tag? → Greedy; it stretches to the last `>`. Use `/<[^>]+>/`.
-5. Which ES2025 method safely escapes user input for a regex? → `RegExp.escape`.
+3. Named group `year` in a replacement string? → `$<year>`.
+4. Why is `/<.+>/` wrong for one tag? → Greedy; use `/<[^>]+>/`.
+5. ES2025 method to escape user input? → `RegExp.escape`.
 
 ---
 
 ## Chapter TL;DR
 
-- Strings are **immutable UTF-16 primitives**; create them with `'…'`, `"…"` (identical) or backticks (interpolation, multi-line, tags). Escape with `\` (`\n`, `\t`, `\\`, `\'`, `\u{…}`).
-- Index with `[i]`, `charAt`, or `at(-1)`; out-of-range brackets give `undefined`. Assigning to an index never changes a string (throws in strict mode).
-- `+` concatenates as soon as one side is a string; other arithmetic operators convert to numbers. Avoid `new String` — wrappers are objects compared by reference; primitives get methods via auto-boxing.
-- Core methods: `includes`/`startsWith`/`endsWith`/`indexOf`, `slice` (negatives OK), `toUpperCase`/`toLowerCase`, `trim*`, `padStart`/`padEnd`, `repeat`, `split`/`join`, `replace` (first only) / `replaceAll`, `localeCompare`/`Intl.Collator` for human ordering.
-- `length` counts code units: emoji are 2. Iterate with `for…of`/spread for code points; use `Intl.Segmenter` for visible characters; `normalize('NFC')` before comparing; `isWellFormed`/`toWellFormed` for lone surrogates.
-- Regexes: literals or `new RegExp`; classes, quantifiers (greedy by default, `?` for lazy), anchors, groups (numbered, named, non-capturing), lookaround, backreferences; flags `g i m s u v y d`.
+- Strings are **immutable UTF-16 primitives**: `'…'`/`"…"` (identical) or backticks (interpolation, multi-line, tags). Escapes: `\n`, `\t`, `\\`, `\'`, `\u{…}`.
+- Index with `[i]`, `charAt`, `at(-1)`; out-of-range brackets → `undefined`. Index assignment never changes a string (throws in strict mode).
+- `+` concatenates if either side is a string; other arithmetic converts to numbers. Avoid `new String`; primitives get methods via auto-boxing.
+- Core methods: `includes`/`startsWith`/`endsWith`/`indexOf`, `slice`, `toUpperCase`/`toLowerCase`, `trim*`, `padStart`/`padEnd`, `repeat`, `split`/`join`, `replace` (first only)/`replaceAll`, `localeCompare`/`Intl.Collator`.
+- `length` counts code units (emoji = 2). `for…of`/spread for code points; `Intl.Segmenter` for visible characters; `normalize('NFC')` before comparing; `isWellFormed`/`toWellFormed` for lone surrogates.
+- Regexes: classes, quantifiers (greedy; `?` lazy), anchors, groups (numbered, named, non-capturing), lookaround, backreferences; flags `g i m s u v y d`.
 - Methods: `test`, `match` (null on no match), `matchAll` (needs `g`), `replace` with `$1`/`$<name>` or a callback, `split` by regex. Beware `lastIndex` with `/g`.
-- ES2024–2025 additions: `v` flag, `RegExp.escape`, pattern modifiers, duplicate named groups — all in Node 24. Prefer string methods for fixed text and real parsers for structured formats.
+- ES2024–2025: `v` flag, `RegExp.escape`, pattern modifiers, duplicate named groups — all in Node 24. String methods for fixed text, real parsers for structured formats.

@@ -1,40 +1,28 @@
 # Chapter 7 — Arrays
 
-An **array** is JavaScript's ordered list: shopping-cart items, search results, rows from a database, pixels in an image, moves in a game. Arrays come with about forty built-in methods, and knowing which ones **change** the array and which ones **return a new one** is the single most useful thing to learn — it prevents a whole class of bugs, especially in React and Redux code (React is a popular library for building user interfaces; Redux is a library for managing an app's shared data, its *state*).
+An **array** is JavaScript's ordered list: cart items, search results, database rows, pixels, game moves. Arrays have about forty methods, and knowing which **change** the array and which **return a new one** is the single most useful thing to learn — it prevents a whole class of bugs, especially in React (a UI library) and Redux (a library managing an app's shared data, its *state*).
 
-**What you'll learn**
+**What you'll learn:** why arrays exist and how to create them (literal, `new Array`, `Array.of`, `Array.from`, `fill`); index access, `at()`, `length`, holes, arrays as objects; `push`/`pop`/`unshift`/`shift` and their costs; the full methods table split into **mutating** vs **non-mutating** (incl. ES2023 `toSorted`, `toReversed`, `toSpliced`, `with`); `forEach`, `map`, `filter`, `reduce`, `find`/`findLast`, `some`/`every`, `flat`/`flatMap` and pipelines; sorting with comparators, stability, shuffling; spread/rest/destructuring, shallow vs deep copies, array-likes, recipes; arrays vs objects vs `Map`/`Set`; typed arrays.
 
-1. Why arrays exist, and how to create them (literal, `new Array`, `Array.of`, `Array.from`, `fill`).
-2. Reading and writing by index, `at()`, `length`, holes (sparse arrays), and arrays as objects.
-3. Adding and removing at the ends: `push`, `pop`, `unshift`, `shift` — and their costs.
-4. The complete methods table, split into **mutating** and **non-mutating** — including the ES2023 copying methods `toSorted`, `toReversed`, `toSpliced` and `with`.
-5. Iteration methods: `forEach`, `map`, `filter`, `reduce`, `find`/`findLast`, `some`/`every`, `flat`/`flatMap`, and chaining them into pipelines.
-6. Sorting correctly with comparators (numbers, strings, multiple keys), stability, and shuffling.
-7. Spread, rest and array destructuring; shallow vs deep copies; array-likes; everyday recipes.
-8. When to use an array vs an object (vs `Map`/`Set`), and a short introduction to typed arrays.
+**Before you start:** functions and arrows ([Chapter 4](../04-functions-scope-and-closures/README.md)) — **callbacks** (functions passed in to be called) are everywhere here; loops ([Chapter 3](../03-control-flow-and-loops/README.md)); object spread/destructuring ([Chapter 5](../05-objects-math-date-and-json/README.md)); `Map`, `Set` and iterators ([Chapter 8](../08-maps-sets-iterators-and-generators/README.md)).
 
-**Before you start.** You need functions and arrow functions ([Chapter 4](../04-functions-scope-and-closures/README.md)); callbacks (functions you pass into another function so it can call them) are used everywhere here. Loops (`for`, `for…of`) are in [Chapter 3](../03-control-flow-and-loops/README.md). Object spread/destructuring are in [Chapter 5](../05-objects-math-date-and-json/README.md); `Map`, `Set` and the iterator protocol behind `for…of` are in [Chapter 8](../08-maps-sets-iterators-and-generators/README.md).
-
-All code is in [`code/`](code/); outputs are real, from Node 24.
+Code is in [`code/`](code/); outputs are real Node 24 output.
 
 ---
 
 ## 7.1 Why arrays?
 
 ### What it is
-An **array** stores many values, in order, under one name. Each value is an **element**, and each element has a numeric position called its **index**, starting at **0**.
-
-Think of a row of numbered lockers: the row has one name (`fruits`), each locker has a number (0, 1, 2 …), and you open a locker by its number.
+An **array** stores many values in order under one name. Each value is an **element** with a numeric **index** starting at **0** — like a row of numbered lockers.
 
 ### The problem it solves
-Without arrays you would need one variable per item:
 
 ```js
 const fruit1 = 'apple', fruit2 = 'banana', fruit3 = 'cherry';   // three separate variables...
 const fruits = ['apple', 'banana', 'cherry'];                  // ...or one array
 ```
 
-Separate variables can't be looped over, counted, sorted or passed around as a group, and adding a fourth fruit means changing code. An array handles any number of items with the same code.
+Separate variables can't be looped, counted, sorted or passed as a group, and a fourth item means new code; an array handles any number with the same code.
 
 ### How it works
 From [`code/01_array_basics.mjs`](code/01_array_basics.mjs):
@@ -52,10 +40,10 @@ Output:
 6 3 4 5
 ```
 
-- An **array literal** is a comma-separated list inside square brackets `[ ]`.
-- `length` is the number of elements (strictly: the highest index + 1).
-- Arrays are **objects**: `typeof` says `'object'`. Use **`Array.isArray(x)`** to test for an array.
-- JavaScript arrays can mix types and nest (an array inside an array is how you build a grid or matrix — a table of values in rows and columns). In practice, keep one type per array — it's easier to reason about and engines optimise it better.
+- An **array literal** is a comma-separated list in `[ ]`.
+- `length` = number of elements (strictly, highest index + 1).
+- Arrays are **objects** (`typeof` → `'object'`); test with **`Array.isArray(x)`**.
+- Arrays can mix types and nest (arrays of arrays make a grid/**matrix**). Prefer one type per array — clearer and better optimised.
 
 ---
 
@@ -67,28 +55,20 @@ Output:
 | `new Array(n)` (one number) | `new Array(3)` | length 3, **no elements** (3 empty slots) | Rarely — prefer `Array.from` |
 | `new Array(a, b, …)` | `new Array('a', 'b', 'c')` | those elements | Never needed — use a literal |
 | `Array.of(...items)` | `Array.of(3)` | `[3]` | When a single number must be an element, not a length |
-| `Array.from(iterableOrArrayLike, mapFn?)` (iterable = anything `for…of` can loop over; array-like = see section 7.7) | `Array.from({ length: 4 }, (_, i) => i * i)` | `[0, 1, 4, 9]` | Build from strings, Sets, Maps, NodeLists (lists of page elements returned by DOM queries), `arguments`, or generate by index |
+| `Array.from(iterableOrArrayLike, mapFn?)` (iterable = anything `for…of` can loop over; array-like = see section 7.7) | `Array.from({ length: 4 }, (_, i) => i * i)` | `[0, 1, 4, 9]` | Build from strings, Sets, Maps, NodeLists (lists of page elements from DOM queries), `arguments`, or generate by index |
 | `Array(n).fill(v)` | `new Array(3).fill(0)` | `[0, 0, 0]` | Pre-filled with a **primitive** |
 | Spread | `[...set]`, `[...'abc']` | copy of any iterable | Copy or convert |
 | `str.split(sep)` | `'a,b'.split(',')` | `['a', 'b']` | From text |
 
 ```js
-console.log(new Array(3), new Array(3).length, new Array('a', 'b', 'c'), new Array(3, 4));
-console.log(Array.of(3), Array.of(1, 2, 3));
-console.log(Array.from('hey'), Array.from({ length: 4 }, (_, i) => i * i), Array.from(new Set([1, 1, 2])));
-console.log(new Array(3).fill(0), Array(2).fill().map(() => []));
+new Array(3);          // [ <3 empty items> ]  (length 3)
+new Array(3, 4);       // [ 3, 4 ]
+Array.of(3);           // [ 3 ]
+Array.from('hey');     // [ 'h', 'e', 'y' ]
+Array(2).fill().map(() => []);   // [ [], [] ]
 ```
 
-Output:
-
-```text
-[ <3 empty items> ] 3 [ 'a', 'b', 'c' ] [ 3, 4 ]
-[ 3 ] [ 1, 2, 3 ]
-[ 'h', 'e', 'y' ] [ 0, 1, 4, 9 ] [ 1, 2 ]
-[ 0, 0, 0 ] [ [], [] ]
-```
-
-The `new Array` constructor (a function called with `new` to build an object) is inconsistent: **one** numeric argument means "length", but two arguments mean "these elements". And `new Array(5)` does not contain five `undefined` values — it contains five **empty slots** (holes; section 7.3). `Array.of` and `Array.from` were added in ES2015 to avoid both surprises.
+The `new Array` **constructor** (called with `new` to build an object) is inconsistent: **one** number means length, two arguments mean elements — and `new Array(5)` holds five **empty slots** (holes, §7.3), not `undefined`s. `Array.of`/`Array.from` (ES2015) avoid both surprises.
 
 ---
 
@@ -110,9 +90,7 @@ red blue blue undefined
 [ 'red', 'green', 'purple' ]
 ```
 
-- `colors[0]` is the first element; the last is `colors[colors.length - 1]` or, more readably, **`colors.at(-1)`** (ES2022 — negative indexes count from the end).
-- Reading an index that doesn't exist gives `undefined` — not an error.
-- Assigning to an existing index replaces that element; the array itself is changed in place.
+Last element: `colors[colors.length - 1]` or **`colors.at(-1)`** (ES2022, negatives from the end). Missing index → `undefined` (no error). Assigning to an index changes the array in place.
 
 ### The four end-methods
 
@@ -136,7 +114,7 @@ Output:
 | `unshift(...items)` | adds at the **start** | new length | **O(n)** — every element shifts up one index |
 | `shift()` | removes from the **start** | the removed item | **O(n)** |
 
-(O(1) means the time doesn't grow with the array size; O(n) means it grows in proportion to the number of elements. See [Chapter 17](../17-javascript-for-interviews/README.md) for complexity basics.) So `push`/`pop` make a fast **stack** (last in, first out — like a pile of plates); using `shift` as a **queue** (first in, first out — like a line at a shop) on huge arrays is slow — for big queues use an index pointer or a linked structure (items that each point to the next, so removing the first never moves the others).
+(O(1): time independent of size; O(n): grows with element count — [Chapter 17](../17-javascript-for-interviews/README.md).) `push`/`pop` make a fast **stack** (last in, first out); `shift` as a **queue** (first in, first out) is slow on huge arrays — use an index pointer or a linked structure (each item points to the next, so removing the first moves nothing).
 
 ### `length` is writable, and holes
 
@@ -161,32 +139,23 @@ Output:
 [ 1, <1 empty item>, 3 ] 2 [ 1, 'U', 3 ] [ 1, <1 empty item>, 3 ]
 ```
 
-- Setting `length` smaller **deletes** elements; `arr.length = 0` empties the array in place (every reference sees the empty array).
-- Writing beyond the end makes a **sparse array**: the missing positions are **holes** (`3 in letters` is `false`). Reading a hole gives `undefined`, but many methods (`forEach`, `map`, `filter`, `reduce`, `some`, `every`) **skip** holes, while newer ones (`for…of`, `find`, `includes`, `Array.from`, `toSorted`, `with`, …) treat them as `undefined`. Avoid holes — they are confusing and make engines de-optimise the array (switch it to a slower general-purpose storage mode).
+- Shrinking `length` **deletes** elements; `arr.length = 0` empties in place (all references see it).
+- Writing past the end makes a **sparse array** with **holes** (`3 in letters` is `false`). Holes read as `undefined`; `forEach`, `map`, `filter`, `reduce`, `some`, `every` **skip** them, while `for…of`, `find`, `includes`, `Array.from`, `toSorted`, `with` treat them as `undefined`. Avoid holes — confusing, and engines de-optimise the array (switch to slower general storage).
 
 ### Looping over an array
 
 ```js
-for (let i = 0; i < colors.length; i++) process.stdout.write(`${i}:${colors[i]} `);
-for (const c of colors) process.stdout.write(c + ' ');
-colors.forEach((c, i) => process.stdout.write(`[${i}]${c} `));
-for (const [i, c] of colors.entries()) process.stdout.write(`${i}=${c} `);
-```
-
-Output (one line per loop):
-
-```text
-0:red 1:green 2:purple 
-red green purple 
-[0]red [1]green [2]purple 
-0=red 1=green 2=purple 
+for (let i = 0; i < colors.length; i++) process.stdout.write(`${i}:${colors[i]} `);  // 0:red 1:green 2:purple
+for (const c of colors) process.stdout.write(c + ' ');                                // red green purple
+colors.forEach((c, i) => process.stdout.write(`[${i}]${c} `));                         // [0]red [1]green [2]purple
+for (const [i, c] of colors.entries()) process.stdout.write(`${i}=${c} `);           // 0=red 1=green 2=purple
 ```
 
 | Loop | Index? | `break`/`continue`? | `await` inside works sequentially? | Notes |
 |---|---|---|---|---|
 | Classic `for (let i…)` | Yes | Yes | Yes | Most control (step by 2, go backwards) |
 | `for (const x of arr)` | Via `arr.entries()` | Yes | Yes | Cleanest default |
-| `arr.forEach(fn)` | Yes (2nd arg) | **No** | **No** (async callbacks aren't awaited — `await` pauses until a result that arrives later is ready, [Chapter 12](../12-asynchronous-javascript/README.md)) | Fine for simple side effects (actions like printing, rather than computing a value) |
+| `arr.forEach(fn)` | Yes (2nd arg) | **No** | **No** (async callbacks aren't awaited — [Chapter 12](../12-asynchronous-javascript/README.md)) | Fine for simple side effects (printing etc.) |
 | `for (const i in arr)` | Yes, as **strings** | Yes | Yes | **Avoid** for arrays: iterates keys, includes inherited enumerable ones (loop-visible properties added to `Array.prototype`) |
 
 ### Arrays are references
@@ -202,24 +171,24 @@ Output:
 object [ 1, 2, 3 ] true false
 ```
 
-Like objects ([Chapter 5](../05-objects-math-date-and-json/README.md)), assigning an array copies the reference; `===` compares identity, not contents; and `const` stops re-assignment but not `push`.
+As with objects ([Chapter 5](../05-objects-math-date-and-json/README.md)): assignment copies the reference, `===` compares identity, `const` blocks reassignment but not `push`.
 
 ### Self-check
-1. `[1, 2, 3].push(4)` returns? → `4` (the new length).
+1. `[1, 2, 3].push(4)` returns? → `4` (new length).
 2. Last element without `length - 1`? → `arr.at(-1)`.
 3. `new Array(2)` vs `Array.of(2)`? → two empty slots vs `[2]`.
-4. Why avoid `for…in` on arrays? → It yields string keys, also visits extra and inherited enumerable properties, and isn't meant for ordered iteration — use `for…of`.
+4. Why avoid `for…in` on arrays? → String keys, visits extra/inherited enumerable properties, not meant for ordered iteration.
 
 ---
 
 ## 7.4 The methods table: mutating vs non-mutating
 
 ### Why it matters
-A **mutating** method changes the array it's called on. That is fine for a local array you own — but if the array is shared (passed into a function, stored in React state, cached), mutation changes it for **everybody** holding a reference. React compares state (the data a component displays) by reference, so mutating an array in place means React may not re-render (redraw that part of the screen) at all. ES2023 added **copying** versions of the classic mutators so you rarely need the old "copy then mutate" dance.
+A **mutating** method changes the array it's called on — fine for a local array, but if it's shared (passed in, in React state, cached) everyone holding a reference sees the change. React compares state by reference, so in-place mutation may mean no **re-render** (redraw). ES2023 added **copying** versions of the classic mutators.
 
 ### Complete reference
 
-`length` is the only instance **property** you'll use; everything else is a method. ✎ = mutates the original.
+`length` is the only instance **property** you'll use. ✎ = mutates the original.
 
 | Method | ✎ | What it does / returns | Added |
 |---|---|---|---|
@@ -250,13 +219,13 @@ A **mutating** method changes the array it's called on. That is fine for a local
 | `at(i)` | | Element at `i`; negatives from the end | ES2022 |
 | `join(sep = ',')` | | String of elements; `null`/`undefined` → empty | ES1 |
 | `toString()` / `toLocaleString()` | | Comma-joined string / locale-formatted | ES1 |
-| `keys()` / `values()` / `entries()` | | Iterators (objects that hand out values one at a time, [Chapter 8](../08-maps-sets-iterators-and-generators/README.md)) over indexes / values / `[index, value]` pairs | ES2015 |
+| `keys()` / `values()` / `entries()` | | Iterators (hand out values one at a time, [Chapter 8](../08-maps-sets-iterators-and-generators/README.md)) over indexes / values / `[index, value]` pairs | ES2015 |
 | **Static**: `Array.isArray(x)`, `Array.of(...)`, `Array.from(x, fn?)`, `Array.fromAsync(x)` | | Test / create arrays (`fromAsync` awaits async iterables; ES2026, already in Node 24) | ES5–ES2026 |
 
-(You may see `toSource()` in old lists; it was a non-standard Firefox-only method and has been removed — ignore it.)
+(`toSource()` in old lists was a non-standard, now-removed Firefox method — ignore it.)
 
 ### Mutators vs copying twins in action
-From [`code/02_mutating_vs_copying.mjs`](code/02_mutating_vs_copying.mjs) — a small `show(label, returnValue, original)` helper prints what the call returned, then the original array afterwards (the file also demonstrates `reverse`, `fill` and `copyWithin`):
+From [`code/02_mutating_vs_copying.mjs`](code/02_mutating_vs_copying.mjs) — `show(label, returnValue, original)` prints the return value, then the original afterwards (the file also demos `reverse`, `fill`, `copyWithin`):
 
 ```js
 let arr = ['a', 'b', 'c', 'd', 'e'];
@@ -298,7 +267,7 @@ concat([4], 5)             [3,1,2,4,5]            original: [3,1,2]
 [...base, 4]               [3,1,2,4]              original: [3,1,2]
 ```
 
-`splice` is the do-everything mutator: *where* to start, *how many* to delete, then *what* to insert. `sort` returns **the same array** (`sorted === arr` is `true`) — a frequent source of "I sorted a copy… oh wait". The four ES2023 methods (the "change array by copy" proposal) return a fresh array and leave the original alone. They are supported in all current browsers and Node 20+.
+`splice` does everything: *where*, *how many* to delete, *what* to insert. `sort` returns **the same array** (`sorted === arr`). The four ES2023 "change array by copy" methods leave the original alone; supported in all current browsers and Node 20+.
 
 ### A real bug: a helper that mutates its argument
 
@@ -318,7 +287,7 @@ Output:
 [ 90, 70 ] caller still sees [ 50, 90, 70 ]
 ```
 
-The "bad" version silently reorders the caller's data. Before ES2023 the fix was `[...scores].sort(...)` or `scores.slice().sort(...)`; today `toSorted` says it directly.
+The bad version silently reorders the caller's data. Pre-ES2023 fix: `[...scores].sort(...)` / `scores.slice().sort(...)`.
 
 ### Immutable update cheat sheet (React/Redux style)
 
@@ -334,20 +303,20 @@ The "bad" version silently reorders the caller's data. Before ES2023 the fix was
 | Sort / reverse | `arr.sort(fn)` / `arr.reverse()` | `arr.toSorted(fn)` / `arr.toReversed()` |
 
 ### Common mistakes
-- Using `sort`/`reverse`/`splice` on props (the inputs a React component receives from its parent) or state; use the copying twins.
-- Confusing `slice` (copy a range, non-mutating) with `splice` (edit in place).
-- Expecting `push` to return the array (it returns the new length), so `arr = arr.push(x)` turns `arr` into a number.
-- Thinking `const arr = […]` prevents `push`; freeze it with `Object.freeze(arr)` if needed (shallow).
+- `sort`/`reverse`/`splice` on React props (a component's inputs from its parent) or state — use the copying twins.
+- Confusing `slice` (copy a range) with `splice` (edit in place).
+- `arr = arr.push(x)` — `push` returns the new length.
+- Thinking `const` prevents `push`; use `Object.freeze(arr)` (shallow) if needed.
 
 ---
 
 ## 7.5 Iteration methods: map, filter, reduce and friends
 
 ### What it is
-These methods take a **callback** — a function you pass in — and call it for each element with three arguments: `(element, index, array)`. They let you describe *what* to do with each element instead of writing loop bookkeeping. This style is called **declarative** (say what you want) as opposed to **imperative** (say how to loop).
+These methods call a **callback** per element with `(element, index, array)`, describing *what* to do (**declarative**) rather than *how to loop* (**imperative**).
 
 ### How it works
-From [`code/03_iteration_methods.mjs`](code/03_iteration_methods.mjs), using this data:
+From [`code/03_iteration_methods.mjs`](code/03_iteration_methods.mjs), with:
 
 ```js
 const orders = [
@@ -361,7 +330,6 @@ const orders = [
 **`forEach`, `map`, `filter`, `reduce`:**
 
 ```js
-orders.forEach((o, i) => console.log(i, o.id, o.customer));
 console.log(orders.map((o) => o.total));
 console.log(['1', '2', '3'].map(Number), ['1', '2', '3'].map(parseInt)); // classic trap
 const paid = orders.filter((o) => o.status === 'paid');
@@ -376,10 +344,6 @@ console.log(['a', 'b', 'c'].reduceRight((acc, x) => acc + x, ''));
 Output:
 
 ```text
-0 1 Ana
-1 2 Ben
-2 3 Ana
-3 4 Cy
 [ 120, 35, 60, 250 ]
 [ 1, 2, 3 ] [ 1, NaN, NaN ]
 [ 1, 3 ]
@@ -395,15 +359,9 @@ cba
 | `filter` | truthy/falsy | new array, **same or fewer** elements | "keep some" |
 | `reduce` | the new accumulator (the running result carried from one step to the next) | the final accumulator | "combine all into one" |
 
-How `reduce` works, step by step, for `sum` over totals `[120, 60]` with initial value `0`:
+`reduce` summing `[120, 60]` from `0`: `0 + 120 → 120`, `120 + 60 → 180`, done → `180`. **Always pass the initial value** — without it the first element is the start, which throws on empty arrays and gives wrong types when building objects.
 
-1. `sum = 0` (the initial value), element 120 → returns 120.
-2. `sum = 120`, element 60 → returns 180.
-3. No elements left → `reduce` returns 180.
-
-**Always pass the initial value.** Without it, `reduce` uses the first element as the starting accumulator — which throws on an empty array and gives wrong types when you're building an object.
-
-**The `map(parseInt)` trap**: `map` passes `(element, index, array)`, and `parseInt` takes `(string, radix)` (radix = the number base, such as 10), so it is called as `parseInt('2', 1)` and `parseInt('3', 2)` — invalid radix and invalid digit → `NaN`. Wrap it: `map((s) => parseInt(s, 10))` or use `map(Number)`.
+**The `map(parseInt)` trap:** `map` passes `(element, index, array)` and `parseInt` takes `(string, radix)`, so it runs `parseInt('2', 1)`, `parseInt('3', 2)` → `NaN`. Use `map((s) => parseInt(s, 10))` or `map(Number)`.
 
 **Chaining into a pipeline:**
 
@@ -423,7 +381,7 @@ Output:
 1:132.00, 3:66.00, 2:38.50
 ```
 
-Each step returns a new array, so steps chain naturally and the original `orders` is never modified. Each step also loops over the data once; for normal UI-sized lists (hundreds or thousands) that's irrelevant, but for millions of rows a single `for` loop or lazy iterator helpers (lazy = each value is computed only when it is asked for) ([Chapter 8](../08-maps-sets-iterators-and-generators/README.md)) avoid building intermediate arrays.
+Each step returns a new array (originals untouched) and loops once; irrelevant for UI-sized lists, but for millions of rows a single loop or **lazy** iterator helpers (values computed only when asked, [Chapter 8](../08-maps-sets-iterators-and-generators/README.md)) avoid intermediate arrays.
 
 **Searching:**
 
@@ -455,7 +413,7 @@ true -1 1 3 false
 | Does any element pass? | `some` | `false` (also for an empty array) |
 | Do all elements pass? | `every` | `true` for an empty array ("vacuous truth") |
 
-`find`, `some` and `every` **stop early** as soon as the answer is known. Note that `includes` and `indexOf` compare with `===`-style equality, so `includes('2')` doesn't find the number 2, and searching for an *object* only works with the same reference — use `some((o) => o.id === id)` for objects.
+`find`, `some`, `every` **stop early**. `includes`/`indexOf` use `===`-style equality — `includes('2')` misses the number 2, and objects match only by reference; use `some((o) => o.id === id)`.
 
 **Flattening:**
 
@@ -475,29 +433,9 @@ Output:
 [ 2, 20, 4, 40 ]
 ```
 
-`flat(depth)` removes `depth` levels of nesting (default 1; `Infinity` for all). `flatMap` maps each element to an *array* and joins the results one level deep — returning `[]` drops an element, returning several items expands it, so it can filter and map in a single pass.
+`flat(depth)` removes `depth` nesting levels (default 1; `Infinity` = all). `flatMap` maps to *arrays* and joins one level — `[]` drops an element, several items expand it — filter + map in one pass.
 
-**Iterators, joining, and the callback signature:**
-
-```js
-console.log([...['x', 'y'].keys()], [...['x', 'y'].values()], [...['x', 'y'].entries()]);
-console.log([1, [2, 3], null, undefined, 4].join('-'), String([1, [2, 3]]), [1234.5, 99].toLocaleString('de-DE'));
-console.log(['a', 'b'].map((el, idx, arr) => `${el}${idx}/${arr.length}`));
-let seen = 0;
-for (const o of orders) { seen++; if (o.total > 100) break; }
-console.log('stopped after', seen);
-```
-
-Output:
-
-```text
-[ 0, 1 ] [ 'x', 'y' ] [ [ 0, 'x' ], [ 1, 'y' ] ]
-1-2,3---4 1,2,3 1.234,5,99
-[ 'a0/2', 'b1/2' ]
-stopped after 1
-```
-
-`join` turns `null`/`undefined` into empty strings and nested arrays into their comma-joined form. `forEach` has no way to stop early (a `return` inside the callback only ends that one call); use `for…of` with `break`, or `some`/`find`.
+**Iterators and joining:** `[...['x', 'y'].entries()]` → `[ [ 0, 'x' ], [ 1, 'y' ] ]` (`keys()`/`values()` give indexes/values); `[1, [2, 3], null, undefined, 4].join('-')` → `'1-2,3---4'` — `join` makes `null`/`undefined` empty and nested arrays comma-joined. `forEach` can't stop early (`return` ends only that call) — use `for…of` + `break`, or `some`/`find`.
 
 ### Trade-offs: methods vs loops
 
@@ -509,26 +447,26 @@ stopped after 1
 | `await` inside | Callbacks are not awaited sequentially | `for…of` + `await` runs in order |
 | Performance | Slight overhead per call; intermediate arrays | Fastest; one pass |
 
-Use methods by default; switch to a loop when you need early exit, sequential `await` ([Chapter 12](../12-asynchronous-javascript/README.md)), or measured performance.
+Methods by default; loops for early exit, sequential `await` ([Chapter 12](../12-asynchronous-javascript/README.md)), or measured performance needs.
 
 ### Real-world examples
-- Rendering lists in React: `items.map((item) => <Row key={item.id} {...item} />)` ([React book](../../../react/chapters/02-components-and-props/README.md)).
-- API data cleanup: `rows.filter(isValid).map(normalize)`.
-- Totals in a shopping cart: `cart.reduce((sum, i) => sum + i.price * i.qty, 0)`.
-- Feature flags (switches that turn a feature on for some users): `user.roles.some((r) => r === 'admin')`.
+- React lists: `items.map((item) => <Row key={item.id} {...item} />)` ([React book](../../../react/chapters/02-components-and-props/README.md)).
+- API cleanup: `rows.filter(isValid).map(normalize)`.
+- Cart total: `cart.reduce((sum, i) => sum + i.price * i.qty, 0)`.
+- Feature flags (per-user feature switches): `user.roles.some((r) => r === 'admin')`.
 
 ### In the interview
 **30-second answer:** "`map` transforms, `filter` selects, `reduce` folds to one value, `find` returns the first match, `some`/`every` answer yes/no with short-circuiting. They take `(element, index, array)` callbacks and don't mutate. I always give `reduce` an initial value and avoid `forEach` when I need `break` or sequential `await`."
 
-- *Implement `map` with `reduce`.* `arr.reduce((acc, x, i) => { acc.push(fn(x, i, arr)); return acc; }, [])`.
-- *Why does `['1','2','3'].map(parseInt)` return `[1, NaN, NaN]`?* The index is passed as the radix.
-- *`find` vs `filter`?* `find` returns the first element (or `undefined`) and stops; `filter` always scans everything and returns an array.
+- *`map` via `reduce`:* `arr.reduce((acc, x, i) => { acc.push(fn(x, i, arr)); return acc; }, [])`.
+- *`['1','2','3'].map(parseInt)` → `[1, NaN, NaN]`?* The index is passed as the radix.
+- *`find` vs `filter`?* `find` returns the first element (or `undefined`) and stops; `filter` scans all and returns an array.
 
 ### Self-check
 1. `[1, 2, 3].map((x) => x * 2)`? → `[2, 4, 6]`.
 2. `[5, 12, 8].find((x) => x > 6)`? → `12`.
 3. `[].every(Boolean)`? → `true`.
-4. Sum `[1, 2, 3]` with `reduce`. → `arr.reduce((s, x) => s + x, 0)`.
+4. Sum with `reduce`? → `arr.reduce((s, x) => s + x, 0)`.
 5. `[[1], [2, [3]]].flat()`? → `[1, 2, [3]]`.
 
 ---
@@ -536,7 +474,7 @@ Use methods by default; switch to a loop when you need early exit, sequential `a
 ## 7.6 Sorting correctly
 
 ### The problem it solves
-`sort()` with no arguments converts elements to **strings** and orders them by UTF-16 code units (the 16-bit numbers JavaScript uses to store each character). That's right for simple ASCII (plain English letters and digits) words and **wrong for numbers**.
+`sort()` with no arguments converts elements to **strings** and orders by UTF-16 code units — fine for plain ASCII words, **wrong for numbers**.
 
 From [`code/04_sorting.mjs`](code/04_sorting.mjs):
 
@@ -557,13 +495,7 @@ Output:
 ```
 
 ### How it works — the comparator contract
-A **comparator** is a function `(a, b) => number`:
-
-1. Return a **negative** number → `a` comes before `b`.
-2. Return a **positive** number → `b` comes before `a`.
-3. Return **0** → keep their current relative order.
-
-`a - b` does this for numbers (and for Dates, since subtraction converts them to milliseconds). The comparator must be **consistent** — returning a boolean (`a > b`) is a bug: `false` becomes 0 and `true` becomes 1, never negative, so results depend on the engine's algorithm.
+A **comparator** `(a, b) => number` returns **negative** (`a` first), **positive** (`b` first) or **0** (keep relative order). `a - b` works for numbers and Dates (subtraction gives ms). It must be **consistent** — a boolean (`a > b`) is a bug: `false`→0, `true`→1, never negative, so results depend on the engine:
 
 ```js
 console.log('boolean comparator ->', [3, 1, 2].sort((a, b) => a > b));
@@ -606,9 +538,9 @@ Output:
 [ 'test', 'plan', 'write', 'deploy' ]
 ```
 
-- For strings, use **`localeCompare`** (or a reused `Intl.Collator().compare`) — the default order puts all capitals first and accented letters last ([Chapter 6](../06-strings-and-regular-expressions/README.md)).
-- **Multi-key sort**: chain comparisons with `||`. When the first comparison returns 0 (a tie), `||` falls through to the next key. `b.age - a.age` sorts that key descending.
-- **Stability**: since ES2019 `sort` must be **stable** — elements that compare equal keep their original order (`test` stays before `plan`, `write` before `deploy`). That lets you sort by a secondary key first and the primary key second.
+- Strings: **`localeCompare`** (or a reused `Intl.Collator().compare`) — default order puts capitals first, accents last ([Chapter 6](../06-strings-and-regular-expressions/README.md)).
+- **Multi-key sort**: chain with `||` — a tie (0) falls through to the next key; `b.age - a.age` sorts descending.
+- **Stability**: since ES2019 `sort` is **stable** — equal elements keep their order (`test` before `plan`), so you can sort by a secondary key, then the primary.
 
 ### Computed keys, booleans, dates
 
@@ -632,7 +564,7 @@ Output:
 [ '2023-12-25', '2024-01-15', '2024-03-01' ]
 ```
 
-When the sort key is expensive to compute (parsing a date string, normalizing text), compute it **once per element** first, sort by the stored key, then strip it — the "decorate–sort–undecorate" pattern (Schwartzian transform). Otherwise the comparator recomputes keys O(n log n) times (a bit more than proportional to *n* — the usual cost of a good sort).
+For expensive keys (parsing dates, normalizing text) compute each **once**, sort by it, strip it — "decorate–sort–undecorate" (Schwartzian transform) — instead of recomputing in the comparator O(n log n) times (the usual cost of a good sort).
 
 ### Shuffling
 
@@ -647,21 +579,21 @@ function shuffle(arr, rand = Math.random) {
 }
 ```
 
-This is the **Fisher–Yates** shuffle: walk from the end, swapping each position with a random earlier (or same) position — every ordering is equally likely, in O(n). The popular one-liner `arr.sort(() => Math.random() - 0.5)` is **biased** (the comparator is inconsistent) and slower. (The demo passes a seeded generator — a fake random-number source that always produces the same sequence from the same starting "seed" — so its output is reproducible: `[ 1, 2, 5, 6, 3, 4 ]`.)
+**Fisher–Yates**: from the end, swap each position with a random earlier-or-same one — every ordering equally likely, O(n). `arr.sort(() => Math.random() - 0.5)` is **biased** (inconsistent comparator) and slower. (The demo uses a **seeded** generator — same sequence from the same seed — so its output is reproducible: `[ 1, 2, 5, 6, 3, 4 ]`.)
 
 ### Complexity
-V8 (Chrome, Node) implements `sort` with TimSort and other engines use merge-sort variants (sorting algorithms that split the list, sort the parts and merge them back): **O(n log n)** comparisons, stable, and fast on partly-sorted data.
+V8 uses TimSort; other engines use merge-sort variants (split, sort parts, merge): **O(n log n)**, stable, fast on partly-sorted data.
 
 ### In the interview
-**30-second answer:** "Default `sort` compares strings, so numbers need `(a, b) => a - b`. The comparator returns negative, zero or positive; chain keys with `||`; strings use `localeCompare`. `sort` mutates and is stable since ES2019; use `toSorted` to keep the original."
+**30-second answer:** "Default `sort` compares strings, so numbers need `(a, b) => a - b`. The comparator returns negative, zero or positive; chain keys with `||`; strings use `localeCompare`. `sort` mutates and is stable since ES2019; `toSorted` keeps the original."
 
-- *Sort objects by `lastName`, then `firstName`?* `(a, b) => a.lastName.localeCompare(b.lastName) || a.firstName.localeCompare(b.firstName)`.
-- *Why not shuffle with `sort(() => Math.random() - 0.5)`?* Biased and O(n log n); use Fisher–Yates.
+- *By `lastName`, then `firstName`?* `(a, b) => a.lastName.localeCompare(b.lastName) || a.firstName.localeCompare(b.firstName)`.
+- *Why not `sort(() => Math.random() - 0.5)`?* Biased and O(n log n); use Fisher–Yates.
 
 ### Self-check
 1. `[2, 10, 1].sort()`? → `[1, 10, 2]`.
 2. Descending numeric comparator? → `(a, b) => b - a`.
-3. What does "stable" mean? → Equal elements keep their original relative order.
+3. "Stable"? → Equal elements keep their original relative order.
 
 ---
 
@@ -704,11 +636,11 @@ h 3
 6 30
 ```
 
-- **Spread** `...arr` expands any **iterable** (array, string, Set, Map, generator) into elements — in array literals and in function calls.
-- **Array destructuring** assigns by **position**. Defaults apply for `undefined`; commas skip positions; `...rest` gathers the remainder (always an array, possibly empty).
-- `[p, q] = [q, p]` swaps two variables.
-- Returning an array and destructuring it (`const [lo, hi] = minMax(...)`) is a light way to return multiple values — React's `const [state, setState] = useState(0)` (a *hook* that gives a component a remembered value plus a function to change it) uses exactly this.
-- A **rest parameter** `(...nums)` collects any number of arguments into a real array (replacing the old `arguments` object — [Chapter 4](../04-functions-scope-and-closures/README.md)).
+- **Spread** `...arr` expands any **iterable** (array, string, Set, Map, generator) in literals and calls.
+- **Array destructuring** assigns by **position**; defaults for `undefined`; commas skip; `...rest` gathers the remainder (always an array).
+- `[p, q] = [q, p]` swaps.
+- Returning an array to destructure is a light multi-value return — React's `const [state, setState] = useState(0)` (a *hook* giving a component a remembered value plus a setter).
+- A **rest parameter** `(...nums)` collects arguments into a real array (replacing `arguments` — [Chapter 4](../04-functions-scope-and-closures/README.md)).
 
 ### Copies are shallow; the `fill([])` trap
 
@@ -733,10 +665,10 @@ Output:
 [ [ 'x' ], [ 'x' ], [ 'x' ] ] [ [ 'x' ], [], [] ]
 ```
 
-`[...arr]`, `slice()`, `concat()` and `Array.from(arr)` copy only the outer array; inner arrays/objects are shared. `structuredClone` copies deeply. `fill(obj)` puts the **same** object into every slot; use `Array.from({ length }, () => newThing)` to create a fresh one per slot — the standard way to build a 2-D grid.
+`[...arr]`, `slice()`, `concat()`, `Array.from(arr)` copy only the outer array; `structuredClone` copies deeply. `fill(obj)` puts the **same** object in every slot — `Array.from({ length }, () => newThing)` creates one per slot (the standard 2-D grid builder).
 
 ### Array-likes
-An **array-like** is an object with numeric keys and a `length` but without array methods — the old `arguments` object, DOM `NodeList`/`HTMLCollection`, strings. Convert with `Array.from` (or spread, if it's iterable), or borrow a method with `call`:
+An **array-like** has numeric keys and `length` but no array methods — `arguments`, DOM `NodeList`/`HTMLCollection`, strings. Convert with `Array.from` (or spread if iterable), or borrow a method with `call`:
 
 ```js
 const arrayLike = { 0: 'a', 1: 'b', length: 2 };
@@ -771,7 +703,7 @@ Output of the demo calls:
 true true
 ```
 
-The last `true` is `[1, 2] == '1,2'` — loose equality converts the array to the string `'1,2'`. Never compare arrays with `==`/`===`; compare element by element (as `arraysEqual` does) or, for simple data, compare `JSON.stringify` results. Grouping arrays into objects/Maps (`Object.groupBy`) is in [Chapter 8](../08-maps-sets-iterators-and-generators/README.md).
+The last `true` is `[1, 2] == '1,2'` — loose equality stringifies the array. Never compare arrays with `==`/`===`; compare element by element (`arraysEqual`) or, for simple data, `JSON.stringify` results. Grouping (`Object.groupBy`): [Chapter 8](../08-maps-sets-iterators-and-generators/README.md).
 
 ---
 
@@ -809,19 +741,19 @@ Banana tart
 yellow
 ```
 
-A simple **ordered list** of names is an array. Once each fruit carries its own **details** looked up by name, an object keyed by name reads better. Real apps usually hold an **array of objects** and, when lookups by id become frequent, build an index: `Object.fromEntries(list.map((x) => [x.id, x]))` or `new Map(list.map((x) => [x.id, x]))` ([Chapter 8](../08-maps-sets-iterators-and-generators/README.md)).
+An ordered list is an array; details looked up by name suit an object keyed by name. Real apps hold an **array of objects** and, when id lookups get frequent, build an index: `Object.fromEntries(list.map((x) => [x.id, x]))` or `new Map(list.map((x) => [x.id, x]))` ([Chapter 8](../08-maps-sets-iterators-and-generators/README.md)).
 
 ### Common mistakes
-- Using `arr.includes(x)` or `arr.find(...)` inside a loop over another big array — O(n²). Build a `Set` or `Map` first.
-- Using an object with numeric keys as a list — you lose `length`, order guarantees are subtler, and no array methods.
-- Using an array as a dictionary (`arr['name'] = …`) — it works (arrays are objects) but `length` ignores it and methods skip it.
+- `arr.includes(x)`/`arr.find(...)` inside a loop over another big array — O(n²); build a `Set`/`Map` first.
+- Object with numeric keys as a list — no `length`, subtler ordering, no array methods.
+- Array as a dictionary (`arr['name'] = …`) — works (arrays are objects) but `length` and methods ignore it.
 
 ---
 
 ## 7.9 Typed arrays (a short note)
 
 ### What it is
-A **typed array** is a fixed-length array of raw numbers of one machine type (8-bit unsigned integers, 32-bit floats, …) stored in a contiguous block of memory called an **`ArrayBuffer`**. Several typed-array **views** can look at the same buffer in different ways. They're used for binary data: files, images, audio, WebGL/WebGPU (browser APIs for GPU graphics), WebSockets (a two-way, always-open connection between browser and server), `fetch` bodies, WebAssembly memory (WebAssembly runs fast compiled code from languages like C or Rust in the browser), and Node's `Buffer` (a `Uint8Array` subclass — a specialised version that inherits all its behaviour).
+A **typed array** is a fixed-length array of raw numbers of one machine type (8-bit unsigned integers, 32-bit floats, …) over a contiguous memory block, an **`ArrayBuffer`**; several typed-array **views** can read the same buffer differently. Used for binary data: files, images, audio, WebGL/WebGPU (GPU graphics APIs), WebSockets (always-open two-way browser–server connections), `fetch` bodies, WebAssembly memory (fast compiled code from C/Rust in the browser), and Node's `Buffer` (a `Uint8Array` subclass).
 
 From [`code/06_typed_arrays.mjs`](code/06_typed_arrays.mjs):
 
@@ -869,17 +801,17 @@ Uint8Array(2) [ 171, 205 ] abcd
 | `Float16Array` (ES2025) / `Float32Array` / `Float64Array` | 2 / 4 / 8 bytes | half / single / double precision |
 | `BigInt64Array` / `BigUint64Array` | 8 bytes | 64-bit integers as BigInt |
 
-Key differences from normal arrays: **fixed length** (no `push`, `pop`, `splice`), every value is **coerced** to the element type (`256` wraps to `0` in a `Uint8Array`; `-1` becomes `255`), and `Array.isArray` is `false`. Byte order (**endianness**) follows the machine for typed arrays; `DataView` lets you choose it explicitly, which binary file formats and network protocols need.
+vs normal arrays: **fixed length** (no `push`/`pop`/`splice`), values **coerced** to the element type (`256` wraps to `0` in `Uint8Array`, `-1` → `255`), `Array.isArray` is `false`. Byte order (**endianness**) follows the machine; `DataView` chooses it explicitly, as binary formats and network protocols require.
 
 ---
 
 ## Chapter TL;DR
 
-- Arrays are ordered, zero-indexed lists — and objects (`typeof` → `'object'`; test with `Array.isArray`). Create with literals; use `Array.from({ length }, fn)` / `Array.of` instead of the quirky `new Array`.
-- Read with `arr[i]` or `arr.at(-1)`; missing index → `undefined`. `length` is writable; avoid holes.
-- `push`/`pop` are O(1) at the end; `unshift`/`shift` are O(n) at the start. `push` returns the new length.
-- **Mutators**: `push pop shift unshift splice sort reverse fill copyWithin`. **Copying twins (ES2023)**: `toSorted toReversed toSpliced with`. Non-mutating: `slice concat map filter flat flatMap` and spread. Never mutate shared state/props.
-- `map` transforms, `filter` selects, `reduce` folds (always pass the initial value), `find`/`findLast` return the element, `findIndex` the index, `some`/`every` short-circuit, `includes` finds `NaN`, `flat`/`flatMap` flatten. `forEach` can't `break` or await.
-- Default `sort` is by string; pass `(a, b) => a - b` for numbers, `localeCompare` for text, chain keys with `||`. Sort is stable (ES2019). Shuffle with Fisher–Yates.
-- Spread copies shallowly; `structuredClone` deep-copies; `Array(n).fill([])` shares one object. Destructure by position, swap with `[a, b] = [b, a]`.
-- Arrays for ordered lists, objects for records, Map/Set for lookups and uniqueness. Typed arrays hold fixed-length binary numbers over an `ArrayBuffer`.
+- Arrays are ordered, zero-indexed lists — and objects (`typeof` → `'object'`; `Array.isArray`). Literals; `Array.from({ length }, fn)` / `Array.of` instead of quirky `new Array`.
+- `arr[i]` or `arr.at(-1)`; missing index → `undefined`. `length` is writable; avoid holes.
+- `push`/`pop` O(1) at the end; `unshift`/`shift` O(n) at the start; `push` returns the new length.
+- **Mutators**: `push pop shift unshift splice sort reverse fill copyWithin`. **Copying twins (ES2023)**: `toSorted toReversed toSpliced with`. Non-mutating: `slice concat map filter flat flatMap`, spread. Never mutate shared state/props.
+- `map` transforms, `filter` selects, `reduce` folds (pass the initial value), `find`/`findLast` element, `findIndex` index, `some`/`every` short-circuit, `includes` finds `NaN`, `flat`/`flatMap` flatten. `forEach` can't `break` or await.
+- Default `sort` is by string; `(a, b) => a - b` for numbers, `localeCompare` for text, chain keys with `||`. Stable since ES2019. Shuffle with Fisher–Yates.
+- Spread copies shallowly; `structuredClone` deep; `Array(n).fill([])` shares one object. Destructure by position; swap with `[a, b] = [b, a]`.
+- Arrays for ordered lists, objects for records, Map/Set for lookups and uniqueness. Typed arrays: fixed-length binary numbers over an `ArrayBuffer`.

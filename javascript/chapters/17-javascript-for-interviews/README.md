@@ -1,13 +1,13 @@
 # Chapter 17 — JavaScript for Interviews
 
-A JavaScript interview usually has three parts. A **coding round** asks you to solve an algorithm (a step-by-step method for solving a problem) problem (in JavaScript, so you need to know which built-ins are fast and which are traps). A **"build it yourself" round** asks you to write a utility that libraries normally give you — `debounce`, `Promise.all`, a deep clone. And a **language round** throws short snippets at you and asks "what does this print, and why?". This chapter prepares all three. It does not re-teach the language: every answer links to the section of this book that explains it fully.
+A JavaScript interview usually has three parts: a **coding round** (an algorithm problem, in JavaScript — so know which built-ins are fast and which are traps), a **"build it yourself" round** (a utility libraries normally give you — `debounce`, `Promise.all`, a deep clone), and a **language round** ("what does this print, and why?"). This chapter prepares all three without re-teaching the language: answers link to the sections that teach it, and to the [Chapter 19 question bank](../19-interview-question-bank/README.md) for say-it-out-loud answers.
 
 **What you'll learn**
 
-1. The JavaScript **DSA toolkit** (DSA = data structures and algorithms, §17.1): arrays as stacks and queues, `Map`/`Set`, sorting comparators and stability, number pitfalls (`0.1 + 0.2`, safe integers, integer division), building strings, `BigInt` — with a complexity table.
-2. **Twenty-one coding patterns** — two pointers, sliding window, hashing, stack, prefix sums, intervals, heap (with a hand-written `MinHeap`, since JavaScript has none, plus two heaps for a running median and k-way merge), binary search, BFS (breadth-first search), DFS (depth-first search), dynamic programming with memoization, backtracking, linked lists, fast & slow pointers, trees, tries, topological sort and union-find, greedy, sort & search (quickselect, Dutch flag, merge sort), bit manipulation, math & geometry — each with two or three classic problems in runnable, asserted code.
-3. **Implement-from-scratch classics** with tests: `debounce`, `throttle`, `curry`, `compose`/`pipe`, `memoize`, `flatten`, a `bind` polyfill (your own implementation of a built-in feature), deep clone (`structuredClone` vs manual), deep equal, an LRU (least recently used) cache, an `EventEmitter`, and `Promise.all`/`allSettled`/`race`/`any` polyfills.
-4. **Fifty-three tricky questions** with real outputs: coercion (JavaScript's automatic conversion between types), equality, `typeof null`, `NaN`, hoisting and the TDZ, closures in loops, `this`, arrow vs regular functions, prototypes, classes, event-loop ordering puzzles, shallow vs deep copies, garbage collection (the engine automatically freeing memory nothing uses any more) and memory leaks.
+1. The JavaScript **DSA toolkit** (data structures and algorithms, §17.1): arrays as stacks/queues, `Map`/`Set`, sort comparators and stability, number pitfalls, building strings, `BigInt` — with a complexity table.
+2. **Twenty-one coding patterns** (§17.2), each with two or three classic problems in runnable, asserted code — including a hand-written `MinHeap`, since JavaScript has none.
+3. **Implement-from-scratch classics** with tests (§17.3): `debounce`, `throttle`, `curry`, `compose`/`pipe`, `memoize`, `flatten`, a `bind` polyfill, deep clone, deep equal, an LRU cache, an `EventEmitter`, `Promise` combinator polyfills.
+4. **Fifty-three tricky questions** with real outputs (§17.4): coercion (automatic type conversion), equality, hoisting and the TDZ, closures, `this`, prototypes, event-loop order, copies, garbage collection (automatic freeing of unreachable memory) and leaks.
 
 **Before you start.** This chapter assumes the whole book up to [Chapter 16](../16-testing-and-typescript/README.md). The tests use `node:assert/strict` and fake timers from `node:test`, explained in [§16.2](../16-testing-and-typescript/README.md#162-assertions-with-nodeassertstrict) and [§16.5](../16-testing-and-typescript/README.md#165-test-doubles-and-mocking). The same patterns are solved in Python in the Python Handbook's [Chapter 19: Python for Coding Interviews](../../../python/chapters/19-python-for-coding-interviews/README.md) — handy for comparing; here we focus on what is specific to JavaScript.
 
@@ -21,7 +21,7 @@ All code is in [`code/`](code/). Every program checks itself with `assert` and e
 | [`04_classics_functions.mjs`](code/04_classics_functions.mjs) | debounce, throttle, curry, compose/pipe, memoize, flatten, bind/call |
 | [`05_classics_data.mjs`](code/05_classics_data.mjs) | structuredClone, deepClone, deepEqual, LRU cache, EventEmitter |
 | [`06_promise_polyfills.mjs`](code/06_promise_polyfills.mjs) | all/allSettled/race/any, timeout, promisify, pool, retry |
-| [`07_qa_language.js`](code/07_qa_language.js) | Outputs for the language questions (CommonJS, sloppy mode — i.e. non-strict mode — on purpose) |
+| [`07_qa_language.js`](code/07_qa_language.js) | Outputs for the language questions (CommonJS, sloppy — non-strict — mode on purpose) |
 | [`08_qa_async_and_memory.mjs`](code/08_qa_async_and_memory.mjs) | Outputs for event-loop, strict-mode and memory questions |
 | [`09_patterns_lists_trees_tries.mjs`](code/09_patterns_lists_trees_tries.mjs) | Linked lists, fast & slow pointers, trees, tries (Patterns 13–16) |
 | [`10_patterns_graphs_greedy_bits_math.mjs`](code/10_patterns_graphs_greedy_bits_math.mjs) | Topological sort, union-find, greedy, quickselect/Dutch flag/merge sort, bits, math & geometry (Patterns 17–21) |
@@ -31,30 +31,29 @@ All code is in [`code/`](code/). Every program checks itself with `assert` and e
 ## 17.1 The JavaScript DSA toolkit
 
 ### What it is
-**DSA** means *data structures and algorithms*. In an interview you have to turn an idea ("use a queue", "count with a hash map") into working code quickly. JavaScript gives you fewer ready-made structures than Java or Python — no priority queue (always hands back the smallest or most urgent item), no deque (double-ended queue: add/remove at both ends), no sorted map (keeps keys in order) — so you need to know what the built-ins really cost and how to fill the gaps.
+You must turn an idea ("use a queue", "count with a hash map") into working code fast. JavaScript has fewer ready-made structures than Java or Python — no priority queue (always returns the smallest/most urgent item), no deque (add/remove at both ends), no sorted map — so know what the built-ins cost and how to fill the gaps.
 
-> **Key term — hash map (hash table):** a structure that stores key → value pairs and finds a key almost instantly. A *hash function* turns the key into a number that picks a slot in an internal array, so a lookup doesn't scan every entry. JavaScript's `Map`, `Set` and plain objects are built on hash tables. Lookups are O(1) "on average" because two keys occasionally land in the same slot and need a little extra work.
+- **Hash map (hash table):** key → value storage where a *hash function* turns the key into a slot index, so lookups don't scan. `Map`, `Set` and objects are built on them; O(1) *on average* (colliding keys need a little extra work).
+- **Big-O notation:** how work (or memory) grows with input size `n`, ignoring constants: O(1) constant, O(log n) halving each step, O(n) linear, O(n log n) good sorting, O(n²) quadratic (10× input ≈ 100× work). State both *time* and extra *space*.
 
 ### Why it matters
-Two JavaScript-specific traps sink otherwise-correct solutions: **hidden O(n) operations** (`shift`, `unshift`, `includes` on an array inside a loop) and **wrong answers from defaults** (`sort()` comparing numbers as text, floating-point arithmetic). Knowing the table below is the difference between an O(n) and an O(n²) solution.
-
-> **Key term — Big-O notation (complexity):** a way to describe how the work (or memory) of an algorithm grows as the input size `n` grows, ignoring constant factors. O(1) = constant, same cost for any size; O(log n) = grows very slowly (halving each step); O(n) = linear, proportional to the input; O(n log n) = typical good sorting; O(n²) = quadratic, 10× more input means ~100× more work. Interviewers expect you to state both *time* and extra *space* complexity.
+Two JavaScript traps sink otherwise-correct solutions: **hidden O(n) operations** (`shift`, `unshift`, `includes` inside a loop) and **wrong defaults** (`sort()` comparing numbers as text, floating point). The table is the difference between O(n) and O(n²).
 
 ### Complexity of the built-ins
 
 | Operation | Cost | Note |
 |---|---|---|
 | `arr[i]`, `arr[i] = x`, `arr.length`, `arr.at(-1)` | O(1) | |
-| `push`, `pop` | O(1) amortized (averaged over many calls) | Use the end of an array as a **stack** |
+| `push`, `pop` | O(1) amortized (averaged over calls) | Use the end of an array as a **stack** |
 | `shift`, `unshift`, `splice(i, …)` | O(n) | Every later element moves — avoid in loops |
 | `indexOf`, `includes`, `find`, `some` | O(n) | Put values in a `Set` if you look them up repeatedly |
 | `slice`, spread `[...a]`, `concat`, `Array.from` | O(k) | k = number of elements copied |
 | `map`, `filter`, `reduce`, `forEach` | O(n) | Plus the callback's cost |
-| `sort`, `toSorted` | O(n log n) | Stable (guaranteed since ES2019 — the 2019 edition of the JS standard); V8 uses TimSort (a hybrid of merge and insertion sort) |
-| `Map`/`Set` `get`, `set`, `has`, `add`, `delete` | O(1) average | The spec only requires *sublinear* (growing slower than n) on average; engines use hash tables |
+| `sort`, `toSorted` | O(n log n) | Stable (guaranteed since ES2019); V8 uses TimSort (merge + insertion sort hybrid) |
+| `Map`/`Set` `get`, `set`, `has`, `add`, `delete` | O(1) average | The spec only requires *sublinear* on average; engines use hash tables |
 | Object property read/write, `in`, `Object.hasOwn` | O(1) average | |
 | `Object.keys` / `entries`, `[...map]` | O(n) | |
-| `str[i]`, `str.length`, `charCodeAt` | O(1) | Strings are immutable (can't be changed in place) |
+| `str[i]`, `str.length`, `charCodeAt` | O(1) | Strings are immutable |
 | `str.slice`, `split`, `join`, `[...str]` | O(n) | |
 | `JSON.stringify`, `structuredClone` | O(size) | |
 | Heap push/pop (you write it, §17.2) | O(log n) | |
@@ -102,9 +101,9 @@ fill(array) shares rows: [[9,0],[9,0]]
 Array.from rows are separate: [[9,0],[0,0]]
 ```
 
-1. A **stack** (last in, first out) is just `push`/`pop`; peek with `at(-1)`.
-2. A **queue** (first in, first out) with `shift()` is fine for small inputs, but in general each `shift` moves every element. Measured in Node 24: emptying a 10,000-element array with `shift` took 0.3 ms, a 100,000-element one 0.6 s, a 400,000-element one 10 s — quadratic growth (V8 has a shortcut for smaller arrays, not for big ones). For BFS on large graphs (a *graph* is a set of nodes joined by edges, like cities and roads) keep a **head index** — the `Queue` class above, or simply `for (let head = 0; head < queue.length; head++)` as in §17.2.
-3. `fill(x)` puts the *same* value in every slot; with an array as `x`, every row is the same object. `Array.from({ length }, () => …)` calls the function once per row. (Sorting, copying and array methods are taught in [Chapter 7](../07-arrays/README.md).)
+1. **Stack** (LIFO) = `push`/`pop`; peek with `at(-1)`.
+2. **Queue** (FIFO) with `shift()` is fine when small, but each `shift` moves every element. Measured in Node 24: emptying 10,000 elements took 0.3 ms, 100,000 took 0.6 s, 400,000 took 10 s — quadratic (V8 shortcuts small arrays only). For BFS on large graphs (nodes joined by edges) keep a **head index** — the `Queue` above, or `for (let head = 0; head < queue.length; head++)` (§17.2).
+3. `fill(x)` puts the *same* value in every slot — with an array, every row is one object. `Array.from({ length }, () => …)` calls the function per row ([Chapter 7](../07-arrays/README.md)).
 
 ### `Map` and `Set`
 
@@ -150,11 +149,11 @@ age desc, name asc: Ann Cid Bob Dee
 original untouched: Ann Bob Cid Dee
 ```
 
-1. A **comparator** `(a, b) => number` returns negative if `a` goes first, positive if `b` goes first, `0` for a tie. `a - b` sorts numbers ascending; `b - a` descending.
-2. **Multi-key sort**: chain comparisons with `||` — when the first difference is `0`, the second decides.
-3. **Stability** means equal elements keep their original relative order (Bob before Dee, Ann before Cid above). It is guaranteed since ES2019, so you can sort by a secondary key first and the primary key second.
-4. `sort` **mutates** (changes the array in place); `toSorted` (ES2023) returns a new array. In an interview, say which one you use — mutating the caller's input is a classic review comment.
-5. Common mistake: returning a boolean (`(a, b) => a > b`). `true`/`false` become `1`/`0`, never negative, so the result is engine-dependent and wrong. Full details: [§7.6](../07-arrays/README.md#76-sorting-correctly).
+1. A **comparator** `(a, b) => number`: negative = `a` first, positive = `b` first, `0` = tie. `a - b` ascending, `b - a` descending.
+2. **Multi-key**: chain with `||` — a `0` from the first key lets the second decide.
+3. **Stability**: equal elements keep their input order (Bob before Dee); guaranteed since ES2019, so you can sort by the secondary key first, then the primary.
+4. `sort` **mutates**; `toSorted` (ES2023) returns a new array — say which you use.
+5. Mistake: a boolean comparator (`(a, b) => a > b`) never returns negative — engine-dependent, wrong ([§7.6](../07-arrays/README.md#76-sorting-correctly)).
 
 ### Number pitfalls
 
@@ -185,11 +184,11 @@ NaN === NaN: false | Number.isNaN(NaN): true | isNaN("x"): true Number.isNaN("x"
 
 | Pitfall | What to do |
 |---|---|
-| All numbers are 64-bit floats (IEEE 754 doubles — the standard binary format for decimals, which can't store most fractions exactly), so `0.1 + 0.2 !== 0.3` | Compare with a tolerance (`Math.abs(a - b) < Number.EPSILON * scale`), or work in integers (cents, not dollars) |
+| All numbers are 64-bit floats (IEEE 754 doubles, which can't store most fractions exactly), so `0.1 + 0.2 !== 0.3` | Compare with a tolerance (`Math.abs(a - b) < Number.EPSILON * scale`), or work in integers (cents, not dollars) |
 | No integer division | `Math.trunc(a / b)` (towards zero) or `Math.floor(a / b)` (towards −∞) — they differ for negatives |
 | `%` is a *remainder*, sign follows the left side | For array wrap-around use `((i % n) + n) % n` |
 | Integers are exact only up to `2**53 − 1` | Check with `Number.isSafeInteger`; use `BigInt` beyond (e.g. factorials, large Fibonacci, 64-bit IDs) |
-| Bitwise operators (`|`, `>>`, `~~`) convert to 32-bit signed ints | `(lo + hi) >> 1` is fine for array indexes (< 2³¹); otherwise use `Math.floor((lo + hi) / 2)`. Unlike Java, there is no overflow (a result too big for its number type) for `lo + hi` below 2⁵³ |
+| Bitwise operators (`|`, `>>`, `~~`) convert to 32-bit signed ints | `(lo + hi) >> 1` is fine for array indexes (< 2³¹); otherwise `Math.floor((lo + hi) / 2)`. Unlike Java, `lo + hi` can't overflow below 2⁵³ |
 | `Infinity` / `-Infinity` | Handy initial values for min/max; but `Math.max(...[])` is `-Infinity` and spreading a very large array (about 125,000+ elements in Node 24 on this machine — the limit depends on stack size) throws `RangeError` — use a loop or `reduce` |
 | `isNaN('x')` coerces first | Use `Number.isNaN` |
 
@@ -205,10 +204,10 @@ parts.join('-');                                  // '0-1-2-3-4'
 [...'hello'].reverse().join('');                  // 'olleh'
 ```
 
-- Strings can't be changed in place; `s[0] = 'x'` silently does nothing (throws in strict mode). To edit, convert to an array (`[...s]`), change it, `join('')`.
-- Building with `+=` in a loop is fine in modern engines (V8 uses *ropes*, a tree of pieces, to avoid copying), but `push` + `join` is the clear, portable idiom (the usual way experienced programmers write it) and makes the O(n) cost obvious.
-- A 26-slot counting array (`charCodeAt(0) - 97`) is faster than a `Map` for lowercase-letter problems.
-- `[...s]` splits by **code point** (one Unicode character number, so emoji stay whole); `s.split('')` splits by UTF-16 code unit (16-bit pieces; some characters need two). See [§6.5](../06-strings-and-regular-expressions/README.md#65-unicode-code-units-code-points-and-graphemes).
+- `s[0] = 'x'` silently does nothing (throws in strict mode). Edit via `[...s]`, change, `join('')`.
+- `+=` in a loop is fine in modern engines (V8 uses *ropes* — trees of pieces), but `push` + `join` is the portable idiom and makes the O(n) cost obvious.
+- A 26-slot counting array (`charCodeAt(0) - 97`) beats a `Map` for lowercase-letter problems.
+- `[...s]` splits by **code point** (emoji stay whole); `s.split('')` by UTF-16 code unit ([§6.5](../06-strings-and-regular-expressions/README.md#65-unicode-code-units-code-points-and-graphemes)).
 
 ### `BigInt`
 
@@ -222,7 +221,7 @@ factorial(25n);                                  // 15511210043330985984000000n
 JSON.stringify(1n);                              // TypeError
 ```
 
-`BigInt` (ES2020) holds integers of any size — write a literal with an `n` suffix or call `BigInt(x)`. It has no fractions, no `Math.*` support, can't be mixed with numbers in arithmetic (convert explicitly), and is slower than numbers, so use it only when values may pass `2**53`.
+`BigInt` (ES2020): integers of any size (`n` suffix or `BigInt(x)`); no fractions, no `Math.*`, no mixing with numbers (convert explicitly), slower — use only when values may pass `2**53`.
 
 ### In the interview
 **30-second answer — "What should I watch for when doing algorithms in JavaScript?"** Arrays are stacks (`push`/`pop`); queues need a head index, not `shift`. `Map`/`Set` give O(1) lookups (string keys for coordinates). Always pass `sort` a comparator; it mutates. Numbers are doubles: `Math.trunc` for integer division, `%` can be negative, exact only to 2⁵³ − 1 (then `BigInt`). No heap — write one.
@@ -231,10 +230,8 @@ JSON.stringify(1n);                              // TypeError
 - *Why a `Map` rather than `{}` for counting?* Any key type, no prototype keys (`'constructor' in {}` is `true`), `size`, insertion order, optimised for frequent adds/removes.
 
 ### Self-check
-1. What is the cost of `arr.shift()`? → O(n): every remaining element moves one slot.
-2. How do you create a 3×3 grid of zeros safely? → `Array.from({ length: 3 }, () => new Array(3).fill(0))`.
-3. How do you sort strings alphabetically in a locale-aware way? → `arr.sort((a, b) => a.localeCompare(b))`.
-4. Is `Number.isSafeInteger(2 ** 53)` true? → No — the largest safe integer is `2 ** 53 − 1`.
+1. Locale-aware alphabetical sort? → `arr.sort((a, b) => a.localeCompare(b))`.
+2. `Number.isSafeInteger(2 ** 53)`? → `false` — the largest safe integer is `2 ** 53 − 1`.
 
 ### TL;DR
 Stack = `push`/`pop`; queue = head index; grid = `Array.from`. `Map`/`Set` for O(1) lookups (string keys for pairs). Always give `sort` a comparator; it's stable; `toSorted` doesn't mutate. Floats: tolerance for equality, `Math.trunc` for division, safe up to 2⁵³ − 1, `BigInt` beyond.
@@ -244,7 +241,7 @@ Stack = `push`/`pop`; queue = head index; grid = `Array.from`. `Map`/`Set` for O
 ## 17.2 Coding patterns
 
 ### What it is
-A **pattern** is a reusable problem-solving shape. Most interview problems are one of about twenty patterns in disguise; recognising the pattern gives you the algorithm and its complexity almost for free. The decision chart below is a starting point, not a law.
+A **pattern** is a reusable problem-solving shape; most interview problems are one of about twenty in disguise, and recognising it gives you the algorithm and complexity almost for free. The chart is a starting point, not a law.
 
 ```mermaid
 flowchart LR
@@ -268,7 +265,7 @@ flowchart LR
   I --> I2["Sort by start, then sweep"]
 ```
 
-Patterns 13–21 cover the remaining shapes — specific data structures and a few algorithm families:
+Patterns 13–21 — specific data structures and algorithm families:
 
 ```mermaid
 flowchart LR
@@ -292,10 +289,10 @@ flowchart LR
   S --> S2["Math and geometry"]
 ```
 
-For each pattern: the idea, when it applies, the code (with asserts), and its cost. The full programs are [`code/02_patterns_arrays.mjs`](code/02_patterns_arrays.mjs), [`code/03_patterns_search_graphs_dp.mjs`](code/03_patterns_search_graphs_dp.mjs), [`code/09_patterns_lists_trees_tries.mjs`](code/09_patterns_lists_trees_tries.mjs) and [`code/10_patterns_graphs_greedy_bits_math.mjs`](code/10_patterns_graphs_greedy_bits_math.mjs).
+Each pattern: idea, signal, asserted code, cost. Full programs: [`code/02_patterns_arrays.mjs`](code/02_patterns_arrays.mjs), [`code/03_patterns_search_graphs_dp.mjs`](code/03_patterns_search_graphs_dp.mjs), [`code/09_patterns_lists_trees_tries.mjs`](code/09_patterns_lists_trees_tries.mjs) and [`code/10_patterns_graphs_greedy_bits_math.mjs`](code/10_patterns_graphs_greedy_bits_math.mjs). Each asserts every result shown below and ends by printing `all … asserts passed`.
 
 ### Pattern 1 — Two pointers
-**Idea:** two indexes move towards each other (or in the same direction) so each element is looked at once. **Signal:** sorted array, pairs, palindromes (text that reads the same backwards), in-place partitioning (rearranging inside the same array, no copy). **Cost:** O(n) time, O(1) space.
+**Idea:** two indexes move towards each other (or in the same direction) so each element is looked at once. **Signal:** sorted array, pairs, palindromes, in-place partitioning. **Cost:** O(n) time, O(1) space.
 
 ```js
 function pairSum(sorted, target) {
@@ -320,7 +317,7 @@ assert.equal(isPalindrome('A man, a plan, a canal: Panama'), true);
 Why it's correct: if the sum is too small, the smallest element can't be part of any answer with a *smaller* partner, so discarding it (`lo++`) loses nothing.
 
 ### Pattern 2 — Sliding window
-**Idea:** keep a window `[start, end]` over a sequence; grow the end, shrink the start when a rule breaks. **Signal:** "longest/shortest/max-sum **contiguous** (neighbouring, with no gaps) subarray or substring". **Cost:** O(n) — each index enters and leaves the window once.
+**Idea:** keep a window `[start, end]` over a sequence; grow the end, shrink the start when a rule breaks. **Signal:** "longest/shortest/max-sum **contiguous** subarray or substring". **Cost:** O(n) — each index enters and leaves the window once.
 
 ```js
 function longestUnique(s) {
@@ -373,7 +370,7 @@ function groupAnagrams(words) {
 }
 ```
 
-Checking before inserting is what makes `[3, 3]` work: the first `3` is not paired with itself. (Anagrams are words with the same letters in a different order; sorting the letters gives every anagram the same *canonical* key.) (`Map.groupBy` from [§8.7](../08-maps-sets-iterators-and-generators/README.md#87-grouping-objectgroupby-and-mapgroupby-es2024) does the grouping step in one call.)
+Checking before inserting makes `[3, 3]` work (the first `3` isn't paired with itself). Sorting an anagram's letters gives every anagram the same *canonical* key; `Map.groupBy` ( [§8.7](../08-maps-sets-iterators-and-generators/README.md#87-grouping-objectgroupby-and-mapgroupby-es2024) does the grouping in one call.
 
 ### Pattern 4 — Stack (and monotonic stack)
 **Idea:** a stack remembers "things still open" — brackets, unfinished elements. A **monotonic stack** keeps its contents increasing or decreasing and answers "next greater/smaller element" questions. **Cost:** O(n) — every index is pushed and popped at most once.
@@ -454,20 +451,11 @@ function minRooms(meetings) {              // sweep line: sorted starts vs sorte
 assert.equal(minRooms([[0, 30], [5, 10], [15, 20]]), 2);
 ```
 
-Output of the array-patterns program:
-
-```text
-pairSum [ 1, 4 ] | longestUnique("abcabcbb") 3
-twoSum [ 0, 1 ] | groupAnagrams [["eat","tea","ate"],["tan","nat"],["bat"]]
-dailyTemperatures 1,1,4,2,1,1,0,0
-subarraySum([1,1,1],2) 2 | merge [[1,6],[8,10],[15,18]] | rooms 2
-all array-pattern asserts passed
-```
 
 ### Pattern 7 — Heap (write your own `MinHeap`)
-**What it is:** a **binary heap** is a complete binary tree (a tree where each node has at most two children and every level is full except possibly the last, filled from the left — see Pattern 15) stored in an array where every parent is ≤ its children (a *min*-heap). The smallest item is always at index 0. For index `i`, the children are `2i+1` and `2i+2`, the parent is `(i−1)>>1`. **Signal:** "k largest/smallest", "merge k sorted lists", "median (middle value when sorted) of a stream", "always process the cheapest next" (Dijkstra's shortest-path algorithm, scheduling). **Cost:** `push`/`pop` O(log n), `peek` O(1).
+**What it is:** a **binary heap** is a complete binary tree (every level full except the last, filled from the left) stored in an array, every parent ≤ its children (*min*-heap); the smallest is at index 0. Children of `i`: `2i+1`, `2i+2`; parent `(i−1)>>1` (so node 6's parent is 2). **Signal:** "k largest/smallest", "merge k sorted lists", "median of a stream", "always process the cheapest next" (Dijkstra, scheduling). **Cost:** `push`/`pop` O(log n), `peek` O(1).
 
-JavaScript has **no built-in priority queue**, so interviewers expect you to write one (or at least describe it). Twenty-five lines are enough:
+JavaScript has **no built-in priority queue**, so write one (or describe it) — 25 lines:
 
 ```js
 export class MinHeap {
@@ -597,10 +585,10 @@ function minEatingSpeed(piles, hours) {     // binary search on the ANSWER
 assert.equal(minEatingSpeed([3, 6, 7, 11], 8), 4);
 ```
 
-Use one template (half-open `[lo, hi)`, `lo < hi`, `hi = mid`) and you avoid the off-by-one bugs (being wrong by exactly one index) that make binary search famous. JavaScript has no `bisect` built-in; `indexOf`/`findIndex` are linear.
+One template (half-open `[lo, hi)`, `lo < hi`, `hi = mid`) avoids binary search's famous off-by-one bugs. JavaScript has no `bisect` built-in; `indexOf`/`findIndex` are linear.
 
 ### Pattern 9 — Breadth-first search (BFS)
-**Idea:** explore in rings — all nodes 1 step away, then 2 steps, … using a queue. The first time you reach a node is by a **shortest path** (in steps). **Signal:** "minimum number of moves", unweighted shortest path, level-order traversal. **Cost:** O(V + E) (V = number of vertices/nodes, E = number of edges; for a grid, O(rows × cols)).
+**Idea:** explore in rings — all nodes 1 step away, then 2 steps, … using a queue. The first time you reach a node is by a **shortest path** (in steps). **Signal:** "minimum number of moves", unweighted shortest path, level-order traversal. **Cost:** O(V + E) (V vertices, E edges; a grid is O(rows × cols)).
 
 ```js
 function shortestPath(grid, [sr, sc], [tr, tc]) {
@@ -622,10 +610,10 @@ function shortestPath(grid, [sr, sc], [tr, tc]) {
 assert.equal(shortestPath(['..#.', '..#.', '....'], [0, 0], [0, 3]), 7);
 ```
 
-Mark a cell visited when you **enqueue** it (add it to the queue), not when you dequeue it (take it out) — otherwise the same cell enters the queue many times.
+Mark a cell visited when you **enqueue** it, not when you dequeue it — otherwise duplicates enter the queue (still correct, but time and memory can blow up).
 
 ### Pattern 10 — Depth-first search (DFS)
-**Idea:** go as deep as possible, then back up. **Signal:** connectivity ("number of islands"), cycle detection, topological order (an ordering where every dependency comes first — Pattern 17), exploring every path. **Cost:** O(V + E).
+**Idea:** go as deep as possible, then back up. **Signal:** connectivity ("number of islands"), cycle detection, topological order (dependencies first — Pattern 17), exploring every path. **Cost:** O(V + E).
 
 ```js
 function numIslands(rows) {
@@ -664,7 +652,7 @@ function topoSort(n, edges) {               // recursive DFS with three colours
 assert.deepEqual(topoSort(4, [[0, 1], [0, 2], [1, 3], [2, 3]]), [0, 2, 1, 3]);
 ```
 
-JavaScript-specific: recursion depth is limited (roughly ten thousand frames — one stack frame per active call — in V8, depending on frame size), and there's no tail-call optimisation (reusing the current frame when a function's very last action is a call) in V8. For inputs that can be deep — a 1000×1000 grid of land — use the iterative version with an explicit stack.
+JavaScript-specific: recursion depth is limited (roughly ten thousand frames in V8, depending on frame size) and V8 has no tail-call optimisation (reusing the frame when the last action is a call). For inputs that can be deep — a 1000×1000 grid of land — use the iterative version with an explicit stack.
 
 ### Pattern 11 — Dynamic programming with memoization
 **What it is:** **dynamic programming (DP)** solves a problem by combining answers to smaller versions of the same problem, storing each answer so it is computed once. **Top-down** = recursion + a cache (**memoization**); **bottom-up** = fill a table in order. **Signal:** "count the ways", "minimum cost", "longest …", when the plain recursion repeats the same calls. **Cost:** (number of states) × (work per state).
@@ -700,7 +688,7 @@ assert.equal(lcs('abcde', 'ace'), 3);
 Without the memo, `climb(70)` would make about 6 × 10¹⁴ calls; with it, about 140. Note the JavaScript twist: the answer for 80 stairs is larger than `2**53`, so a real solution would switch to `BigInt` (§17.1). For multi-argument states, use a string key (`` `${i},${j}` ``) or a 2D array.
 
 ### Pattern 12 — Backtracking
-**Idea:** build a solution one choice at a time; after exploring a choice, **undo** it and try the next (choose → explore → un-choose). Prune (stop exploring) branches that can't succeed. **Signal:** "list all subsets/permutations (orderings)/combinations", puzzles (N-Queens, Sudoku). **Cost:** exponential (doubling or worse with every extra item) — 2ⁿ subsets, n! permutations — so inputs are small.
+**Idea:** build a solution one choice at a time; after exploring a choice, **undo** it and try the next (choose → explore → un-choose). Prune branches that can't succeed. **Signal:** "list all subsets/permutations/combinations", puzzles (N-Queens, Sudoku). **Cost:** exponential — 2ⁿ subsets, n! permutations — so inputs are small.
 
 ```js
 function subsets(nums) {
@@ -735,17 +723,6 @@ assert.equal(nQueens(8), 92);
 
 The most common JavaScript bug here is `out.push(cur)` without copying: every entry would be the *same* array, which ends up empty. (`permutations` with a `used` array is in the code file.)
 
-Output of the search/graph/DP program:
-
-```text
-heap drain 1,2,3,5,8,9 | kLargest [ 6, 5 ] | dijkstra {"A":0,"B":3,"C":1,"D":4}
-running medians 5,10,5,4 | k-way merge 0,1,2,3,4,5,6,7,8,9
-lowerBound 4 -> 3 | minEatingSpeed 4
-maze steps 7 | islands 3 | topo 0,2,1,3
-climb(70) 308061521170129 | climb(80) safe? false | coinChange 11 3 | lcs 3
-subsets [[1,2],[1],[2],[]] | perms of 3: 6 | 8-queens 92
-all search/graph/DP asserts passed
-```
 
 ### Pattern 13 — Linked lists
 **What it is:** a **linked list** is a chain of nodes; each node holds a value and a `next` reference to the following node (`null` at the end). Unlike an array there is no index: reaching the k-th node means walking k steps, but inserting or removing a node you already hold is O(1) — you only rewire references. JavaScript has no built-in linked list, so problems hand you a `{ val, next }` shape. **Signal:** "reverse", "remove the k-th from the end", "merge", "where do two lists meet". **Cost:** usually O(n) time, O(1) extra space.
@@ -781,7 +758,7 @@ function intersection(a, b) {                // first node shared by two lists, 
 }
 ```
 
-Why `intersection` works: pointer `p` walks list A then list B, `q` walks B then A. Both travel `lenA + lenB` steps, so they line up and reach the shared node at the same moment — or both reach `null` together if there is none. It compares **nodes** with `!==`, not values: two lists that merely contain equal numbers do not intersect. The **dummy head** trick (a fake node before the real head) appears in almost every list problem because it removes the "what if I change the head?" branch. `fromArray`/`toArray` helpers are in the code file.
+`intersection`: `p` walks A then B, `q` walks B then A; both travel `lenA + lenB` steps, so they reach the shared node together (or `null` together). It compares **nodes**, not values. The **dummy head** (a fake node before the real head) gives every node a predecessor, so changing the head needs no special case — e.g. `removeKthFromEnd` can stop *before* the head when k equals the length. `fromArray`/`toArray` are in the code file.
 
 ### Pattern 14 — Fast & slow pointers
 **Idea:** two pointers move through a sequence at different speeds — slow one step, fast two steps. If the sequence loops, fast eventually laps slow and they meet; if it ends, fast reaches the end when slow is halfway. **Signal:** "is there a cycle / where does it start", "middle of a list", any "does repeating this step loop forever?" question. **Cost:** O(n) time, **O(1) space** — the point, since a `Set` of visited nodes would also work but costs O(n).
@@ -861,7 +838,7 @@ function deserialize(text) {
 assert.equal(serialize(fromLevels([1, 2, 3, null, null, 4, 5])), '1,2,#,#,3,4,#,#,5,#,#');
 ```
 
-The classic BST bug is comparing a node only with its parent: in `[5, 1, 7, null, null, 4, 8]`, 4 is a correct left child of 7 but sits in 5's *right* subtree, so the tree is invalid. Passing the range `(lo, hi)` down catches it. Serialization (turning the tree into a string) works because preorder (visit a node, then its left subtree, then its right) plus explicit `#` markers fixes the shape: the reader always knows whether the next token is a left child, a right child or an empty slot. (`fromLevels`, which builds a tree from a level-order array with `null` gaps, is in the code file; deep, unbalanced trees hit the recursion-depth limit from Pattern 10 — switch to an explicit stack.)
+Classic BST bug: comparing a node only with its parent — in `[5, 1, 7, null, null, 4, 8]`, 4 is a valid left child of 7 but sits in 5's *right* subtree. Passing `(lo, hi)` down catches it. Serialization works because preorder (node, left, right) plus `#` markers fixes the shape: the reader always knows what the next token fills. (`fromLevels`, which builds a tree from a level-order array with `null` gaps, is in the code file; deep, unbalanced trees hit the recursion-depth limit from Pattern 10 — switch to an explicit stack.)
 
 ### Pattern 16 — Tries
 **What it is:** a **trie** (prefix tree, pronounced "try") stores strings one character per level; words that share a prefix share the same path from the root, and a flag marks "a word ends here". Looking up a word or prefix of length `L` costs O(L), no matter how many words are stored. **Signal:** "autocomplete", "starts with", "search with a wildcard", "find many words in a grid". **Cost:** O(L) per insert/search; memory O(total characters).
@@ -899,7 +876,7 @@ assert.equal(trie.search('ca'), false);      // a prefix, not a stored word
 assert.equal(trie.match('c.r.'), true);      // card, care
 ```
 
-The third classic, **word search on a board** (find every listed word that can be traced through neighbouring cells, each cell used once per word), combines a trie with Pattern 12's backtracking: one DFS from each cell walks the board and the trie together, and stops as soon as the letters so far are not a prefix of any word. That prune is what makes it fast compared with searching for each word separately.
+**Word search on a board** (find every listed word traceable through neighbouring cells, each cell once per word) combines a trie with backtracking: one DFS per cell walks board and trie together and stops as soon as the letters aren't a prefix of any word — the prune that beats searching word by word.
 
 ```js
 function findWords(board, words) {
@@ -927,15 +904,6 @@ assert.deepEqual(findWords(['cats', 'ored', 'waxy'], ['cat', 'cats', 'car', 'cor
 
 JavaScript notes: a `Map` per node is the clean choice; a plain object (`n[ch] ??= {}`) is shorter, but then a stored key such as `$word` must never collide with a letter. For lowercase-only input, a 26-slot array per node is the fastest variant (§17.1).
 
-Output of the list/tree/trie program:
-
-```text
-reverse 4,3,2,1 | remove 2nd from end 1,2,3,5 | intersection at 8
-cycle starts at 3 | middle of 1..4 3 | happy 19? true | happy 2? false
-validBST true false | lca(7,4) 2 | serialized 1,2,#,#,3,4,#,#,5,#,#
-trie search car true | prefix ca true | match c.r. true | board words car,cat,cats,core,cow,red,wax
-all list/tree/trie asserts passed
-```
 
 ### Pattern 17 — Topological sort and union-find
 **What it is:** two graph tools that plain BFS/DFS (Patterns 9–10) don't cover directly. A **topological order** lists the nodes of a directed graph (one whose edges point one way, like "A before B") so every edge goes from earlier to later ("take prerequisites first"); it exists only if the graph has no cycle. **Kahn's algorithm** builds it with BFS: repeatedly take a node whose **in-degree** (number of incoming edges still unprocessed) is 0. A **union-find** (disjoint-set union) keeps a collection of groups and answers "are x and y in the same group?" and "merge their groups" in almost constant time. **Signal:** "order of tasks with dependencies", "can all courses be finished" → topological sort; "number of connected groups", "does this edge create a cycle", merging accounts or friend circles → union-find. **Cost:** Kahn O(V + E); union-find O(α(n)) per operation, where α (the inverse Ackermann function) is below 5 for any real input.
@@ -988,7 +956,7 @@ function redundantEdge(edges) {              // first edge that closes a cycle (
 assert.deepEqual(redundantEdge([[1, 2], [2, 3], [3, 4], [1, 4], [1, 5]]), [1, 4]);
 ```
 
-Kahn vs the DFS topological sort in Pattern 10: both are O(V + E). Kahn detects a cycle by counting ("fewer than n nodes came out") instead of by recursion colours, needs no recursion (no depth limit), and processes the graph in "waves" — handy when asked for the minimum number of semesters. Union-find answers connectivity for edges that arrive one at a time, where rerunning BFS after each edge would cost O(V + E) each time. The two optimisations (path halving and union by size) are what make it fast; without them a chain of unions can make `find` O(n).
+Kahn vs Pattern 10's DFS sort: both O(V + E); Kahn detects cycles by counting ("fewer than n came out"), needs no recursion, and works in "waves" (minimum number of semesters). Union-find handles edges arriving one at a time (rerunning BFS each time would cost O(V + E) per edge); `union` returning `false` means the ends already shared a root — the edge closes a cycle. Path halving and union by size make it fast; without them `find` can degrade to O(n).
 
 ### Pattern 18 — Greedy
 **What it is:** a **greedy** algorithm makes the choice that looks best right now and never revisits it. It is fast (usually one pass, often after a sort) but only correct when you can argue that a locally best choice never blocks a globally best answer — so in the interview, always say *why* the greedy choice is safe, or give a counterexample (one input where it gives the wrong answer) and switch to DP (Pattern 11). **Signal:** "minimum number of …", "can you reach …", scheduling, and problems where a sort plus one sweep feels natural. **Cost:** O(n) or O(n log n) with a sort.
@@ -1024,7 +992,7 @@ function candies(ratings) {                  // everyone >= 1; higher rating tha
 assert.equal(candies([1, 3, 4, 5, 2]), 11);  // 1, 2, 3, 4, 1
 ```
 
-The safety arguments, in one line each. **Jump game:** every index up to `reach` is reachable, so extending `reach` from each of them loses nothing. **Gas station:** if the tank goes negative at `i` after starting at `s`, every station between `s` and `i` arrived with at least 0 fuel from `s`, so starting there is no better — skip to `i + 1`; and if total gas covers total cost, the last surviving start completes the loop. **Candies:** the left-to-right pass satisfies every "better than my left neighbour" rule with the fewest candies, the right-to-left pass does the same for right neighbours, and `Math.max` keeps both. When greedy fails — coin change with coins `[1, 3, 4]` and amount 6 (greedy picks 4+1+1, the best is 3+3) — use DP. (Pattern 6's meeting-rooms and merge-intervals are greedy too: sort, then sweep.)
+Safety arguments: **Jump game:** every index up to `reach` is reachable, so extending `reach` from each of them loses nothing. **Gas station:** if the tank goes negative at `i` after starting at `s`, every station between `s` and `i` arrived with at least 0 fuel from `s`, so starting there is no better — skip to `i + 1`; and if total gas covers total cost, the last surviving start completes the loop. **Candies:** the left-to-right pass satisfies every "better than my left neighbour" rule with the fewest candies, the right-to-left pass does the same for right neighbours, and `Math.max` keeps both. When greedy fails — coin change with coins `[1, 3, 4]` and amount 6 (greedy picks 4+1+1, the best is 3+3) — use DP. (Pattern 6's meeting-rooms and merge-intervals are greedy too: sort, then sweep.)
 
 ### Pattern 19 — Sort & search: quickselect, Dutch flag, merge sort
 **Idea:** some questions are really about the sorting algorithms themselves: find the k-th item *without* fully sorting, partition in place, or sort stably. **Quickselect** partitions like quicksort (a **pivot** value; smaller items to its left, the rest to its right) but then continues into only the side that contains the answer. **Signal:** "k-th largest/smallest", "median", "sort 0/1/2 in one pass", "sort a linked list", "count inversions" (pairs that are in the wrong order). **Cost:** quickselect O(n) average (O(n²) worst, made unlikely by a random pivot); Dutch flag O(n) one pass, O(1) space; merge sort O(n log n) always, O(n) extra space, **stable**.
@@ -1070,7 +1038,7 @@ const people = [['ann', 30], ['bob', 25], ['cy', 30], ['di', 25]];
 assert.deepEqual(mergeSort(people, (x, y) => x[1] - y[1]).map(p => p[0]), ['bob', 'di', 'ann', 'cy']);
 ```
 
-Quickselect vs a heap (Pattern 7): quickselect is O(n) on average but needs the whole array in memory and rearranges a copy; a size-k heap is O(n log k) but works on a stream. The code file also checks `kthLargest` against `toSorted` on 200 random arrays — a cheap way to test any randomised algorithm. Merge sort's merge step is the same idea as "merge two sorted lists" and, on a linked list, needs no extra array (find the middle with Pattern 14, sort both halves, merge). In everyday JavaScript, `toSorted` is already a stable O(n log n) sort (§17.1); write these only when the question is about the algorithm.
+Quickselect (O(n) average, whole array, rearranges a copy) vs a size-k heap (O(n log k), works on a stream, no bad worst case). The code file checks `kthLargest` against `toSorted` on 200 random arrays — a cheap test for randomised algorithms. On a linked list merge sort needs no extra array (middle via Pattern 14, sort halves, merge). Everyday code: `toSorted` is already stable O(n log n); write these only when the algorithm is the question.
 
 ### Pattern 20 — Bit manipulation
 **What it is:** treating a number as its binary digits (**bits**) and using the bitwise operators: `&` (and), `|` (or), `^` (xor: 1 when the bits differ), `~` (not), `<<` (shift left = ×2), `>>` (shift right keeping the sign), `>>>` (shift right filling with 0). **Signal:** "without extra space, find the one that appears once", "count 1-bits", "power of two", subsets as bitmasks (an integer whose bits mark which items are chosen). **Cost:** O(1) per operation. **The JavaScript twist:** numbers are 64-bit floats, but every bitwise operator first converts to a **32-bit signed integer**, so results can come out negative and values above 2³² lose their high bits; `x >>> 0` reinterprets the 32 bits as unsigned (no sign bit, so never negative).
@@ -1095,10 +1063,10 @@ assert.equal(0x40000000 << 1, -2147483648);              // the trap without it
 const isPowerOfTwo = (n) => n > 0 && (n & (n - 1)) === 0;   // n & (n-1) clears the lowest 1-bit
 ```
 
-`singleNumber` works in any order because xor is commutative and associative (neither the order nor the grouping of the operations changes the result): the pairs cancel and only the lone value is left, with O(1) space instead of a `Set`. `countBits` is a tiny DP: `i >> 1` is `i` without its last bit (already computed) and `i & 1` is that last bit. In the swap, the final `>>> 0` matters: shifting a 1 into bit 31 makes the signed result negative. Because the file asserts against a slow bit-by-bit version on edge values (`0`, `0x80000000`, `0xFFFFFFFF`), the sign bug would be caught. For numbers beyond 32 bits, `BigInt` supports the same operators (`5n & 3n`), except `>>>`.
+`singleNumber`: xor is commutative and associative, so pairs cancel in any order — O(1) space instead of a `Set`. `countBits` is a tiny DP (`i >> 1` = `i` minus its last bit, `i & 1` = that bit). The swap's final `>>> 0` matters: a 1 in bit 31 makes the signed result negative (the file asserts against a slow bit-by-bit version on `0`, `0x80000000`, `0xFFFFFFFF`). Beyond 32 bits, `BigInt` supports the same operators (`5n & 3n`) except `>>>`.
 
 ### Pattern 21 — Math & geometry
-**Idea:** simulation and number facts rather than a data structure: walk a matrix in a given order, handle integer limits, compare slopes exactly. The skill is spotting the invariant (a fact that stays true at every step) and the edge cases. **Signal:** "spiral / rotate a matrix", "reverse digits … return 0 on overflow", "points on a line", gcd (greatest common divisor), modular arithmetic (arithmetic with remainders, like hours on a clock). **Cost:** problem-specific — here O(rows × cols), O(digits) and O(n²).
+**Idea:** simulation and number facts: walk a matrix in order, handle integer limits, compare slopes exactly — spot the invariant (true at every step) and the edge cases. **Signal:** "spiral / rotate a matrix", "reverse digits … 0 on overflow", "points on a line", gcd (greatest common divisor), modular arithmetic. **Cost:** problem-specific — here O(rows × cols), O(digits) and O(n²).
 
 ```js
 function spiral(m) {                         // peel layers with four shrinking walls
@@ -1151,18 +1119,8 @@ function maxPointsOnLine(points) {           // most points on one straight line
 assert.equal(maxPointsOnLine([[1, 1], [3, 2], [5, 3], [4, 1], [2, 3], [1, 4]]), 4);
 ```
 
-The two `if`s in `spiral` stop a single remaining row or column from being walked twice (try a 3×1 matrix). In `reverseInt`, JavaScript is *easier* than languages with fixed-size integers: numbers are exact up to 2⁵³, so the intermediate value cannot overflow and one range check at the end is enough; in Java or C++ you must check *before* `r * 10`. In `maxPointsOnLine`, a floating-point slope `dy / dx` would be both imprecise (in the code file, `94911150 / 94911151 === 94911151 / 94911152` is `true` although the two directions differ, so three non-collinear points — not on one straight line — would be counted as one line) and infinite for vertical lines; the reduced integer pair as a `Map` key avoids both — the same "canonical key" idea as Pattern 3's anagram grouping.
+`spiral`'s two `if`s stop a lone remaining row/column being walked twice (try 3×1). `reverseInt` is *easier* than in Java/C++: exact to 2⁵³, so no intermediate overflow — one range check at the end. In `maxPointsOnLine` a float slope `dy / dx` is imprecise (`94911150 / 94911151 === 94911151 / 94911152` is `true` though the directions differ, so non-collinear points would count as one line) and infinite for verticals; the gcd-reduced integer pair as a `Map` key avoids both (Pattern 3's canonical-key idea).
 
-Output of the graph/greedy/sort/bit/math program:
-
-```text
-course order 0,1,2,3 | cyclic null | components 2 | redundant [2,3]
-canJump true false | gas start 3 | candies 5 11
-2nd largest 5 | colors 0,0,1,1,2,2 | mergeSort stable bob,di,ann,cy
-single 4 | countBits(5) 0,1,1,2,1,2 | swap bits 22 -> 41 | swap 0x40000000 -> 2147483648
-spiral 1,2,3,6,9,8,7,4,5 | reverse -21 0 | max collinear 4
-all graph/greedy/sort/bit/math asserts passed
-```
 
 ### Summary table
 
@@ -1191,9 +1149,9 @@ all graph/greedy/sort/bit/math asserts passed
 | 21 | Math & geometry | spiral, overflow, collinear points, gcd | problem-specific | O(1)–O(n) |
 
 ### In the interview
-**30-second answer — "How do you approach a coding problem?"** Restate it; agree on input/output and edge cases (empty, duplicates, negatives). State the brute force (the obvious try-everything solution) and its cost. Find the pattern — sorted → binary search/two pointers; contiguous → window; lookups → hash map; fewest steps → BFS — and state the better complexity before coding. Then test by hand with a normal and an edge case.
+**30-second answer — "How do you approach a coding problem?"** Restate it; agree on input/output and edge cases (empty, duplicates, negatives). State the brute force and its cost. Find the pattern — sorted → binary search/two pointers; contiguous → window; lookups → hash map; fewest steps → BFS — and state the better complexity before coding. Then test by hand with a normal and an edge case.
 - *Why BFS rather than DFS for shortest path?* BFS reaches nodes in order of distance, so the first visit is the shortest; DFS may find a long path first.
-- *Top-down or bottom-up DP?* Top-down is easier to derive and computes only needed states; bottom-up avoids recursion-depth limits (important in JavaScript) and allows rolling arrays (keeping only the last row or two of the table).
+- *Top-down or bottom-up DP?* Top-down is easier to derive and computes only needed states; bottom-up avoids recursion-depth limits (important in JavaScript) and allows rolling arrays (keep only the last row or two).
 - *How do you implement a priority queue in JavaScript?* A binary heap over an array: push = append + sift up, pop = move last to root + sift down, both O(log n).
 - *Why a dummy head in linked-list problems?* It gives every real node a predecessor, so removing or inserting at the head needs no special case.
 - *How do you prove a greedy solution?* Show that the greedy choice can be swapped into any optimal answer without making it worse (an **exchange argument**), or that it keeps an invariant (jump game: everything up to `reach` is reachable). If you can't, try a small counterexample and fall back to DP.
@@ -1201,27 +1159,21 @@ all graph/greedy/sort/bit/math asserts passed
 - *Kahn's algorithm or DFS for topological order?* Both O(V + E). Kahn counts nodes to detect a cycle and needs no recursion; DFS uses three colours and post-order.
 
 ### Self-check
-1. Which pattern finds the length of the longest substring with at most two distinct letters? → Sliding window with a `Map` of counts.
-2. Why does `subarraySum` start the map with `[0, 1]`? → So subarrays that start at index 0 (prefix sum exactly `k`) are counted.
-3. What's wrong with marking BFS cells visited when you dequeue them? → Duplicates enter the queue; still correct but can blow up time and memory.
-4. What's the parent index of heap node 6? → `(6 − 1) >> 1 = 2`.
-5. In `removeKthFromEnd`, why start both pointers at a dummy node? → So that when k equals the list length, `trail` can stop *before* the head and remove it.
-6. Why must `isValidBST` pass a range instead of comparing each node with its parent? → A node can be correct for its parent yet violate an ancestor further up (4 under 7 under 5's right side).
-7. What does `union` return in `redundantEdge`, and why does `false` mean a cycle? → `false` = the two ends already had the same root, so a path between them existed and this edge closes a loop.
-8. Why does `swapOddEvenBits` end with `>>> 0`? → Bitwise results are 32-bit **signed**; a 1 in bit 31 would print as a negative number. `>>> 0` reads the same bits as unsigned.
+1. Longest substring with at most two distinct letters? → Sliding window with a `Map` of counts.
+2. Why does `subarraySum` start the map with `[0, 1]`? → So subarrays starting at index 0 (prefix sum exactly `k`) count.
 
 ### TL;DR
-Recognise the pattern, state the complexity, then code. Two pointers/window/hashing/prefix sums are O(n) array tricks; stacks handle nesting; sort first for intervals; heaps (hand-written in JS) for top-k, Dijkstra, k-way merge and — two of them — a running median; binary search on data or on the answer; BFS for fewest steps, DFS (iterative for deep inputs) for connectivity; memoize overlapping recursion; backtrack with choose/explore/un-choose and copy results. Linked lists: rewire with a dummy head; fast & slow pointers find cycles and middles in O(1) space; trees: recursion that combines subtree answers (pass ranges down for BSTs); tries for prefixes; Kahn's algorithm for dependency order, union-find for growing groups; greedy only with a safety argument; quickselect for the k-th item, Dutch flag for 3-way partitions, merge sort when stability matters; bitwise ops are 32-bit signed (`>>> 0` for unsigned); in math problems use exact integer keys, not float slopes.
+Recognise the pattern (summary table above), state the complexity, then code. JavaScript specifics: hand-write the heap; head-index queues for BFS; iterative DFS for deep inputs; copy backtracking results; bitwise ops are 32-bit signed (`>>> 0` for unsigned); exact integer keys, not float slopes; greedy only with a safety argument.
 
 ---
 
 ## 17.3 Implement-from-scratch classics
 
 ### What it is
-"Implement `X` without using the built-in" questions test whether you understand *how* everyday tools work: closures and timers (`debounce`, `throttle`), `this` and `apply` (`bind`), recursion and object types (deep clone, deep equal), `Map` ordering (LRU cache), and promises (`Promise.all`). Each implementation below is short, correct for the cases interviewers probe, and tested.
+"Implement `X` without the built-in" tests whether you know *how* everyday tools work: closures and timers (`debounce`, `throttle`), `this` and `apply` (`bind`), recursion and object types (deep clone, deep equal), `Map` ordering (LRU cache), promises (`Promise.all`). The versions below are the fuller, **tested** implementations; the [Chapter 19 bank](../19-interview-question-bank/README.md#14-coding-tasks-implement-from-scratch-classics) (Q245–Q269) has compact whiteboard versions and more tasks (`once`, `sleep`, retry, `get`, `instanceof`, a `Promise` class…).
 
 ### How the tests control time
-`debounce` and `throttle` depend on time, and real timers make tests slow and flaky. [`code/04_classics_functions.mjs`](code/04_classics_functions.mjs) uses the **fake timers** from `node:test` ([§16.5](../16-testing-and-typescript/README.md#165-test-doubles-and-mocking)): `setTimeout` and `Date.now()` only move forward when the test calls `tick(ms)`.
+[`code/04_classics_functions.mjs`](code/04_classics_functions.mjs) uses `node:test` **fake timers** ([§16.5](../16-testing-and-typescript/README.md#165-test-doubles-and-mocking)): `setTimeout` and `Date.now()` move only when the test calls `tick(ms)`.
 
 ```js
 import { mock } from 'node:test';
@@ -1230,7 +1182,7 @@ const tick = (ms) => mock.timers.tick(ms);
 ```
 
 ### Debounce
-**What it is:** a **debounced** function waits until calls *stop* for `wait` ms, then runs once with the latest arguments. Analogy: a lift door that stays open while people keep walking in, and closes only after nobody has come for a few seconds. **Use it for:** search-as-you-type, auto-save, resize handling.
+A **debounced** function waits until calls *stop* for `wait` ms, then runs once with the latest arguments. **Use for:** search-as-you-type, auto-save, resize handling. (B [Q245](../19-interview-question-bank/README.md#14-coding-tasks-implement-from-scratch-classics))
 
 ```js
 function debounce(fn, wait) {
@@ -1254,10 +1206,10 @@ assert.deepEqual(calls, ['jav']);                   // cancelled
 
 Output: `debounce calls: [ 'jav' ]`
 
-Interviewers check: (1) the timer lives in a **closure** shared by all calls; (2) `debounced` is a regular `function` forwarding `this` and arguments with `apply`, so it works as a method; (3) a `cancel` method (Lodash — a popular utility library — also offers `flush` and `leading`).
+Interviewers check: the timer lives in a **closure** shared by all calls; `debounced` is a regular `function` forwarding `this` and arguments with `apply` (works as a method); a `cancel` method (Lodash also offers `flush` and `leading`). Superseded calls' arguments are simply dropped.
 
 ### Throttle
-**What it is:** a **throttled** function runs **at most once per `wait` ms**, however often it's called. Analogy: a bus that leaves every 10 minutes whether 1 or 50 people arrive. **Use it for:** scroll and mousemove handlers, rate-limited API calls (APIs that allow only so many calls per second). This version runs on the **leading** edge (immediately) and also on the **trailing** edge (once more at the end with the latest arguments) so the final position is never lost.
+A **throttled** function runs **at most once per `wait` ms**. **Use for:** scroll/mousemove handlers, rate-limited API calls. This version runs on the **leading** edge and once more on the **trailing** edge with the latest arguments, so the final position is never lost. (B [Q246](../19-interview-question-bank/README.md#14-coding-tasks-implement-from-scratch-classics))
 
 ```js
 function throttle(fn, wait) {
@@ -1285,7 +1237,7 @@ for (let i = 0; i < 20; i++) tick(10);                          // then 200 quie
 assert.deepEqual(calls, ['0@0', '90@100', '190@200', '250@300']);
 ```
 
-Output: `throttle calls: [ '0@0', '90@100', '190@200', '250@300' ]` — 26 events became 4 calls, exactly 100 ms apart, and the last one carries the final value `250`.
+Output: `throttle calls: [ '0@0', '90@100', '190@200', '250@300' ]` — 26 events became 4 calls, 100 ms apart, the last carrying the final `250`.
 
 | | Debounce | Throttle |
 |---|---|---|
@@ -1293,10 +1245,10 @@ Output: `throttle calls: [ '0@0', '90@100', '190@200', '250@300' ]` — 26 event
 | During a long burst | Never (until it ends) | Every `wait` ms |
 | Typical use | Search box, auto-save, validation | Scroll, drag, resize-driven layout, analytics |
 
-In the browser, visual updates tied to scrolling are often better done with `requestAnimationFrame` (once per frame) — see [§14.5](../14-browser-apis-and-security/README.md#145-timers-and-requestanimationframe).
+For scroll-tied visual updates, `requestAnimationFrame` (once per frame) is often better — [§14.5](../14-browser-apis-and-security/README.md#145-timers-and-requestanimationframe).
 
 ### Curry
-**What it is:** **currying** turns `f(a, b, c)` into a chain `f(a)(b)(c)`. The usual interview version also accepts several arguments at once. It relies on `fn.length` — the number of declared parameters (it doesn't count default or rest parameters).
+**Currying** turns `f(a, b, c)` into `f(a)(b)(c)`; the usual version also accepts several arguments at once. It relies on `fn.length` — declared parameters, counting stops at the first default or rest parameter (`(a, b = 2, ...rest) => {}` has length 1). (B [Q255, Q256](../19-interview-question-bank/README.md#14-coding-tasks-implement-from-scratch-classics))
 
 ```js
 function curry(fn) {
@@ -1316,10 +1268,10 @@ const sum = (a) => (b) => (b === undefined ? a : sum(a + b));
 assert.equal(sum(1)(2)(3)(), 6);
 ```
 
-Reusability works because each call builds a **new** argument array instead of pushing into a shared one — a common bug.
+Partials are reusable because each call builds a **new** argument array instead of pushing into a shared one — a common bug.
 
 ### Compose and pipe
-**Function composition** chains functions so the output of one is the input of the next. `compose(f, g)(x)` = `f(g(x))` (right to left, as in maths); `pipe(f, g)(x)` = `g(f(x))` (left to right, as you read).
+`compose(f, g)(x)` = `f(g(x))` (right to left, as in maths); `pipe(f, g)(x)` = `g(f(x))` (left to right). (B [Q42, Q278](../19-interview-question-bank/README.md#3-functions-and-functional-patterns))
 
 ```js
 const compose = (...fns) => (x) => fns.reduceRight((acc, f) => f(acc), x);
@@ -1331,7 +1283,7 @@ assert.equal(pipe()(7), 7);                            // no functions = identit
 ```
 
 ### Memoize
-**Memoization** caches a pure function's results by its arguments. Key design questions: how to build the key (here `JSON.stringify(args)`, overridable), and where the cache lives (a `Map`, which can grow forever — production code bounds it, e.g. with the LRU cache below).
+**Memoization** caches a pure function's results by its arguments. Design questions: the key (here `JSON.stringify(args)`, overridable) and where the cache lives (a `Map` grows forever — production bounds it, e.g. with the LRU below). (B [Q257](../19-interview-question-bank/README.md#14-coding-tasks-implement-from-scratch-classics))
 
 ```js
 function memoize(fn, keyOf = (...args) => JSON.stringify(args)) {
@@ -1352,10 +1304,10 @@ assert.equal(runs, 2);
 const fib = memoize((n) => (n < 2 ? n : fib(n - 1) + fib(n - 2)));
 ```
 
-Output: `memoize runs: 2 | fib(50): 12586269025`. `JSON.stringify` keys can't tell apart some values (`undefined` and `null` in arrays both become `null`; objects with different key orders differ) — mention it and offer a custom `keyOf`, or a `WeakMap` (a `Map` whose object keys don't stop garbage collection) for single-object arguments.
+Output: `memoize runs: 2 | fib(50): 12586269025`. `JSON.stringify` keys can't tell some values apart (`undefined` and `null` in arrays both become `null`; objects with different key orders differ) — offer a custom `keyOf`, or a `WeakMap` for single-object arguments.
 
 ### Flatten
-Flatten a nested array to a given depth, exactly like the built-in `arr.flat(depth)` ([§7.5](../07-arrays/README.md#75-iteration-methods-map-filter-reduce-and-friends)):
+Flatten to a given depth, like `arr.flat(depth)` ([§7.5](../07-arrays/README.md#75-iteration-methods-map-filter-reduce-and-friends)). (B [Q254, Q296](../19-interview-question-bank/README.md#14-coding-tasks-implement-from-scratch-classics))
 
 ```js
 function flatten(arr, depth = Infinity) {
@@ -1390,7 +1342,7 @@ assert.deepEqual(flattenObject({ a: 1, b: { c: 2, d: { e: 3 } } }), { a: 1, 'b.c
 ```
 
 ### A `bind` polyfill (and `call`)
-A **polyfill** is code that implements a standard feature for environments that lack it ([§10.12](../10-modules-and-tooling/README.md#1012-transpilers-and-polyfills)). `bind` must (1) fix `this`, (2) pre-fill arguments (partial application), and (3) when the bound function is used with `new`, ignore the bound `this` and construct normally. How `this` works is in [§9.1–9.2](../09-this-prototypes-and-classes/README.md#92-call-apply-and-bind).
+A **polyfill** implements a standard feature for environments that lack it ([§10.12](../10-modules-and-tooling/README.md#1012-transpilers-and-polyfills)). `bind` must (1) fix `this`, (2) pre-fill arguments (partial application), (3) under `new`, ignore the bound `this` and construct normally ([§9.1–9.2](../09-this-prototypes-and-classes/README.md#92-call-apply-and-bind)). (B [Q250, Q251](../19-interview-question-bank/README.md#14-coding-tasks-implement-from-scratch-classics))
 
 ```js
 Function.prototype.myBind = function (thisArg, ...preset) {
@@ -1421,10 +1373,10 @@ Function.prototype.myCall = function (thisArg, ...args) {
 
 Output: `myBind: Hi, Ada! | new bound -> {"x":1,"y":2}`
 
-`myCall` shows the classic trick: calling a function as a method of `ctx` makes `this === ctx`. (The real `call` doesn't box primitives — wrap them in object form, like `Object(5)` — or default to `globalThis` in strict code — that's the sloppy-mode behaviour.) Adding methods to built-in prototypes is fine in an interview but **not** in real code — it can clash with future standard methods.
+`myCall`'s trick: calling a function as a method of `ctx` makes `this === ctx`. (The real `call` neither boxes primitives — `Object(5)` — nor defaults to `globalThis` for strict functions; that's sloppy-mode behaviour.) Extending built-in prototypes is fine in an interview, **not** in real code — it can clash with future standard methods.
 
 ### Deep clone: `structuredClone` vs manual
-A **shallow copy** (`{ ...obj }`, `[...arr]`, `Object.assign`) copies the top level only; nested objects are still shared. A **deep copy** copies every level. The built-in is **`structuredClone`** (browsers since 2022, Node 17+), which uses the *structured clone algorithm* (the one `postMessage` uses).
+A **shallow copy** (`{ ...obj }`, `[...arr]`, `Object.assign`) shares nested objects; a **deep copy** copies every level. The built-in is **`structuredClone`** (browsers since 2022, Node 17+), using the *structured clone algorithm* (as `postMessage` does). (B [Q74, Q252](../19-interview-question-bank/README.md#14-coding-tasks-implement-from-scratch-classics))
 
 From [`code/05_classics_data.mjs`](code/05_classics_data.mjs):
 
@@ -1457,10 +1409,10 @@ JSON clone: { d: '1970-01-01T00:00:00.000Z', m: {}, n: null }
 | `undefined`, `NaN`, `Infinity` | ✓ | Dropped / `null` | ✓ | ✓ |
 | Cycles | ✓ (shared) | Throws `TypeError` | ✓ | ✓ (with a `WeakMap`) |
 | Functions | Shared | Dropped | Throws `DataCloneError` | Shared (as written) |
-| Class prototype | Lost (spread gives a plain object) | Lost | Lost | Kept (as written) |
-| Getters, property descriptors (a property's hidden settings: writable, enumerable, getter/setter) | Values copied | Values copied | Values copied | Values copied |
+| Class prototype | Lost (plain object) | Lost | Lost | Kept (as written) |
+| Getters, property descriptors (writable/enumerable/accessor settings) | Values copied | Values copied | Values copied | Values copied |
 
-The manual version interviewers ask for — a recursive walk that handles primitives, `Date`, `RegExp`, `Map`, `Set`, arrays, objects with their prototype, and **cycles** via a `WeakMap` of already-copied objects:
+The manual version: a recursive walk handling primitives, `Date`, `RegExp`, `Map`, `Set`, arrays, objects with their prototype, and **cycles** via a `WeakMap` of already-copied objects:
 
 ```js
 function deepClone(value, seen = new WeakMap()) {
@@ -1488,12 +1440,12 @@ function deepClone(value, seen = new WeakMap()) {
 }
 ```
 
-Output: `deepClone keeps class: true | shared ref kept: true` — the copy of `new Point(-3)` still has `norm()`, and an object referenced twice in the original is one object (referenced twice) in the copy.
+Output: `deepClone keeps class: true | shared ref kept: true` — the copy of `new Point(-3)` still has `norm()`, and an object referenced twice stays one object referenced twice. `seen.set` happens *before* copying children so a child pointing back finds the copy instead of recursing forever.
 
-**Which to use?** `structuredClone` for data; a manual clone only to keep class instances — where a `clone()` method is usually clearer.
+**Which?** `structuredClone` for data; manual only to keep class instances — where a `clone()` method is usually clearer.
 
 ### Deep equal
-Compare two values structurally. Decisions to state out loud: `NaN` equals `NaN`? (yes, via `Object.is`); `0` vs `-0`? (not equal with `Object.is` — say which you want); do prototypes have to match? (yes, so `[1, 2]` ≠ `{0: 1, 1: 2}`); does `{a: 1}` equal `{a: 1, b: undefined}`? (no — the key sets differ).
+Decisions to state out loud: `NaN` equals `NaN`? (yes, via `Object.is`); `0` vs `-0`? (not equal with `Object.is` — say which you want); prototypes must match? (yes: `[1, 2]` ≠ `{0: 1, 1: 2}`); `{a: 1}` vs `{a: 1, b: undefined}`? (no — key sets differ). (B [Q253](../19-interview-question-bank/README.md#14-coding-tasks-implement-from-scratch-classics))
 
 ```js
 function deepEqual(a, b, seen = new WeakMap()) {
@@ -1524,10 +1476,10 @@ assert.ok(!deepEqual([1, 2], { 0: 1, 1: 2 }));
 { const x = { v: 1 }; x.me = x; const y = { v: 1 }; y.me = y; assert.ok(deepEqual(x, y)); }
 ```
 
-In tests you don't write this: `assert.deepStrictEqual` does it ([§16.2](../16-testing-and-typescript/README.md#162-assertions-with-nodeassertstrict)).
+In tests, `assert.deepStrictEqual` does this ([§16.2](../16-testing-and-typescript/README.md#162-assertions-with-nodeassertstrict)).
 
 ### LRU cache
-An **LRU (least recently used) cache** holds at most `capacity` entries; when full, it evicts the entry that was used longest ago. The textbook design is a hash map plus a doubly linked list (each node links to both the previous and the next one). Caches in general — keeping copies of results so repeat requests are fast — are covered in [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md). In JavaScript a single **`Map`** is enough, because a `Map` iterates in insertion order: delete-and-reinsert moves a key to the "newest" end, and `map.keys().next().value` is the oldest. Both operations are O(1).
+An **LRU (least recently used) cache** holds at most `capacity` entries and evicts the one used longest ago. Textbook design: hash map + doubly linked list (each node links to previous and next). In JavaScript one **`Map`** suffices: it iterates in insertion order, so delete-and-reinsert moves a key to the "newest" end and `map.keys().next().value` is the oldest — both O(1). Caching in general: [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md). (B [Q259](../19-interview-question-bank/README.md#14-coding-tasks-implement-from-scratch-classics))
 
 ```js
 class LRUCache {
@@ -1558,10 +1510,10 @@ lru.put('a', 10);                       // update moves a to the end
 assert.deepEqual(lru.keys(), ['c', 'a']);
 ```
 
-If the interviewer forbids the `Map` trick, build the linked list: nodes with `prev`/`next`, a `Map` from key to node, and dummy head/tail nodes so insert and remove never special-case the ends. The LLD (low-level design) handbook builds the linked-list version (in Java) with eviction policies (rules for what to throw out) and thread safety (staying correct when several threads use it at once): [§20.3](../../../lld/chapters/20-case-components/README.md#203-design-an-in-memory-cache-and-an-lru-cache-from-scratch).
+Without the `Map` trick: nodes with `prev`/`next`, a `Map` from key to node, and dummy head/tail nodes so ends need no special case. The LLD handbook builds that version (in Java) with eviction policies and thread safety: [§20.3](../../../lld/chapters/20-case-components/README.md#203-design-an-in-memory-cache-and-an-lru-cache-from-scratch).
 
 ### EventEmitter
-The **publish/subscribe** pattern: code registers listeners for named events; `emit` calls them in registration order. Node's own `EventEmitter` is covered in [§15.8](../15-nodejs-basics/README.md#158-events-eventemitter); this is the interview version with `on`, `off`, `once` and `emit`.
+**Publish/subscribe**: listeners register for named events; `emit` calls them in registration order. Node's own is in [§15.8](../15-nodejs-basics/README.md#158-events-eventemitter); this is the interview version. (B [Q258, Q298](../19-interview-question-bank/README.md#14-coding-tasks-implement-from-scratch-classics))
 
 ```js
 class EventEmitter {
@@ -1598,10 +1550,10 @@ class EventEmitter {
 
 Output: `EventEmitter log: [ 'A:1', 'once:1', 'B:1', 'B:2' ]`
 
-A good answer iterates over a **copy** of the listener list (a `once` listener removes itself during `emit`, which would otherwise skip the next one), lets `off` remove a `once` listener by the original function, throws on an unhandled `'error'` like Node, and returns an unsubscribe function.
+Iterate a **copy** (a `once` listener removing itself mid-`emit` would otherwise skip the next one), let `off` remove a `once` listener by the original function, throw on an unhandled `'error'` like Node, return an unsubscribe function.
 
 ### `Promise.all`, `allSettled`, `race`, `any` polyfills
-How the real combinators behave is in [§12.8](../12-asynchronous-javascript/README.md#128-promise-combinators-all-allsettled-race-any). From [`code/06_promise_polyfills.mjs`](code/06_promise_polyfills.mjs):
+Real behaviour: [§12.8](../12-asynchronous-javascript/README.md#128-promise-combinators-all-allsettled-race-any). From [`code/06_promise_polyfills.mjs`](code/06_promise_polyfills.mjs) (B [Q247–Q249](../19-interview-question-bank/README.md#14-coding-tasks-implement-from-scratch-classics)):
 
 ```js
 function promiseAll(iterable) {
@@ -1667,45 +1619,23 @@ pool results: [ 't0', 't1', 't2', 't3', 't4' ] peak concurrency: 2
 all promise asserts passed
 ```
 
-Four things interviewers look for in `Promise.all`: results **by index** (not `push`, which orders by finish time); a **counter**, not `results.length` (a pre-sized array's length is already full); `Promise.resolve(item)` so plain values work; and an **empty input** that resolves immediately. A settled promise ignores later calls, so `reject` can be passed straight through.
+Four things interviewers look for in `Promise.all`: results **by index** (not `push`, which orders by finish time); a **counter**, not `results.length` (a pre-sized array is already "full"); `Promise.resolve(item)` so plain values work; **empty input** resolves immediately. A settled promise ignores later calls, so `reject` can be passed straight through.
 
-The same file also builds on these: a **timeout** (`race` a promise against a rejecting timer), **`promisify`** (wrap an error-first callback API — Node ships `util.promisify`), a **concurrency-limited pool** (run at most *n* tasks at once, results in order — the peak is asserted to be 2), and **retry**. The pool core:
-
-```js
-async function pool(tasks, limit) {
-  const results = new Array(tasks.length);
-  let next = 0;
-  async function worker() {
-    while (next < tasks.length) {
-      const i = next++;                   // no race: nothing else runs between these lines
-      results[i] = await tasks[i]();
-    }
-  }
-  await Promise.all(Array.from({ length: Math.min(limit, tasks.length) }, worker));
-  return results;
-}
-```
-
-More production-ready patterns (retry with back-off, stale responses) are in [§12.13](../12-asynchronous-javascript/README.md#1213-real-world-async-patterns).
+The file also builds a **timeout** (`race` against a rejecting timer), **`promisify`** (Node ships `util.promisify`), a **concurrency-limited pool** (at most *n* tasks at once, results in order — peak asserted to be 2; same worker-pool shape as `mapLimit` in [§12.13](../12-asynchronous-javascript/README.md#1213-real-world-async-patterns): `limit` workers share a `next++` index, safe because nothing runs between the read and the increment) and **retry** (B [Q262–Q264](../19-interview-question-bank/README.md#14-coding-tasks-implement-from-scratch-classics)). Production patterns (back-off, stale responses): §12.13.
 
 ### Common mistakes
-- Using arrow functions for `debounced`/`throttled`/`memoized` wrappers, which silently drops the caller's `this`.
+- Arrow functions for `debounced`/`throttled`/`memoized` wrappers silently drop the caller's `this`.
 - `Promise.all` with `results.push(v)` (wrong order) or `if (results.length === n)` (fires too early).
 - Deep clone without a `seen` map — infinite recursion on the first cycle.
-- `curry` that mutates a shared argument array, so partial functions interfere with each other.
+- `curry` mutating a shared argument array, so partials interfere.
 - `EventEmitter.emit` iterating the live array while a `once` listener removes itself.
 
 ### In the interview
 **30-second answer — "Implement debounce."** Return a wrapper holding a timer in a closure; each call clears it and starts a new `wait`-ms timer; when it fires, call the original with the latest arguments and `this`. Add `cancel`; mention the leading-edge option.
 - *Debounce vs throttle?* Debounce waits for quiet and runs once; throttle runs at a steady maximum rate during activity.
-- *Why store `Promise.all` results by index?* Promises finish in any order; the result must match the input order.
-- *Why is a `Map` enough for an LRU cache?* It preserves insertion order and supports O(1) delete/insert, so "move to newest" = delete + set and "oldest" = first key.
-
-### Self-check
-1. What does `debounce` do with the arguments of calls that were superseded? → Nothing — only the last call's arguments are used.
-2. What does `Promise.race([])` return? → A promise that never settles.
-3. Why does `deepClone` call `seen.set` *before* copying children? → So a child that points back to the parent finds the copy instead of recursing forever.
-4. What is `fn.length` for `(a, b = 2, ...rest) => {}`? → `1` — counting stops at the first default or rest parameter.
+- *Why store `Promise.all` results by index?* Promises finish in any order; results must match input order.
+- *Why is a `Map` enough for an LRU cache?* Insertion order + O(1) delete/insert: "move to newest" = delete + set, "oldest" = first key.
+- *`Promise.race([])`?* Never settles.
 
 ### TL;DR
 Closures hold state (`debounce` timer, `memoize` cache, `curry` arguments); forward `this` with `apply`; `bind` must handle `new`. `structuredClone` for data, manual clone for class instances, `WeakMap` for cycles. LRU = one `Map`. EventEmitter: copy the list before emitting. `Promise.all`: index, counter, `Promise.resolve`, empty input.
@@ -1715,7 +1645,7 @@ Closures hold state (`debounce` timer, `memoize` cache, `curry` arguments); forw
 ## 17.4 Fifty-three tricky interview questions
 
 ### How to use this section
-Each question shows the code, the **real output** (from [`code/07_qa_language.js`](code/07_qa_language.js) — CommonJS in sloppy mode on purpose, so legacy behaviour is visible — and [`code/08_qa_async_and_memory.mjs`](code/08_qa_async_and_memory.mjs)), a short answer you can say out loud, and a link to the section that teaches the topic properly. Cover the answer, predict the output, then check.
+Each question shows the code and its **real output** (from [`code/07_qa_language.js`](code/07_qa_language.js) — CommonJS in sloppy mode on purpose, so legacy behaviour is visible — and [`code/08_qa_async_and_memory.mjs`](code/08_qa_async_and_memory.mjs)), the one-line reason, and links: **→ B** points to the say-it-out-loud answer in the [Chapter 19 question bank](../19-interview-question-bank/README.md) (not repeated here), **§** to the section that teaches the topic. Cover the output, predict, then check.
 
 ### 17.4.1 Coercion and equality
 
@@ -1731,7 +1661,7 @@ Q1  [] + {}                        "[object Object]"
 Q1  [1,2] + [3]                    "1,23"
 ```
 
-`+` first turns objects into primitives (arrays → `"1,2"`-style strings, plain objects → `"[object Object]"`); if **either** side is then a string it concatenates, otherwise it adds. `-`, `*`, `/` always convert to numbers. (At the start of a console line, `{} + []` is `0`: `{}` parses as an empty block and `+[]` is unary plus — the `+x` operator that converts `x` to a number.) → [§2.5](../02-variables-types-and-operators/README.md#25-arithmetic-operators), [§2.12](../02-variables-types-and-operators/README.md#212-type-conversion-summary)
+`+` first turns objects into primitives (arrays → `"1,2"`-style strings, plain objects → `"[object Object]"`); if **either** side is then a string it concatenates, otherwise it adds. `-`, `*`, `/` always convert to numbers. (At the start of a console line, `{} + []` is `0`: `{}` parses as an empty block and `+[]` is unary plus — `+x` converts `x` to a number.) → B [Q6, Q230](../19-interview-question-bank/README.md#1-types-values-and-coercion) · [§2.5](../02-variables-types-and-operators/README.md#25-arithmetic-operators), [§2.12](../02-variables-types-and-operators/README.md#212-type-conversion-summary)
 
 **Q2. What do `null == undefined`, `null == 0`, `null >= 0`, `'' == 0` and `'0' == false` give?**
 
@@ -1743,7 +1673,7 @@ Q2  '' == 0                        true
 Q2  '0' == false                   true
 ```
 
-`==` converts types first (booleans and strings become numbers), but `null` and `undefined` are `==` only to each other, so `null == 0` is false. Relational operators (`<`, `>`, `<=`, `>=`) have no such exception — `null` becomes `0`, so `null >= 0` is true. Use `===`; keep `x == null` for a deliberate "null or undefined" check. → [§2.6](../02-variables-types-and-operators/README.md#26-comparison-operators-and-equality)
+`null` and `undefined` are `==` only to each other, so `null == 0` is false; relational operators (`<`, `>=` …) have no such exception — `null` becomes `0`. → B [Q3](../19-interview-question-bank/README.md#1-types-values-and-coercion) · [§2.6](../02-variables-types-and-operators/README.md#26-comparison-operators-and-equality)
 
 **Q3. Why is `[] == ![]` true?**
 
@@ -1751,7 +1681,7 @@ Q2  '0' == false                   true
 Q3  [] == ![]                      true
 ```
 
-`![]` is `false` (every object is truthy). Now `[] == false`: the boolean becomes `0`, the array becomes `''` then `0`, and `0 == 0`. The same array is "equal to its own negation" — the best argument for `===`. → [§2.6](../02-variables-types-and-operators/README.md#26-comparison-operators-and-equality), [§2.11](../02-variables-types-and-operators/README.md#211-booleans-truthy-and-falsy)
+`![]` is `false` (objects are truthy); then `[] == false` → `'' == 0` → `0 == 0`. — the best argument for `===`. → [§2.6](../02-variables-types-and-operators/README.md#26-comparison-operators-and-equality), [§2.11](../02-variables-types-and-operators/README.md#211-booleans-truthy-and-falsy)
 
 **Q4. What is `typeof null`, and why?**
 
@@ -1759,7 +1689,7 @@ Q3  [] == ![]                      true
 Q4  typeof null                    "object"
 ```
 
-A bug from the first engine (1995): values carried a type tag, objects had tag 0, and `null` (the null pointer — a reference to nothing, stored as 0) also read as tag 0. Fixing it would break the web. Use `x === null`, and `x !== null && typeof x === 'object'` for "a real object". → [§2.3](../02-variables-types-and-operators/README.md#23-data-types-and-typeof)
+A 1995 type-tag bug kept for compatibility. Test with `x === null`, and `x !== null && typeof x === 'object'` for "a real object". → B [Q5](../19-interview-question-bank/README.md#1-types-values-and-coercion) · [§2.3](../02-variables-types-and-operators/README.md#23-data-types-and-typeof)
 
 **Q5. How does `NaN` behave?**
 
@@ -1770,7 +1700,7 @@ Q5  [NaN].indexOf(NaN)             -1
 Q5  typeof NaN                     "number"
 ```
 
-`NaN` (the result of failed numeric operations like `0 / 0`) is the only value not equal to itself. `indexOf` uses `===`, so it can't find it; `includes`, `Map` and `Set` use SameValueZero, where `NaN` equals `NaN`. Test with `Number.isNaN`, not the global `isNaN`, which converts first (`isNaN('x')` is `true`). → [§2.10](../02-variables-types-and-operators/README.md#210-numbers-in-depth)
+`indexOf` uses `===`; `includes`, `Map` and `Set` use SameValueZero (`NaN` equals `NaN`). Use `Number.isNaN`, not the coercing global `isNaN`. → B [Q8, Q236](../19-interview-question-bank/README.md#1-types-values-and-coercion) · [§2.10](../02-variables-types-and-operators/README.md#210-numbers-in-depth)
 
 **Q6. How does `Object.is` differ from `===`?**
 
@@ -1778,7 +1708,7 @@ Q5  typeof NaN                     "number"
 Q6  Object.is(-0, 0) / -0 === 0    "false / true"
 ```
 
-Only in two cases: `Object.is(NaN, NaN)` is `true` and `Object.is(0, -0)` is `false`. React uses `Object.is` to decide whether state changed. → [§2.6](../02-variables-types-and-operators/README.md#26-comparison-operators-and-equality)
+Only for `NaN` (equal) and `±0` (different). → B [Q9](../19-interview-question-bank/README.md#1-types-values-and-coercion)
 
 **Q7. What does `typeof` return for arrays, functions, classes and undeclared variables?**
 
@@ -1787,7 +1717,7 @@ Q7  typeof [] / function / class   "object / function / function"
 Q7  typeof undeclaredVar           "undefined"
 ```
 
-Arrays are objects — use `Array.isArray`. Classes are functions underneath. `typeof` on a name that was never declared returns `'undefined'` instead of throwing (useful for feature detection — checking whether an API exists before using it) — but see Q16 for the TDZ exception. → [§2.3](../02-variables-types-and-operators/README.md#23-data-types-and-typeof)
+Use `Array.isArray`; classes are functions; `typeof` on a never-declared name doesn't throw (feature detection) — except in the TDZ (Q16). → B [Q5](../19-interview-question-bank/README.md#1-types-values-and-coercion)
 
 **Q8. Which values are falsy? Is `[]` truthy? And `new Boolean(false)`?**
 
@@ -1796,7 +1726,7 @@ Q8  Boolean([]), Boolean('0')      "true, true"
 Q8  !!new Boolean(false)           true
 ```
 
-Falsy: `false`, `0`, `-0`, `0n`, `''`, `null`, `undefined`, `NaN` (plus the legacy `document.all`). Everything else is truthy — `[]`, `{}`, `'0'`, `'false'`, even a `Boolean` object holding `false`. Test an empty array with `arr.length === 0`. → [§2.11](../02-variables-types-and-operators/README.md#211-booleans-truthy-and-falsy)
+Falsy: `false`, `0`, `-0`, `0n`, `''`, `null`, `undefined`, `NaN` (plus legacy `document.all`); everything else, objects included, is truthy. Test an empty array with `arr.length === 0`. → B [Q7](../19-interview-question-bank/README.md#1-types-values-and-coercion)
 
 **Q9. What does `'b' + 'a' + +'a' + 'a'` give?**
 
@@ -1804,7 +1734,7 @@ Falsy: `false`, `0`, `-0`, `0n`, `''`, `null`, `undefined`, `NaN` (plus the lega
 Q9  'b' + 'a' + +'a' + 'a'         "baNaNa"
 ```
 
-`+'a'` is unary plus: it converts `'a'` to a number, which is `NaN`; concatenation turns it into the text `"NaN"`. → [§2.5](../02-variables-types-and-operators/README.md#25-arithmetic-operators)
+`+'a'` (unary plus) is `NaN`, concatenated as text. → [§2.5](../02-variables-types-and-operators/README.md#25-arithmetic-operators)
 
 **Q10. Why does `['1', '7', '11'].map(parseInt)` give `[1, NaN, 3]`?**
 
@@ -1813,7 +1743,7 @@ Q10 ['1','7','11'].map(parseInt)   [ 1, NaN, 3 ]
 Q10 ['1','7','11'].map(Number)     [ 1, 7, 11 ]
 ```
 
-`map` passes `(value, index, array)`, and `parseInt`'s second parameter is the **radix** (the number base, e.g. 10 for decimal, 2 for binary): `parseInt('1', 0)` (0 = default base 10 → 1), `parseInt('7', 1)` (invalid base → `NaN`), `parseInt('11', 2)` (binary → 3). Fix: `map(Number)` or `map((s) => parseInt(s, 10))`. → [§7.5](../07-arrays/README.md#75-iteration-methods-map-filter-reduce-and-friends), [§2.10](../02-variables-types-and-operators/README.md#210-numbers-in-depth)
+`map` passes `(value, index)`, and `parseInt`'s second parameter is the **radix** (number base): `parseInt('1', 0)` (0 = default 10), `parseInt('7', 1)` (invalid → `NaN`), `parseInt('11', 2)` (binary 3). Use `map(Number)` or `(s) => parseInt(s, 10)`. → [§7.5](../07-arrays/README.md#75-iteration-methods-map-filter-reduce-and-friends), [§2.10](../02-variables-types-and-operators/README.md#210-numbers-in-depth)
 
 **Q11. Why does `[10, 1, 2].sort()` give `[1, 10, 2]`?**
 
@@ -1821,7 +1751,7 @@ Q10 ['1','7','11'].map(Number)     [ 1, 7, 11 ]
 Q11 [10, 1, 2].sort()              [ 1, 10, 2 ]
 ```
 
-Without a comparator, `sort` compares elements as strings, and `'10' < '2'` because `'1' < '2'`. Pass `(a, b) => a - b`. → [§7.6](../07-arrays/README.md#76-sorting-correctly)
+No comparator → string comparison. Pass `(a, b) => a - b`. → B [Q90, Q233](../19-interview-question-bank/README.md#5-objects-arrays-strings-and-collections) · [§7.6](../07-arrays/README.md#76-sorting-correctly)
 
 **Q12. What's the difference between `||` and `??`?**
 
@@ -1829,7 +1759,7 @@ Without a comparator, `sort` compares elements as strings, and `'10' < '2'` beca
 Q12 0 || 'x' / 0 ?? 'x'            "x / 0"
 ```
 
-`a || b` falls back to `b` when `a` is **any falsy** value, so it wrongly replaces a legitimate `0`, `''` or `false`. `a ?? b` (nullish coalescing, ES2020) falls back only when `a` is `null` or `undefined`. Use `??` for defaults. → [§2.7](../02-variables-types-and-operators/README.md#27-logical-operators--and-)
+`||` replaces any falsy value; `??` (ES2020) only `null`/`undefined`. Use `??` for defaults. → B [Q12](../19-interview-question-bank/README.md#1-types-values-and-coercion) · [§2.7](../02-variables-types-and-operators/README.md#27-logical-operators--and-)
 
 **Q13. Why is `{} === {}` false?**
 
@@ -1837,7 +1767,7 @@ Q12 0 || 'x' / 0 ?? 'x'            "x / 0"
 Q13 {} === {}                      false
 ```
 
-Objects (including arrays and functions) are compared by **reference** — "is this the same object in memory?" — not by content. Two literals create two objects. To compare content, use a deep-equal (§17.3). → [§2.4](../02-variables-types-and-operators/README.md#24-primitives-vs-objects)
+Objects compare by **reference**; two literals are two objects. Compare content with a deep-equal (§17.3). → B [Q2](../19-interview-question-bank/README.md#1-types-values-and-coercion) · [§2.4](../02-variables-types-and-operators/README.md#24-primitives-vs-objects)
 
 **Q14. Why is `0.1 + 0.2 !== 0.3`? And why is `Math.max() < Math.min()`?**
 
@@ -1846,7 +1776,7 @@ Q14 0.1 + 0.2 === 0.3              false
 Q14 Math.max() < Math.min()        true
 ```
 
-0.1 and 0.2 have no exact binary (IEEE 754) form, so the sum is `0.30000000000000004` — compare with a tolerance or use integers (§17.1). With no arguments `Math.max()` is `-Infinity` (the identity for "max") and `Math.min()` is `Infinity`. → [§2.10](../02-variables-types-and-operators/README.md#210-numbers-in-depth)
+No exact IEEE 754 binary form → `0.30000000000000004` (§17.1). With no arguments `Math.max()` is `-Infinity` (the identity for "max") and `Math.min()` is `Infinity`. → B [Q10](../19-interview-question-bank/README.md#1-types-values-and-coercion) · [§2.10](../02-variables-types-and-operators/README.md#210-numbers-in-depth)
 
 ### 17.4.2 Scope, hoisting and closures
 
@@ -1855,12 +1785,12 @@ Q14 Math.max() < Math.min()        true
 | | `var` | `let` | `const` |
 |---|---|---|---|
 | Scope | Function | Block `{ }` | Block `{ }` |
-| Before the declaration line | `undefined` (hoisted and initialised) | `ReferenceError` (TDZ) | `ReferenceError` (TDZ) |
+| Before the declaration line | `undefined` | `ReferenceError` (TDZ) | `ReferenceError` (TDZ) |
 | Redeclare in the same scope | Allowed | `SyntaxError` | `SyntaxError` |
 | Reassign | Yes | Yes | No (`TypeError`) |
-| At top level of a script | Becomes a property of `globalThis` | Doesn't | Doesn't |
+| At top level of a script | Property of `globalThis` | No | No |
 
-`const` stops *reassignment* of the variable, not mutation of the object it points to (Q44). Default to `const`, use `let` when you must reassign, avoid `var`. → [§2.1](../02-variables-types-and-operators/README.md#21-variables-let-const-and-var)
+`const` stops reassignment, not mutation (Q44). → B [Q21](../19-interview-question-bank/README.md#2-variables-hoisting-scope-and-closures) · [§2.1](../02-variables-types-and-operators/README.md#21-variables-let-const-and-var)
 
 **Q16. What happens when you read a variable before its declaration?**
 
@@ -1870,7 +1800,7 @@ Q16 let read before declaration    "ReferenceError: Cannot access 'tdz' before i
 Q16 typeof in the TDZ              "ReferenceError: Cannot access 'inTdz' before initialization"
 ```
 
-All declarations are **hoisted** (registered on entering the scope); `var` is also initialised to `undefined`. `let`, `const` and `class` stay uninitialised until their line runs — the **temporal dead zone (TDZ)** — and any access throws, even `typeof`. → [§2.2](../02-variables-types-and-operators/README.md#22-hoisting-and-the-temporal-dead-zone)
+All declarations are hoisted; only `var` is initialised (`undefined`). `let`/`const`/`class` sit in the **temporal dead zone** — even `typeof` throws. → B [Q22, Q23](../19-interview-question-bank/README.md#2-variables-hoisting-scope-and-closures) · [§2.2](../02-variables-types-and-operators/README.md#22-hoisting-and-the-temporal-dead-zone)
 
 **Q17. Can you call a function before it's defined?**
 
@@ -1879,7 +1809,7 @@ Q17 declaration hoisted            "works"
 Q17 expression not hoisted         "TypeError: late is not a function"
 ```
 
-A function **declaration** is hoisted with its body. A function **expression** in a `var` hoists only the variable (`undefined`), so calling it throws `TypeError`; with `let`/`const` it's a TDZ `ReferenceError`. → [§4.2](../04-functions-scope-and-closures/README.md#42-declarations-vs-expressions-and-hoisting)
+Declarations hoist with their body; a `var` function expression hoists only `undefined` (→ `TypeError`; with `let`/`const` a TDZ `ReferenceError`). → B [Q24](../19-interview-question-bank/README.md#2-variables-hoisting-scope-and-closures) · [§4.2](../04-functions-scope-and-closures/README.md#42-declarations-vs-expressions-and-hoisting)
 
 **Q18. What do these loops print?**
 
@@ -1893,7 +1823,7 @@ for (var k = 0; k < 3; k++) ((k2) => setTimeout(() => out.fixed.push(k2), 0))(k)
 Q18 closures in loops              {"var":[3,3,3],"let":[0,1,2],"fixed":[0,1,2]}
 ```
 
-The callbacks run after the loop. `var` has **one** `i` for the whole function — `3` by then. `let` in a `for` header creates a **fresh binding per iteration**. The pre-ES2015 fix was an IIFE (immediately invoked function expression — a function defined and called on the spot) copying the value into a parameter. → [§4.7](../04-functions-scope-and-closures/README.md#47-closures)
+One shared `var i`; a fresh `let` binding per iteration; the pre-ES2015 fix was an IIFE (a function defined and called on the spot) copying the value. → B [Q29, Q243](../19-interview-question-bank/README.md#2-variables-hoisting-scope-and-closures) · [§4.7](../04-functions-scope-and-closures/README.md#47-closures)
 
 **Q19. What is a closure? Show one.**
 
@@ -1907,7 +1837,7 @@ c1(); c1();
 Q19 counter via closure            "c1: 3, c2: 1"
 ```
 
-A **closure** is a function plus the variables of the scope where it was created, kept alive and updatable after the outer function returns. Each `makeCounter()` call creates a new `n`, so `c1` and `c2` are independent. Uses: private state, factories, `debounce`/`memoize` (§17.3). → [§4.7](../04-functions-scope-and-closures/README.md#47-closures)
+A **closure** = a function plus its creation scope's variables, kept alive after the outer function returns; each `makeCounter()` makes a new `n`. → B [Q28](../19-interview-question-bank/README.md#2-variables-hoisting-scope-and-closures) · [§4.7](../04-functions-scope-and-closures/README.md#47-closures)
 
 **Q20. What's wrong with `let a = b = 5`?**
 
@@ -1919,7 +1849,7 @@ A **closure** is a function plus the variables of the scope where it was created
 Q20 let a = b = 5                  "outside: typeof a=undefined, typeof b=number"
 ```
 
-It parses as `b = 5; let a = b;`. `a` is local, but `b` was never declared, so in sloppy mode the assignment creates an **accidental global**. In strict mode it throws `ReferenceError` (Q22). → [§4.5](../04-functions-scope-and-closures/README.md#45-scope-global-function-and-block)
+`b = 5` creates an **accidental global** in sloppy mode (`ReferenceError` in strict). → B [Q36](../19-interview-question-bank/README.md#2-variables-hoisting-scope-and-closures) · [§4.5](../04-functions-scope-and-closures/README.md#45-scope-global-function-and-block)
 
 **Q21. Is a `var` inside an `if` block visible outside it?**
 
@@ -1927,7 +1857,7 @@ It parses as `b = 5; let a = b;`. `a` is local, but `b` was never declared, so i
 Q21 var in block leaks             "v=1, typeof l=undefined"
 ```
 
-Yes: `var` ignores blocks and belongs to the whole function. `let`/`const` are confined to the block. → [§4.5](../04-functions-scope-and-closures/README.md#45-scope-global-function-and-block)
+Yes: `var` ignores blocks; `let`/`const` don't. → [§4.5](../04-functions-scope-and-closures/README.md#45-scope-global-function-and-block)
 
 **Q22. What does strict mode change?**
 
@@ -1936,7 +1866,7 @@ Q22/Q23 strict: lost this      TypeError: Cannot read properties of undefined (r
 Q22 strict: undeclared assign  ReferenceError: undeclaredThing is not defined
 ```
 
-Strict mode (automatic in ES modules and class bodies) turns silent mistakes into errors: undeclared assignments and writes to read-only properties throw, `this` in a plain call is `undefined` instead of `globalThis`, and duplicate parameter names and `with` are syntax errors. → [§1.8](../01-introduction-and-setup/README.md#18-strict-mode)
+Silent mistakes become errors; `this` in a plain call is `undefined`; automatic in ES modules and class bodies. → B [Q34](../19-interview-question-bank/README.md#2-variables-hoisting-scope-and-closures) · [§1.8](../01-introduction-and-setup/README.md#18-strict-mode)
 
 ### 17.4.3 `this`, arrow functions, `call`/`apply`/`bind`, `new`
 
@@ -1951,7 +1881,7 @@ Q23 method call                    "Ada"
 Q23 extracted method (sloppy)      undefined
 ```
 
-`this` is decided by **how** a function is called. `user.regular()` sets `this = user`; a plain `f()` gives `undefined` in strict code (→ `TypeError`, Q22) or `globalThis` in sloppy code (→ `undefined` name). It bites with callbacks like `setTimeout(user.regular)`. Fix: `user.regular.bind(user)` or `() => user.regular()`. → [§9.1](../09-this-prototypes-and-classes/README.md#91-this--the-call-time-context)
+`this` comes from the call: a plain `f()` gets `undefined` (strict → `TypeError`, Q22) or `globalThis` (sloppy). Fix with `bind` or `() => user.regular()`. → B [Q54](../19-interview-question-bank/README.md#4-this-callapplybind-prototypes-and-classes) · [§9.1](../09-this-prototypes-and-classes/README.md#91-this--the-call-time-context)
 
 **Q24. How do arrow functions differ from regular functions?**
 
@@ -1959,14 +1889,7 @@ Q23 extracted method (sloppy)      undefined
 Q24 arrow in object literal        "object"
 ```
 
-| | Regular function | Arrow function |
-|---|---|---|
-| `this` | Set by the call | Taken from the surrounding scope (lexical); `call`/`bind` can't change it |
-| `arguments` | Has its own | None (uses the outer one); use rest `...args` |
-| `new` | Can be a constructor | `TypeError` — no `prototype` |
-| Good for | Methods, constructors | Callbacks inside methods |
-
-So an arrow used as an object-literal *method* doesn't see the object: its `this` is the outer scope's — here CommonJS's `module.exports`; in an ES module, `undefined`. → [§4.3](../04-functions-scope-and-closures/README.md#43-arrow-functions)
+No own `this` (lexical; `call`/`bind` can't change it), no `arguments` (use rest), no `new`/`prototype`. As an object-literal *method* an arrow sees the outer `this` — here CommonJS's `module.exports`; in an ES module, `undefined`. → B [Q37, Q55](../19-interview-question-bank/README.md#3-functions-and-functional-patterns) · [§4.3](../04-functions-scope-and-closures/README.md#43-arrow-functions)
 
 **Q25. Inside a method, what is `this` in a nested regular function vs a nested arrow?**
 
@@ -1978,7 +1901,7 @@ delayed() { return [function () { return this === globalThis; }(), (() => this.n
 Q25 inner function vs arrow        [ true, 'Ada' ]
 ```
 
-The inner regular function is called plainly (default `this`: global object in sloppy mode, `undefined` in strict); the arrow inherits the method's `this` — why arrows suit callbacks like `setTimeout(() => this.save(), 100)` inside methods. → [§9.1](../09-this-prototypes-and-classes/README.md#91-this--the-call-time-context)
+The inner function is a plain call (global object in sloppy mode); the arrow inherits the method's `this` — why arrows suit `setTimeout(() => this.save())` in methods. → B [Q226](../19-interview-question-bank/README.md#13-output-prediction-puzzles-what-will-this-print) · [§9.1](../09-this-prototypes-and-classes/README.md#91-this--the-call-time-context)
 
 **Q26. What's the difference between `call`, `apply` and `bind`?**
 
@@ -1986,7 +1909,7 @@ The inner regular function is called plainly (default `this`: global object in s
 Q26 call / apply / bind            "Hi Lin! | Yo Lin? | Hey Lin."
 ```
 
-All three set `this`. `call(thisArg, a, b)` calls now with arguments listed; `apply(thisArg, [a, b])` calls now with an array; `bind(thisArg, a)` **returns a new function** with `this` (and optionally leading arguments) fixed, to call later. Memory aid: **A**pply = **A**rray. → [§9.2](../09-this-prototypes-and-classes/README.md#92-call-apply-and-bind)
+`call` (args listed) and `apply` (args array) call now; `bind` returns a new fixed-`this` function. **A**pply = **A**rray. → B [Q53](../19-interview-question-bank/README.md#4-this-callapplybind-prototypes-and-classes) · [§9.2](../09-this-prototypes-and-classes/README.md#92-call-apply-and-bind)
 
 **Q27. What happens if you `bind` twice?**
 
@@ -1994,7 +1917,7 @@ All three set `this`. `call(thisArg, a, b)` calls now with arguments listed; `ap
 Q27 bind twice                     1
 ```
 
-The first `bind` wins: a bound function ignores any later `this` from `bind`, `call` or `apply` (the only exception is `new`). → [§9.2](../09-this-prototypes-and-classes/README.md#92-call-apply-and-bind)
+The first `bind` wins (only `new` overrides it). → B [Q56](../19-interview-question-bank/README.md#4-this-callapplybind-prototypes-and-classes) · [§9.2](../09-this-prototypes-and-classes/README.md#92-call-apply-and-bind)
 
 **Q28. What does `new` do? What if the constructor returns something?**
 
@@ -2003,7 +1926,7 @@ Q28 new returns object?            "{\"b\":2}"
 Q28 new returns primitive?         "{\"a\":1}"
 ```
 
-`new F(args)`: (1) creates an empty object whose prototype is `F.prototype`; (2) calls `F` with `this` set to that object; (3) returns that object — **unless** `F` explicitly returns an *object*, which then replaces it. Returned primitives are ignored. → [§9.4](../09-this-prototypes-and-classes/README.md#94-constructor-functions-and-new)
+Creates an object linked to `F.prototype`, runs `F` with that `this`, returns it — unless `F` returns an *object*; returned primitives are ignored. → B [Q59, Q237](../19-interview-question-bank/README.md#4-this-callapplybind-prototypes-and-classes) · [§9.4](../09-this-prototypes-and-classes/README.md#94-constructor-functions-and-new)
 
 ### 17.4.4 Prototypes and classes
 
@@ -2014,7 +1937,7 @@ Q29 proto links                    "true true true"
 Q29 own vs inherited               "true false true"
 ```
 
-Every object has an internal **`[[Prototype]]`** link (read with `Object.getPrototypeOf`; `__proto__` is the legacy accessor — an old getter/setter property for the same link); missed lookups continue along this **prototype chain**. `F.prototype` is an ordinary property of **functions**: the object `new F()` installs as the instance's `[[Prototype]]`. So methods live on `Animal.prototype` (shared) and data on the instance (`Object.hasOwn(rex, 'speak')` is false, `'speak' in rex` is true). → [§9.3](../09-this-prototypes-and-classes/README.md#93-prototypes-and-the-prototype-chain)
+Every object has a `[[Prototype]]` link (`Object.getPrototypeOf`; `__proto__` is the legacy accessor); `F.prototype` is the object `new F()` installs as that link. Methods live on `Animal.prototype` (shared): `Object.hasOwn(rex, 'speak')` is false, `'speak' in rex` is true. → B [Q57, Q58](../19-interview-question-bank/README.md#4-this-callapplybind-prototypes-and-classes) · [§9.3](../09-this-prototypes-and-classes/README.md#93-prototypes-and-the-prototype-chain)
 
 **Q30. How does `instanceof` work? Can it be fooled?**
 
@@ -2022,7 +1945,7 @@ Every object has an internal **`[[Prototype]]`** link (read with `Object.getProt
 Q30 instanceof after proto swap    true
 ```
 
-`x instanceof F` walks `x`'s prototype chain looking for `F.prototype`. It doesn't check how `x` was created, so a plain object whose prototype was set to `Animal.prototype` passes. It also fails across realms (separate JavaScript environments with their own built-ins — an array from an iframe, a page embedded in another, isn't `instanceof Array` here — use `Array.isArray`). → [§9.7](../09-this-prototypes-and-classes/README.md#97-instanceof-and-type-checks)
+It walks the prototype chain for `F.prototype`, so a plain object given `Animal.prototype` passes; it fails across realms (iframe arrays — use `Array.isArray`). → B [Q65](../19-interview-question-bank/README.md#4-this-callapplybind-prototypes-and-classes) · [§9.7](../09-this-prototypes-and-classes/README.md#97-instanceof-and-type-checks)
 
 **Q31. How are classes different from constructor functions?**
 
@@ -2031,7 +1954,7 @@ Q31 class before declaration       "ReferenceError: Cannot access 'Later' before
 Q31 class without new              "TypeError: Class constructor K cannot be invoked without 'new'"
 ```
 
-Mostly syntax over prototypes, but: class declarations are in the TDZ until defined; calling without `new` throws; bodies are strict; methods are non-enumerable; and classes add real features — `#private`, `static` blocks, `super`. → [§9.5](../09-this-prototypes-and-classes/README.md#95-classes)
+TDZ, `new` required, strict bodies, non-enumerable methods, plus `#private`, `static` blocks, `super`. → B [Q61](../19-interview-question-bank/README.md#4-this-callapplybind-prototypes-and-classes) · [§9.5](../09-this-prototypes-and-classes/README.md#95-classes)
 
 **Q32. What is `Object.create(null)` for?**
 
@@ -2039,7 +1962,7 @@ Mostly syntax over prototypes, but: class declarations are in the TDZ until defi
 Q32 Object.create(null)            "undefined true"
 ```
 
-It creates an object with **no prototype** — no inherited `toString`, `constructor` or `__proto__` — a safe "dictionary" where keys like `'constructor'` from user input can't collide with built-ins. A `Map` is usually the better choice today. → [§9.3](../09-this-prototypes-and-classes/README.md#93-prototypes-and-the-prototype-chain)
+An object with **no prototype** — no inherited `toString`, `constructor` or `__proto__` — a safe dictionary for user-supplied keys. A `Map` is usually better today. → [§9.3](../09-this-prototypes-and-classes/README.md#93-prototypes-and-the-prototype-chain)
 
 **Q33. How do `#private` fields compare with closure-based privacy?**
 
@@ -2051,7 +1974,7 @@ class Wallet { #cents = 0; add(c) { this.#cents += c; return this.#cents; } }
 Q33 #private vs closure            "10 undefined 0 {}"
 ```
 
-`#cents` is truly private — invisible to `w.cents`, `Object.keys` and `JSON.stringify`, and a *syntax* error outside the class body. Closure privacy also hides state, but every instance needs its own method copies; `#` fields keep methods shared on the prototype. → [§9.5](../09-this-prototypes-and-classes/README.md#95-classes)
+`#cents` is invisible to `w.cents`, `Object.keys`, `JSON.stringify`, and a *syntax* error outside the class. Closure privacy needs per-instance method copies; `#` fields keep methods shared on the prototype. → B [Q30, Q63](../19-interview-question-bank/README.md#2-variables-hoisting-scope-and-closures) · [§9.5](../09-this-prototypes-and-classes/README.md#95-classes)
 
 **Q34. What happens if a subclass constructor uses `this` before `super()`?**
 
@@ -2059,11 +1982,11 @@ Q33 #private vs closure            "10 undefined 0 {}"
 Q34 this before super()            "ReferenceError: Must call super constructor in derived class before accessing 'this' or returning from derived constructor"
 ```
 
-In a derived class (one that `extends` another) the **parent** constructor creates the object, so `this` doesn't exist until `super(...)` returns. → [§9.6](../09-this-prototypes-and-classes/README.md#96-inheritance-with-extends-and-super)
+In a derived class the **parent** constructor creates the object, so `this` exists only after `super(...)` returns. → [§9.6](../09-this-prototypes-and-classes/README.md#96-inheritance-with-extends-and-super)
 
 ### 17.4.5 The event loop and async code
 
-For all of these, apply the rules from [§12.2–12.3](../12-asynchronous-javascript/README.md#123-ordering-puzzles): run all synchronous code first; then drain the **microtask** queue (promise callbacks, code after `await`, `queueMicrotask`) completely; then run **one task** (timer, I/O, event); drain microtasks again; repeat.
+Rules ([§12.2–12.3](../12-asynchronous-javascript/README.md#123-ordering-puzzles)): all sync code; drain **all** microtasks (promise callbacks, code after `await`, `queueMicrotask`); one task (timer, I/O, event); repeat. More puzzles: B [Q218–Q223](../19-interview-question-bank/README.md#13-output-prediction-puzzles-what-will-this-print).
 
 **Q35. The classic.**
 
@@ -2078,7 +2001,7 @@ log('4');
 Q35 classic                    1 4 3 2
 ```
 
-`1` and `4` are synchronous. The `.then` callback is a microtask, so it runs as soon as the script finishes; the timer is a task and waits for the next loop turn — even with a 0 ms delay. → [§12.2](../12-asynchronous-javascript/README.md#122-the-event-loop)
+The `.then` microtask runs as soon as the script finishes; the 0 ms timer waits for the next loop turn. → B [Q108, Q218](../19-interview-question-bank/README.md#6-the-event-loop-promises-and-asyncawait) · [§12.2](../12-asynchronous-javascript/README.md#122-the-event-loop)
 
 **Q36. `async`/`await` ordering.**
 
@@ -2096,7 +2019,7 @@ log('s2');
 Q36 async/await                s1 a1 b p s2 a2 then t
 ```
 
-An `async` function runs **synchronously until its first `await`** (`a1`, `b`); the rest (`a2`) becomes a microtask. The promise **executor** is synchronous too (`p`). After `s2`, microtasks run in queue order — `a2`, then `then` — and the timer last. → [§12.3](../12-asynchronous-javascript/README.md#123-ordering-puzzles), [§12.9](../12-asynchronous-javascript/README.md#129-async--await)
+An async function runs synchronously until its first `await` (`a1`, `b`); the executor is synchronous (`p`); then microtasks in queue order (`a2`, `then`); the timer last. → B [Q220](../19-interview-question-bank/README.md#13-output-prediction-puzzles-what-will-this-print) · [§12.9](../12-asynchronous-javascript/README.md#129-async--await)
 
 **Q37. `process.nextTick`, promises and `setImmediate` in Node.**
 
@@ -2112,7 +2035,7 @@ Q37 CommonJS main                  sync nextTick then immediate
 Q37 ESM (after await)          sync then nextTick immediate
 ```
 
-Node normally drains `nextTick` **before** promise microtasks (the CommonJS result). Inside an ES module (here after a top-level `await`) the code already runs in a promise job, so promises drain first. `setImmediate` runs later, in the *check* phase. Don't rely on the `nextTick`/promise order; prefer `queueMicrotask`. → [§12.4](../12-asynchronous-javascript/README.md#124-nodes-event-loop-nexttick-setimmediate-and-phases)
+`nextTick` normally drains before promises (CommonJS), but ESM code already runs inside a promise job, so promises go first; `setImmediate` runs in the *check* phase. Prefer `queueMicrotask`. → B [Q119](../19-interview-question-bank/README.md#6-the-event-loop-promises-and-asyncawait) · [§12.4](../12-asynchronous-javascript/README.md#124-nodes-event-loop-nexttick-setimmediate-and-phases)
 
 **Q38. When does a promise executor run, and what if you resolve twice?**
 
@@ -2120,7 +2043,7 @@ Node normally drains `nextTick` **before** promise microtasks (the CommonJS resu
 Q38 executor + settle once     executor after first
 ```
 
-The function passed to `new Promise(...)` runs **synchronously**, right away. A promise settles **once**: the first `resolve`/`reject` wins, later calls are ignored silently. → [§12.7](../12-asynchronous-javascript/README.md#127-promises)
+Synchronously; the first `resolve`/`reject` wins. → B [Q121](../19-interview-question-bank/README.md#6-the-event-loop-promises-and-asyncawait) · [§12.7](../12-asynchronous-javascript/README.md#127-promises)
 
 **Q39. Why doesn't this `try`/`catch` catch the error?**
 
@@ -2133,7 +2056,7 @@ try { await Promise.reject(new Error('rejected')); } catch (e) { /* runs */ }
 Q39 errors in callbacks        uncaught: boom | await caught: rejected
 ```
 
-`try` only covers code running *while it's on the stack*. The timer callback runs later, so its error is uncaught (the demo shows it via `process.on('uncaughtException')`; normally Node would crash). With `await`, the rejection is thrown back into the function at the `await`, so `try`/`catch` works. → [§11.5](../11-errors-and-debugging/README.md#115-errors-in-asynchronous-code-preview), [§12.10](../12-asynchronous-javascript/README.md#1210-error-handling-across-async-code--a-checklist)
+The timer callback runs after `try` left the stack (shown via `process.on('uncaughtException')`; normally Node crashes); `await` rethrows the rejection inside the function. → B [Q128](../19-interview-question-bank/README.md#7-errors-modules-and-tooling) · [§11.5](../11-errors-and-debugging/README.md#115-errors-in-asynchronous-code-preview), [§12.10](../12-asynchronous-javascript/README.md#1210-error-handling-across-async-code--a-checklist)
 
 **Q40. Does `await` inside `forEach` wait?**
 
@@ -2147,7 +2070,7 @@ for (const ms of [20, 10]) { await wait(ms); log.push(`for-of ${ms}`); }
 Q40 await in forEach           forEach returned | 10 | 20 | for-of 20 | for-of 10
 ```
 
-No. `forEach` ignores the promise each async callback returns, so it returns immediately and callbacks finish in timer order. Use `for…of` + `await` for sequential work, `await Promise.all(arr.map(async …))` for parallel. → [§12.9](../12-asynchronous-javascript/README.md#129-async--await)
+No — `forEach` ignores the returned promises. → B [Q116](../19-interview-question-bank/README.md#6-the-event-loop-promises-and-asyncawait) · [§12.9](../12-asynchronous-javascript/README.md#129-async--await)
 
 **Q41. Two independent `await`s — how long do they take?**
 
@@ -2155,18 +2078,11 @@ No. `forEach` ignores the promise each async callback returns, so it returns imm
 Q41 sequential vs parallel     sequential >= 80ms: true, parallel < 80ms: true
 ```
 
-`await wait(40); await wait(40);` takes ~80 ms because the second doesn't start until the first finishes. Starting both and awaiting `Promise.all([...])` takes ~40 ms. Start independent work first, await later. → [§12.9](../12-asynchronous-javascript/README.md#129-async--await)
+`await wait(40); await wait(40);` ≈ 80 ms; `Promise.all` ≈ 40 ms. → B [Q115](../19-interview-question-bank/README.md#6-the-event-loop-promises-and-asyncawait) · [§12.9](../12-asynchronous-javascript/README.md#129-async--await)
 
 **Q42. `Promise.all` vs `allSettled` vs `race` vs `any`?**
 
-| Combinator | Fulfils when | Rejects when |
-|---|---|---|
-| `all` | All fulfil (array of values, input order) | The first rejection |
-| `allSettled` | All settle (array of `{status, value/reason}`) | Never |
-| `race` | The first to settle fulfils | The first to settle rejects |
-| `any` | The first fulfils | All reject (`AggregateError`) |
-
-Implementations and tests: §17.3. → [§12.8](../12-asynchronous-javascript/README.md#128-promise-combinators-all-allsettled-race-any)
+`all`: all fulfil / first rejection; `allSettled`: never rejects; `race`: first to settle; `any`: first to fulfil, `AggregateError` if all reject. Polyfills: §17.3. → B [Q112](../19-interview-question-bank/README.md#6-the-event-loop-promises-and-asyncawait) · [§12.8](../12-asynchronous-javascript/README.md#128-promise-combinators-all-allsettled-race-any)
 
 ### 17.4.6 Objects, arrays and copies
 
@@ -2180,7 +2096,7 @@ const a = { n: { v: 1 } }; const b = { ...a }; b.n.v = 2; a.n.v;
 Q43 spread copy is shallow         2
 ```
 
-Spread copies only the top level; `b.n` and `a.n` are the same nested object. For a deep copy use `structuredClone` (or the manual clone, §17.3). → [§5.4](../05-objects-math-date-and-json/README.md#54-spread-rest-and-copying-objects)
+Spread copies the top level only; use `structuredClone` (or §17.3's manual clone). → B [Q74](../19-interview-question-bank/README.md#5-objects-arrays-strings-and-collections) · [§5.4](../05-objects-math-date-and-json/README.md#54-spread-rest-and-copying-objects)
 
 **Q44. Can you change a `const` object? Does `Object.freeze` make it immutable?**
 
@@ -2189,7 +2105,7 @@ Q44 const + mutate                 2
 Q44 freeze is shallow              "2 undefined"
 ```
 
-`const` protects the **binding**, not the object. `Object.freeze` blocks adding, removing and changing *own* properties (silently in sloppy mode, `TypeError` in strict) but is **shallow** — nested objects stay mutable; deep-freeze by recursing. → [§5.6](../05-objects-math-date-and-json/README.md#56-object-static-methods-descriptors-and-locking)
+`const` protects the binding; `freeze` blocks changes to *own* properties (silent in sloppy, `TypeError` in strict) but is **shallow** — deep-freeze by recursing. → B [Q76](../19-interview-question-bank/README.md#5-objects-arrays-strings-and-collections) · [§5.6](../05-objects-math-date-and-json/README.md#56-object-static-methods-descriptors-and-locking)
 
 **Q45. What happens when you use an object as an object key?**
 
@@ -2201,7 +2117,7 @@ const o = {}; o[{}] = 'a'; o[{ id: 2 }] = 'b'; o[1] = 'c';
 Q45 object keys become strings     "[\"1\",\"[object Object]\"] b"
 ```
 
-Property keys are strings (or symbols). Both objects convert to the same string `"[object Object]"`, so the second assignment overwrites the first; `1` becomes `"1"`. Use a `Map` for object keys. → [§5.2](../05-objects-math-date-and-json/README.md#52-reading-adding-updating-and-deleting-properties), [§8.1](../08-maps-sets-iterators-and-generators/README.md#81-map)
+Keys are strings (or symbols): both objects become `"[object Object]"`, so the second overwrites the first; `1` becomes `"1"`. Use a `Map` for object keys. → [§5.2](../05-objects-math-date-and-json/README.md#52-reading-adding-updating-and-deleting-properties), [§8.1](../08-maps-sets-iterators-and-generators/README.md#81-map)
 
 **Q46. What do `delete arr[i]` and `arr.length = n` do?**
 
@@ -2211,7 +2127,7 @@ Q46 length truncates               "[1]"
 Q46 length of sparse               6
 ```
 
-`delete` removes the element but leaves a **hole** — the length stays 3 (JSON shows the hole as `null`). Use `splice` to remove. Setting `length` smaller truncates the array (`arr.length = 0` empties it in place). Assigning `a[5]` on an empty array makes `length` 6 with five holes. → [§7.3](../07-arrays/README.md#73-reading-changing-adding-and-removing)
+`delete` leaves a **hole** (length unchanged; JSON shows `null`) — use `splice`. A smaller `length` truncates (`= 0` empties in place); assigning `a[5]` on `[]` gives length 6 with five holes. → B [Q93, Q235](../19-interview-question-bank/README.md#5-objects-arrays-strings-and-collections) · [§7.3](../07-arrays/README.md#73-reading-changing-adding-and-removing)
 
 **Q47. Is JavaScript pass-by-value or pass-by-reference?**
 
@@ -2226,11 +2142,11 @@ o.v;
 Q47 reassign param                 2
 ```
 
-Always **by value** — but an object's value *is a reference* ("call by sharing"): mutating through the parameter changes the caller's object; reassigning it changes only the local variable. → [§2.4](../02-variables-types-and-operators/README.md#24-primitives-vs-objects)
+Always **by value** — but an object's value *is a reference* ("call by sharing"): mutating through the parameter changes the caller's object; reassigning only changes the local. → [§2.4](../02-variables-types-and-operators/README.md#24-primitives-vs-objects)
 
 **Q48. When should you use a `Map` instead of an object?**
 
-Use a `Map` for dynamic keys added and removed at runtime, non-string keys, frequent size checks and guaranteed insertion order; use a plain object for fixed-shape records (a user, a config) and JSON. Objects also have inherited keys (`'toString' in {}` is true) — a source of bugs with user-supplied keys. → [§7.8](../07-arrays/README.md#78-arrays-vs-objects-vs-mapset), [§8.1](../08-maps-sets-iterators-and-generators/README.md#81-map)
+Dynamic keys, non-string keys, frequent size checks and adds/deletes, guaranteed order; objects for fixed-shape records and JSON (and they have inherited keys: `'toString' in {}` is true). → B [Q84](../19-interview-question-bank/README.md#5-objects-arrays-strings-and-collections) · [§7.8](../07-arrays/README.md#78-arrays-vs-objects-vs-mapset), [§8.1](../08-maps-sets-iterators-and-generators/README.md#81-map)
 
 **Q49. What does `JSON.stringify` drop?**
 
@@ -2239,7 +2155,7 @@ Q49 JSON drops                     "{\"n\":null,\"d\":\"1970-01-01T00:00:00.000Z
 Q49 JSON array holes               "[null,null]"
 ```
 
-Object properties holding `undefined`, a function or a symbol are **omitted** (in arrays they become `null`); `NaN`/`Infinity` → `null`; dates → ISO strings (the standard `2026-01-15T10:00:00.000Z` format); `Map`/`Set` → `{}`; `BigInt` and cycles throw. → [§5.12](../05-objects-math-date-and-json/README.md#512-json)
+`undefined`/functions/symbols omitted (→ `null` in arrays); `NaN`/`Infinity` → `null`; dates → ISO strings; `Map`/`Set` → `{}`; `BigInt` and cycles throw. → B [Q82](../19-interview-question-bank/README.md#5-objects-arrays-strings-and-collections) · [§5.12](../05-objects-math-date-and-json/README.md#512-json)
 
 **Q50. `for…in` vs `for…of`?**
 
@@ -2247,33 +2163,33 @@ Object properties holding `undefined`, a function or a symbol are **omitted** (i
 Q50 for...in vs for...of           "in: 0,1,extra | of: a,b"
 ```
 
-`for…in` loops over **enumerable property keys** (strings; enumerable = visible to loops, which ordinary properties are), including inherited ones and extras like `extra` — meant for plain objects. `for…of` loops over the **values** of any *iterable*; use it for arrays. → [§3.10](../03-control-flow-and-loops/README.md#310-the-forof-loop)
+`for…in`: enumerable string keys, inherited ones and extras like `extra` included; `for…of`: values of an iterable. → B [Q80](../19-interview-question-bank/README.md#5-objects-arrays-strings-and-collections) · [§3.10](../03-control-flow-and-loops/README.md#310-the-forof-loop)
 
 ### 17.4.7 Garbage collection and memory leaks
 
 **Q51. How does JavaScript free memory?**
 
-Automatically, with a **garbage collector (GC)**. An object stays alive while it is **reachable** from a *root* (globals, the call stack, active closures, pending callbacks). Unreachable objects are freed even if they reference each other — **mark-and-sweep** marks everything reachable and sweeps the rest, so cycles are fine. V8 is **generational**: a small *young generation* is collected often and cheaply (most objects die young), survivors move to an *old generation* collected less often, much of it on helper threads. Normal code can't (and needn't) trigger GC. → [§8.3](../08-maps-sets-iterators-and-generators/README.md#83-weakmap-weakset-weakref-and-finalizationregistry)
+A **garbage collector (GC)** frees objects no longer **reachable** from a root (globals, call stack, active closures, pending callbacks) — **mark-and-sweep**, so cycles are fine. V8 is **generational**: a small young generation collected often (most objects die young), survivors promoted to an old generation collected less often, much of it on helper threads. Code can't (and needn't) trigger GC. → B [Q182](../19-interview-question-bank/README.md#10-performance-and-memory) · [§8.3](../08-maps-sets-iterators-and-generators/README.md#83-weakmap-weakset-weakref-and-finalizationregistry)
 
 **Q52. What causes memory leaks in JavaScript, and how do you fix them?**
 
-A **leak** is memory that is still reachable but no longer needed. The usual causes:
+A **leak** is memory still reachable but no longer needed:
 
-| Cause | Example | Fix |
-|---|---|---|
-| Forgotten listeners and timers | `setInterval` or `addEventListener` never removed; the callback's closure keeps data alive | `clearInterval`, `removeEventListener`, `AbortController` signal, React effect cleanup |
-| Unbounded caches and collections | A `Map` from request/DOM objects to data that only grows | Size limit (LRU), or a `WeakMap` keyed by the object |
-| Closures capturing big data | A long-lived callback references a huge array it doesn't need | Copy only what's needed into the closure; set big references to `null` |
-| Detached DOM nodes | A removed element still referenced from a JS variable or array | Drop the reference when the element is removed |
-| Accidental globals | `x = …` without declaration (sloppy mode) | Strict mode / modules |
+| Cause | Fix |
+|---|---|
+| Forgotten listeners and timers (their closures keep data alive) | `clearInterval`, `removeEventListener`, `AbortController` signal, React effect cleanup |
+| Unbounded caches/collections keyed by request or DOM objects | Size limit (LRU), or a `WeakMap` |
+| Closures capturing big data | Capture only what's needed; null out big references |
+| Detached DOM nodes still referenced from JS | Drop the reference on removal |
+| Accidental globals | Strict mode / modules |
 
-The demo stores ~8 KB of data per short-lived "request" object in a `Map` and in a `WeakMap`, then forces a GC (only possible with a V8 flag, used here for the demonstration):
+The demo stores ~8 KB per short-lived "request" object in a `Map` and in a `WeakMap`, then forces a GC (V8 flag, for the demo only):
 
 ```text
 Q52 Map vs WeakMap cache       Map retains > 10 MB: true, WeakMap retains < 2 MB: true
 ```
 
-The `Map` keeps every key object and its data alive forever; the `WeakMap` lets both be collected once the request object is unreachable. Find leaks with DevTools' **Memory** panel: take heap snapshots (a dump of every object in memory at that moment) before and after an action and compare what grew. → [§4.7](../04-functions-scope-and-closures/README.md#47-closures), [§8.3](../08-maps-sets-iterators-and-generators/README.md#83-weakmap-weakset-weakref-and-finalizationregistry), [§11.9](../11-errors-and-debugging/README.md#119-debugging-with-devtools-and-the-node-inspector)
+The `Map` keeps every key and value alive; the `WeakMap` lets both go once the key is unreachable. Find leaks with DevTools **Memory** heap snapshots before/after an action. → B [Q183](../19-interview-question-bank/README.md#10-performance-and-memory) · [§4.7](../04-functions-scope-and-closures/README.md#47-closures), [§8.3](../08-maps-sets-iterators-and-generators/README.md#83-weakmap-weakset-weakref-and-finalizationregistry), [§11.9](../11-errors-and-debugging/README.md#119-debugging-with-devtools-and-the-node-inspector)
 
 **Q53. What are `WeakMap`, `WeakRef` and `FinalizationRegistry` for?**
 
@@ -2282,20 +2198,18 @@ Q53 WeakRef before             true
 Q53 WeakRef after gc           collected
 ```
 
-`WeakMap`/`WeakSet` hold keys **weakly** — an entry vanishes with its key, ideal for metadata or caches on objects you don't own. A `WeakRef` points to an object without keeping it alive (`deref()` → the object or `undefined`); `FinalizationRegistry` calls back some time after collection. GC timing is **not guaranteed**, so use these only for optional optimisations, never program logic. → [§8.3](../08-maps-sets-iterators-and-generators/README.md#83-weakmap-weakset-weakref-and-finalizationregistry)
+Weak keys/references don't keep objects alive; `deref()` returns the object or `undefined`; finalizers run some time after collection. GC timing is **not guaranteed** — optimisations only, never program logic. → B [Q85, Q184](../19-interview-question-bank/README.md#10-performance-and-memory) · [§8.3](../08-maps-sets-iterators-and-generators/README.md#83-weakmap-weakset-weakref-and-finalizationregistry)
 
 ### In the interview
 **30-second answer — "`this`, closures and the event loop in one breath?"** `this` comes from the call site (method, plain call, `new`, `call`/`apply`/`bind`) except in arrows, which take it lexically. A closure is a function plus its creation scope's variables, kept alive with it. The event loop runs sync code, then all microtasks, then one task, repeat — so promise callbacks beat `setTimeout(0)`.
 
 ### Self-check
 1. `console.log([] + null + 1)`? → `"null1"`: `[]` becomes `''`, then string concatenation.
-2. Why does `for (var i…) setTimeout(() => console.log(i))` print the final value? → One shared `var` binding; `let` creates one per iteration.
-3. In `async function f() { console.log(1); await null; console.log(2); }  f(); console.log(3);` — the order? → `1 3 2`.
-4. `typeof typeof 1`? → `'string'` (`typeof 1` is the string `'number'`).
-5. Does `Object.freeze` stop `obj.nested.x = 1`? → No, freeze is shallow.
+2. `async function f() { console.log(1); await null; console.log(2); }  f(); console.log(3);`? → `1 3 2`.
+3. `typeof typeof 1`? → `'string'`.
 
 ### TL;DR
-Use `===`; know the falsy list, `typeof null`, `NaN` rules and how `+` concatenates. `var` is function-scoped and hoisted as `undefined`; `let`/`const` are block-scoped with a TDZ; `let` in loops gives one binding per iteration. `this` depends on the call; arrows inherit it; `bind` wins once; `new` returns the new object unless you return an object. Classes are prototypes plus TDZ, strictness and `#private`. Sync → microtasks → one task. Spread is shallow; `structuredClone` is deep. Leaks come from things that stay reachable — listeners, timers, caches, closures; `WeakMap` and cleanup fix them.
+`===`; falsy list; `typeof null`; `NaN` rules; `+` concatenates if either side is a string. `var` = function scope, hoisted `undefined`; `let`/`const` = block scope + TDZ, one loop binding per iteration. `this` from the call; arrows inherit; first `bind` wins; `new` returns the object unless you return one. Sync → microtasks → one task. Spread is shallow; `structuredClone` deep. Leaks = things left reachable; clean up and use `WeakMap`.
 
 ---
 
@@ -2303,7 +2217,7 @@ Use `===`; know the falsy list, `typeof null`, `NaN` rules and how `+` concatena
 
 - **Toolkit:** `push`/`pop` stack; head-index queue (no `shift` in hot loops); `Array.from` grids; `Map`/`Set` with string keys for pairs; `sort` needs a comparator, is stable, mutates (`toSorted` doesn't); floats — tolerance, `Math.trunc`, `%` sign, safe to 2⁵³ − 1, then `BigInt`; build strings with `join`.
 - **Patterns (21):** two pointers, sliding window, hashing, stack/monotonic stack, prefix sums, intervals (sort + sweep), heap (hand-written `MinHeap`, O(log n) push/pop; two heaps for a running median; k-way merge), binary search (on data or the answer), BFS (fewest steps, mark on enqueue), DFS (iterative for deep inputs), DP with memo, backtracking (choose/explore/un-choose, copy results), linked lists (dummy head, reverse, k-th from end), fast & slow pointers (cycle start, middle), trees (validate with ranges, LCA, serialize), tries (prefix, wildcard, board words), Kahn's topological sort and union-find, greedy (with a proof), quickselect / Dutch flag / merge sort, bit manipulation (32-bit signed, `>>> 0`), math & geometry (spiral, overflow, gcd-reduced slopes).
-- **Classics:** `debounce` (clear + restart a timer) vs `throttle` (at most once per interval, leading + trailing); `curry` via `fn.length`; `compose` = `reduceRight`, `pipe` = `reduce`; `memoize` with a `Map`; `flatten` recursive or with a stack; `bind` must support `new`; `structuredClone` vs manual `deepClone` with a `WeakMap`; `deepEqual` with `Object.is`; LRU = one `Map`; EventEmitter copies listeners before emitting; `Promise.all` = index + counter + `Promise.resolve` + empty case.
-- **Q&A:** coercion and `==` rules, `typeof null`, `NaN`, `??` vs `||`; hoisting and TDZ, closures in loops, accidental globals, strict mode; `this` rules, arrows, `call`/`apply`/`bind`, `new`; prototype chain, `instanceof`, classes vs functions, `#private`; event-loop order (sync → microtasks → task), `nextTick`, errors in callbacks, `await` in `forEach`, parallel awaits; shallow vs deep copy, `freeze`, keys as strings, holes, call by sharing, JSON; GC by reachability, leaks and weak references.
+- **Classics:** `debounce` vs `throttle` (leading + trailing); `curry` via `fn.length`; `compose` = `reduceRight`, `pipe` = `reduce`; `memoize` with a `Map`; `flatten` recursive or with a stack; `bind` must support `new`; `structuredClone` vs manual `deepClone` with a `WeakMap`; `deepEqual` with `Object.is`; LRU = one `Map`; EventEmitter copies listeners before emitting; `Promise.all` = index + counter + `Promise.resolve` + empty case.
+- **Q&A:** coercion, `==`, `typeof null`, `NaN`, `??`; hoisting/TDZ, loop closures, accidental globals, strict mode; `this`, arrows, `bind`, `new`; prototypes, `instanceof`, classes, `#private`; event-loop order, `nextTick`, callback errors, `await` in `forEach`; copies, `freeze`, string keys, holes, call by sharing, JSON; GC, leaks, weak references — short answers in [Chapter 19](../19-interview-question-bank/README.md).
 
 Next: the cheat sheets and glossary — [Chapter 18](../18-cheatsheet-and-glossary/README.md).

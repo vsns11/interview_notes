@@ -1,17 +1,8 @@
 # Chapter 3 — Control Flow and Loops
 
-Left alone, a program runs its statements once each, top to bottom. **Control flow** is everything that changes that: *choosing* which statements run (conditionals) and *repeating* statements (loops). With the values and operators from [Chapter 2](../02-variables-types-and-operators/README.md), these two tools are enough to express any algorithm (a precise, step-by-step recipe for solving a problem).
+By default a program runs each statement once, top to bottom. **Control flow** changes that: *choosing* which statements run (conditionals) and *repeating* them (loops). With the values and operators of [Chapter 2](../02-variables-types-and-operators/README.md), these are enough to express any **algorithm** (a precise step-by-step recipe).
 
-**What you'll learn**
-
-1. What conditional statements are and where real applications use them.
-2. `if`, `else`, `else if`, guard clauses, and how truthiness affects conditions.
-3. The conditional (ternary) operator `? :`.
-4. `switch`: cases, `default`, `break`, grouped cases, strict comparison, fall-through.
-5. Why loops exist, and the five loop statements: `for`, `while`, `do…while`, `for…in`, `for…of`.
-6. Nested loops.
-7. `break`, `continue` and labels.
-8. How to choose the right loop (and when an array method is better than any loop).
+**What you'll learn:** `if`/`else if`/`else`, guard clauses and truthiness in conditions; the ternary `? :`; `switch` (cases, `default`, `break`, grouping, strict comparison, fall-through); the five loops `for`, `while`, `do…while`, `for…in`, `for…of`; nested loops; `break`, `continue`, labels; choosing a loop (or an array method).
 
 Code: [`code/`](code/). Every "Output:" block is real Node 24 output.
 
@@ -20,11 +11,7 @@ Code: [`code/`](code/). Every "Output:" block is real Node 24 output.
 ## 3.1 Conditional statements — making decisions
 
 ### What it is
-A **conditional statement** evaluates a **condition** — an expression — and, depending on whether it is truthy or falsy (treated as `true` or as `false` when used as a condition), runs one block of code or another. It's the program's way of saying "if this, do that; otherwise do something else".
-
-Analogy: a railway switch. The train (your program) always moves forward, but the switch decides which track it takes.
-
-JavaScript has two conditional **statements** and one conditional **operator**:
+A **conditional statement** evaluates a **condition** and, depending on whether it is truthy or falsy, runs one block or another.
 
 | Tool | Best for |
 |---|---|
@@ -33,14 +20,14 @@ JavaScript has two conditional **statements** and one conditional **operator**:
 | `condition ? a : b` | choosing between two **values** inside an expression |
 
 ### Where you meet them in real applications
-- **Form validation** — is the email field filled in and shaped like an email? Only then enable the Submit button.
-- **Authentication and permissions** (checking *who* the user is, then *what* they may do) — show the admin panel only if the user is logged in *and* has the admin role.
-- **Interactive UI** (user interface — the buttons, menus and screens people interact with) — if the menu is open, close it on click; otherwise open it. If the user prefers dark mode, apply the dark theme.
-- **Filtering data** — show a product only if its price is inside the range the shopper selected.
-- **Error handling** — if the server answered with status 404, show "Not found"; if 500, show "Try again later". (An HTTP status code is the number a web server sends back to say how a request went: 2xx success, 4xx your mistake, 5xx the server's — see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md).)
+- **Form validation** — enable Submit only when the email looks valid.
+- **Authentication and permissions** (who the user is, what they may do) — show the admin panel only if logged in *and* admin.
+- **UI** (user interface) — toggle a menu; apply dark mode if preferred.
+- **Filtering** — show products inside the selected price range.
+- **Error handling** — HTTP status 404 → "Not found", 500 → "Try again later" (2xx success, 4xx client error, 5xx server error — [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)).
 
 ### TL;DR
-Conditionals choose between code paths based on a condition's truthiness. `if` handles anything, `switch` handles one-value-many-options, the ternary chooses between two values.
+`if` handles anything, `switch` one-value-many-options, the ternary chooses between two values.
 
 ---
 
@@ -48,8 +35,8 @@ Conditionals choose between code paths based on a condition's truthiness. `if` h
 
 ### What it is
 - **`if (condition) { … }`** runs the block only when the condition is truthy.
-- **`else { … }`** (optional) is the fallback, run when the `if` condition is falsy.
-- **`else if (condition) { … }`** (any number) adds more conditions, tested **in order**; the first truthy one wins and the rest are skipped.
+- **`else { … }`** (optional) runs when it is falsy.
+- **`else if (condition) { … }`** (any number) adds conditions tested **in order**; the first truthy one wins, the rest are skipped.
 
 ### How it works
 ```mermaid
@@ -63,10 +50,7 @@ flowchart TD
   E --> F
 ```
 
-1. The condition in parentheses is evaluated and converted to a boolean using the truthy/falsy rules ([Chapter 2 §2.11](../02-variables-types-and-operators/README.md#211-booleans-truthy-and-falsy)).
-2. If truthy, its block runs, and execution jumps to after the whole statement.
-3. If falsy, the next `else if` condition is evaluated, and so on.
-4. If no condition was truthy, the `else` block runs (if there is one). At most **one** block runs.
+Conditions are converted with the truthy/falsy rules ([Chapter 2 §2.11](../02-variables-types-and-operators/README.md#211-booleans-truthy-and-falsy)); at most **one** block of the chain runs.
 
 ### Example
 ```js
@@ -116,9 +100,7 @@ score 40 -> grade F
 wrong order: 95 -> C
 ```
 
-(Functions and `return` are introduced properly in [Chapter 4](../04-functions-scope-and-closures/README.md); here they just package each example. The `for…of` loop is §3.10.)
-
-The grade ladder works because the checks go from **most specific to least specific**: a score of 85 fails `>= 90`, then passes `>= 80`, and nothing further is tested. `badGrade` shows what happens when the order is wrong — the broad condition `>= 70` catches 95 before the `>= 90` test is ever reached.
+(Functions are covered in [Chapter 4](../04-functions-scope-and-closures/README.md); `for…of` in §3.10.) Order checks **from most specific to least specific**: in `badGrade` the broad `>= 70` catches 95 before `>= 90` is reached.
 
 ### Conditions are truthy/falsy, not just `true`/`false`
 ```js
@@ -138,10 +120,10 @@ null   falsy  -> else-branch
 []     truthy -> if-branch
 ```
 
-`if (name)` is a common, readable way to say "if `name` is a non-empty string". Just remember `0` and `""` are falsy and `[]` is truthy, and write an explicit comparison when that matters (`if (items.length > 0)`).
+`if (name)` reads well for "non-empty string", but `0`/`""` are falsy and `[]` truthy — compare explicitly when it matters (`items.length > 0`).
 
 ### Guard clauses — flatter code
-Deeply nested `if`s are hard to read. A **guard clause** handles a special case at the top of a function and returns immediately, so the main logic isn't indented:
+A **guard clause** handles a special case at the top of a function and returns immediately, avoiding deep nesting:
 
 ```js
 // code/01_if_else.js (part 3)
@@ -162,10 +144,10 @@ no order | empty cart | free shipping | shipping: $4.99
 can publish
 ```
 
-Conditions can be combined with `&&`, `||` and `!`; use parentheses to make grouping explicit.
+Combine conditions with `&&`, `||`, `!`, using parentheses for explicit grouping.
 
 ### Braces
-If a block has only one statement, the braces can be omitted (`if (x) doSomething();`). Keep braces for anything multi-line — this classic bug happens without them:
+Braces are optional around a single statement, but this classic bug follows:
 
 ```js
 if (isAdmin)
@@ -173,28 +155,28 @@ if (isAdmin)
   logAccess();   // looks conditional, but ALWAYS runs — only the first line belongs to the if
 ```
 
-A formatter (a tool that automatically rewrites code layout — e.g. Prettier) re-indents code to expose this; many teams simply always use braces.
+A formatter (e.g. Prettier) re-indents to expose it; many teams always use braces.
 
 ### Common mistakes
 - **`=` instead of `===`**: `if (role = "admin")` assigns and is always truthy.
-- **Wrong order in an else-if ladder** (see `badGrade`).
-- **Testing an array or object for emptiness with `if (arr)`** — always truthy.
-- **Writing `else if` conditions that overlap or leave gaps** (`< 60` and `> 60` forgets exactly 60). Test the boundaries.
+- **Wrong ladder order** (see `badGrade`).
+- **`if (arr)` for emptiness** — always truthy.
+- **Overlapping or gapped conditions** (`< 60` and `> 60` miss 60) — test the boundaries.
 
 ### Self-check
-1. With `if (a) {…} else if (b) {…}`, can both blocks run? → No; at most one block of an if/else chain runs.
-2. What does `if ("0")` do? → Runs the block — `"0"` is a non-empty string, hence truthy.
-3. Why check `score >= 90` before `score >= 80`? → Because the first truthy branch wins; broader checks must come later.
+1. In `if (a) {…} else if (b) {…}`, can both run? → No, at most one.
+2. `if ("0")`? → Runs — non-empty string is truthy.
+3. Why check `>= 90` before `>= 80`? → The first truthy branch wins.
 
 ### TL;DR
-`if` → optional `else if`s → optional `else`; the first truthy branch runs, others are skipped. Order from specific to general, keep braces, prefer guard clauses to deep nesting.
+First truthy branch runs. Order specific → general, keep braces, prefer guard clauses to nesting.
 
 ---
 
 ## 3.3 The conditional (ternary) operator
 
 ### What it is
-`condition ? valueIfTruthy : valueIfFalsy` is an **expression** (it produces a value) that picks one of two values. It is JavaScript's only operator with three operands, hence the nickname *ternary operator*.
+`condition ? valueIfTruthy : valueIfFalsy` is an **expression** picking one of two values — JavaScript's only three-operand (*ternary*) operator.
 
 ### Example
 ```js
@@ -229,21 +211,21 @@ to pay: 90
 ### When to use it (and when not)
 | Use the ternary when… | Use `if` when… |
 |---|---|
-| choosing between two **values** | running **statements** (side effects — changes beyond returning a value, like printing or updating a variable — several lines) |
+| choosing between two **values** | running **statements** (side effects such as printing or updating variables, several lines) |
 | it fits on one line and reads naturally | the logic needs explanation or more than two outcomes |
 | you need an expression: inside a template literal, an argument, a `const` initialiser, JSX in React (HTML-like syntax inside JavaScript) | — |
 
-Chained ternaries are acceptable when formatted one condition per line as above; nesting them inside each other's branches quickly becomes unreadable.
+Chained ternaries are fine one condition per line (as above); nesting inside branches gets unreadable.
 
 ### TL;DR
-`cond ? a : b` returns `a` or `b`. It's for choosing values, not for running code.
+`cond ? a : b` returns `a` or `b` — for choosing values, not running code.
 
 ---
 
 ## 3.4 `switch`
 
 ### What it is
-A **`switch`** statement evaluates one expression once and compares the result against a list of **`case`** values, running the code of the first match. It's a tidy replacement for a long `if … else if` chain that keeps testing *the same value* for equality.
+**`switch`** evaluates one expression once and compares it with a list of **`case`** values, running code from the first match — a tidy replacement for an `else if` chain testing *the same value*.
 
 ```js
 switch (expression) {
@@ -266,11 +248,7 @@ switch (expression) {
 | `default:` | optional catch-all when nothing matched — the switch equivalent of `else` |
 
 ### How it works
-1. Evaluate the `switch` expression.
-2. Compare it, top to bottom, with each `case` value using `===`.
-3. At the first match, start executing statements *from that point*.
-4. Keep going until a `break` (or `return`), or the end of the switch — **including through the following cases' code**.
-5. If nothing matched and there is a `default`, start executing there.
+Evaluate the expression; compare top-down with `===`; at the first match start executing *from there* and continue until `break`/`return` or the end — **through following cases' code**. No match → start at `default` if present.
 
 ### Examples
 ```js
@@ -326,11 +304,10 @@ open 9-17 | open 10-14 | closed | unknown day
 matched the STRING '18' | matched the NUMBER 18 | matched the NUMBER 18
 ```
 
-Notes:
-- In `describeType`, `typeof null` is `"object"`, which matches no case, so `default` runs.
-- Inside a function, `return` both produces the result and leaves the switch, so no `break` is needed.
-- **Grouped cases**: empty cases fall through to the next non-empty one, so five weekdays share one block without repeating code.
-- **Strict comparison**: `"18"` (string) only matches `case "18"`. `18.0` is the same number as `18`. If your value might arrive as a string (form input, URL parameter), convert it first: `switch (Number(age))`.
+- `typeof null` is `"object"` → no case → `default`.
+- `return` leaves the switch too, so no `break` is needed in functions.
+- **Grouped cases**: empty cases fall through to the next non-empty one.
+- **Strict comparison**: `"18"` matches only `case "18"`; `18.0` is `18`. Convert string input first: `switch (Number(age))`.
 
 ### Fall-through — feature and trap
 ```js
@@ -351,7 +328,7 @@ Output:
 admin: [ 'delete', 'edit', 'read' ] viewer: [ 'read' ]
 ```
 
-Intentional fall-through like this is rare; accidental fall-through (a forgotten `break`) is a classic bug. If you do it on purpose, add a `// falls through` comment — ESLint's `no-fallthrough` rule recognises it (ESLint is a linter: a tool that scans code for likely bugs).
+Intentional fall-through is rare; a forgotten `break` is a classic bug. Mark intentional cases with `// falls through` — ESLint's `no-fallthrough` rule recognises it.
 
 ### Two useful patterns
 ```js
@@ -374,11 +351,11 @@ underweight, normal, overweight, obese
 Not Found | Unknown status
 ```
 
-- **`switch (true)`** matches the first case whose expression is `true` — a way to use ranges. It works, but many developers find a plain `if … else if` clearer.
-- **A lookup object** (or a `Map` — a built-in key-to-value collection, [Chapter 8](../08-maps-sets-iterators-and-generators/README.md)) is often cleaner than a switch whose only job is to translate one value to another; add a fallback with `??`.
+- **`switch (true)`** matches the first case evaluating to `true` (ranges) — works, but `if … else if` is often clearer.
+- **A lookup object** (or `Map`, [Chapter 8](../08-maps-sets-iterators-and-generators/README.md)) beats a switch that only maps values; add a fallback with `??`.
 
 ### Scope inside cases
-The whole switch body is **one block**, so `const r` declared in two different cases collides. Wrap each case body in its own braces when declaring variables:
+The switch body is **one block**, so `const r` in two cases collides. Wrap case bodies in braces:
 
 ```js
 case "circle": {
@@ -397,40 +374,34 @@ case "circle": {
 | Best when | many discrete values, some sharing code | mixed or range conditions | pure value-to-value mapping |
 
 ### In the interview
-**"How does `switch` compare values?"** With strict equality (`===`), evaluated once against each case top-down; execution starts at the first match and continues until `break`/`return` or the end — that's fall-through. `default` runs when nothing matches, and can appear anywhere (it's conventionally last).
+**"How does `switch` compare values?"** With `===`, the expression evaluated once and checked against cases top-down; execution starts at the first match and continues until `break`/`return` or the end (fall-through). `default` runs when nothing matches and may appear anywhere (conventionally last).
 
-- *Follow-up: Why is `switch("1")` not matching `case 1`?* Different types under `===`.
-- *Follow-up: What's wrong with `let` in two cases?* The switch body is a single block, so two `let x` declarations are a redeclaration `SyntaxError`; wrap case bodies in braces.
+- *`switch("1")` vs `case 1`?* Different types under `===`.
+- *`let` in two cases?* One block → redeclaration `SyntaxError`; wrap case bodies in braces.
 
 ### TL;DR
-`switch` = one value vs many `===` cases. End each case with `break` (or `return`), group cases to share code, use `default` as a catch-all, and wrap case bodies in `{ }` to declare variables.
+One value vs many `===` cases; `break`/`return` each case, group to share code, `default` as catch-all, `{ }` for per-case variables.
 
 ---
 
 ## 3.5 Loops — why and which
 
 ### What it is
-A **loop** repeats a block of code — the **body** — while some condition holds or for each item in a collection. One run of the body is an **iteration**.
-
-Without loops, printing "Hello" ten times means writing ten `console.log` lines, and processing a 10,000-item shopping list is impossible to write out. With a loop you write the body once and describe *how often* it should run.
-
-Real uses: rendering every product in a cart, summing an order, retrying a network request, reading lines of a file, walking a grid in a game, polling (checking again and again at intervals) until a job is done.
+A **loop** repeats its **body** while a condition holds or once per item in a collection; one run is an **iteration**. You write the body once instead of copying it — for rendering every cart item, summing an order, retrying a request, reading file lines, walking a game grid, **polling** (checking repeatedly at intervals).
 
 | Loop | Repeats… | Checks condition | Typical use |
 |---|---|---|---|
-| `for` | a counted number of times | before each iteration | index-based loops (using each item's position number, starting at 0) over arrays, counting |
+| `for` | a counted number of times | before each iteration | index-based loops (positions from 0) over arrays, counting |
 | `while` | while a condition is truthy | before each iteration (may run 0 times) | unknown number of iterations |
 | `do…while` | while a condition is truthy | **after** each iteration (runs at least once) | "do it, then decide whether to repeat" |
-| `for…in` | once per enumerable (visible to loops, §3.9) **property name** of an object | — | inspecting an object's keys |
-| `for…of` | once per **value** of an iterable (anything that can hand out values one by one, §3.10: array, string, Map, Set …) | — | the everyday way to walk a collection |
+| `for…in` | once per enumerable **property name** of an object (§3.9) | — | inspecting an object's keys |
+| `for…of` | once per **value** of an iterable (§3.10: array, string, Map, Set …) | — | the everyday way to walk a collection |
 
 ---
 
 ## 3.6 The `for` loop
 
 ### What it is
-The classic **`for` loop** puts everything that controls the repetition in one header:
-
 ```js
 for (initialisation; condition; final-expression) {
   // body
@@ -489,12 +460,10 @@ pair lo=0 hi=4
 pair lo=1 hi=3
 ```
 
-Trace of the first loop: `i = 0` → `0 < 3` true → print → `i` becomes 1 → `1 < 3` true → … → `i` becomes 3 → `3 < 3` false → exit. Arrays are indexed from 0, so the last valid index is `length - 1`; that's why the condition is `<`, not `<=`.
-
-The header is flexible: count down with `i--`, step with `i += 2`, or manage two variables separated by commas (the "two pointers" pattern used in many interview problems — [Chapter 17](../17-javascript-for-interviews/README.md)).
+Trace: `i = 0` → `0 < 3` true → print → `i = 1` → … → `i = 3` → `3 < 3` false → exit. Indexes start at 0, so the last is `length - 1` — hence `<`, not `<=`. The header can count down (`i--`), step (`i += 2`) or manage two comma-separated variables (the "two pointers" interview pattern — [Chapter 17](../17-javascript-for-interviews/README.md)).
 
 ### Nested loops
-A loop inside another loop is **nested**. For **each single iteration of the outer loop, the inner loop runs through all of its iterations**, then the outer loop moves on and the inner loop starts again from the beginning. With an outer loop of *m* iterations and an inner loop of *n*, the inner body runs *m × n* times.
+For **each outer iteration, the inner loop runs all of its iterations**; *m* outer × *n* inner = *m × n* inner-body runs.
 
 ```js
 // code/04_for_loop.js (part 2)
@@ -529,7 +498,7 @@ Output:
 inner body ran 16 times
 ```
 
-Nested loops are how you walk two-dimensional data — matrices (grids of numbers arranged in rows and columns), spreadsheet rows and columns, game boards, image pixels — and how you compare every item with every other item. That *m × n* cost is also why nested loops are the first thing to look at when code is slow: two nested loops over 10,000 items each is 100 million iterations. Interview problems often ask you to replace such an O(n²) nested loop (Big-O notation describes how work grows with input size *n*; O(n²) means doubling the input roughly quadruples the work) with a single loop and a `Map` or `Set` ([Chapter 8](../08-maps-sets-iterators-and-generators/README.md)).
+Nested loops walk 2-D data (matrices, spreadsheets, game boards, pixels) and compare every item with every other. Their *m × n* cost is the first suspect when code is slow (10,000 × 10,000 = 100 million iterations); interviews often ask to replace such an **O(n²)** loop (Big-O: how work grows with input size *n*; O(n²) — double the input, ~4× the work) with one loop plus a `Map`/`Set` ([Chapter 8](../08-maps-sets-iterators-and-generators/README.md)).
 
 ### Edge cases
 ```js
@@ -549,36 +518,32 @@ i = 1 -> b
 i = 2 -> undefined
 ```
 
-- `for (;;)` is an intentional infinite loop; something inside must `break`.
-- **Off-by-one**: `<=` visits index 2, which doesn't exist — JavaScript doesn't throw, it quietly gives `undefined`.
+- `for (;;)` is an intentional infinite loop — something inside must `break`.
+- **Off-by-one**: `<=` reads a missing index, which quietly gives `undefined` (no error).
 
 ### `let` in the loop header
-Declare the counter with `let`. Each iteration gets a **fresh copy** of `i`, which matters when a function created inside the loop remembers `i` (a closure). With `var` all iterations share one variable — a famous interview puzzle explained in [Chapter 4 §4.7](../04-functions-scope-and-closures/README.md#47-closures).
+With `let` each iteration gets a **fresh copy** of `i` — important when a closure created inside the loop remembers it; with `var` all iterations share one variable ([Chapter 4 §4.7](../04-functions-scope-and-closures/README.md#47-closures)).
 
 ### Common mistakes
-- **`i <= arr.length`** instead of `<` (off-by-one).
-- **Modifying the array you are looping over by index** (removing items shifts the rest, so elements get skipped). Loop backwards or build a new array with `filter`.
-- **Forgetting to update the counter** (or updating the wrong one in a nested loop, e.g. `i++` in the inner loop) → infinite loop.
+- **`i <= arr.length`** (off-by-one).
+- **Removing items while looping by index** — later items shift and get skipped. Loop backwards or use `filter`.
+- **Not updating the counter** (or `i++` in the inner loop by mistake) → infinite loop.
 
 ### TL;DR
-`for (init; condition; update)` — init once, check before each iteration, update after. Use `<` with `length`. Nested loops multiply iteration counts.
+`for (init; condition; update)` — init once, check before each iteration, update after. `<` with `length`. Nested loops multiply iteration counts.
 
 ---
 
 ## 3.7 The `while` loop
 
 ### What it is
-A **`while` loop** keeps running its body *as long as* its condition is truthy. The condition is checked **before** each iteration, so if it is falsy at the start, the body never runs.
+**`while`** runs its body *as long as* the condition is truthy, checking **before** each iteration (so possibly zero times). Use it when the number of iterations is unknown (read until input ends, retry until success, halve until small). A `for` loop is a `while` with its bookkeeping gathered in the header.
 
 ```js
 while (condition) {
   // body — must eventually make the condition falsy (or break)
 }
 ```
-
-Use it when you **don't know in advance** how many iterations you need: keep reading until the input ends, keep retrying until it works, keep halving until the value is small enough. (A `for` loop is really a `while` loop with its counter bookkeeping gathered into the header — anything one can do, the other can.)
-
-Analogy: "keep stirring while the sauce is still lumpy". You don't know how many stirs it will take; you check before each one.
 
 ### How it works
 ```mermaid
@@ -619,22 +584,22 @@ sum before first negative: 15 (stopped at index 3)
 halvings: 10
 ```
 
-The second loop has a **compound condition**: stop at the end of the array *or* at the first negative number, whichever comes first. The order inside `&&` matters: `i < readings.length` is checked first, so `readings[i]` is never read past the end — short-circuit evaluation ([Chapter 2 §2.7](../02-variables-types-and-operators/README.md#27-logical-operators--and-)) protects it.
+In the compound condition, `i < readings.length` comes first, so short-circuiting ([Chapter 2 §2.7](../02-variables-types-and-operators/README.md#27-logical-operators--and-)) prevents reading past the end.
 
 ### Common mistakes
-- **Infinite loop** — the body never changes anything the condition depends on (`while (count <= 5) { console.log(count); }` with no `count++`). In the browser the tab freezes; in Node, press `Ctrl+C`.
-- **Using `while` for a simple count** — a `for` loop keeps the counter logic in one visible place.
-- **Busy-waiting** — `while (!dataArrived) {}` to wait for a network response never works in JavaScript: the single thread is stuck in your loop, so the response can never be processed. Waiting is done with callbacks (functions handed over to run later), promises (objects standing for a result that will arrive later) and `await` ([Chapter 12](../12-asynchronous-javascript/README.md)).
+- **Infinite loop** — nothing in the body changes the condition (no `count++`). Browser tab freezes; in Node press `Ctrl+C`.
+- **`while` for a simple count** — `for` keeps counter logic visible in one place.
+- **Busy-waiting** — `while (!dataArrived) {}` never works: the single thread is stuck in your loop, so the response can't be processed. Wait with callbacks, promises and `await` ([Chapter 12](../12-asynchronous-javascript/README.md)).
 
 ### TL;DR
-`while (cond) { … }` checks first, may run zero times, and is for an unknown number of iterations. Make sure the body moves toward ending the loop.
+`while (cond) { … }` checks first, may run zero times, for unknown counts. The body must move toward ending the loop.
 
 ---
 
 ## 3.8 The `do…while` loop
 
 ### What it is
-A **`do…while` loop** runs its body **first** and checks the condition **afterwards**. The body therefore always runs **at least once**, even when the condition was already false before the loop began.
+**`do…while`** runs the body **first** and checks afterwards — so **at least once**, even if the condition was already false.
 
 ```js
 do {
@@ -693,7 +658,7 @@ attempt 2: failed
 attempt 3: success
 ```
 
-The first two lines show the key difference: with the same false condition, `while` ran zero times and `do…while` ran once. The dice example is the natural shape for "generate something, then decide whether to try again" — you can't test the roll before you've rolled. (In real code you'd use `Math.random()`, [Chapter 5](../05-objects-math-date-and-json/README.md); the seeded generator — one that starts from a fixed starting number, the *seed*, so it produces the same "random" sequence every time — keeps the printed output identical on every run.) The retry loop combines "until success" with a safety cap on attempts so it can't run forever.
+Same false condition: `while` ran zero times, `do…while` once. Dice rolling is the natural shape — you can't test a roll before rolling. (Real code uses `Math.random()`, [Chapter 5](../05-objects-math-date-and-json/README.md); the **seeded** generator repeats the same sequence so output is stable.) The retry loop adds a safety cap on attempts.
 
 ### Trade-offs — `while` vs `do…while`
 
@@ -705,22 +670,20 @@ The first two lines show the key difference: with the same false condition, `whi
 | How common | very | rare — a `while` with a flag or `break` is often clearer |
 
 ### TL;DR
-`do { … } while (cond);` runs the body once before testing. Use it only when the first run must happen unconditionally.
+`do { … } while (cond);` runs once before testing — use only when the first run is unconditional.
 
 ---
 
 ## 3.9 The `for…in` loop
 
 ### What it is
-**`for…in`** loops over the **property names (keys)** of an object — all **enumerable string-keyed** properties, **including inherited ones** (properties the object gets from another object it is linked to, rather than its own). It's useful when you need to inspect an object whose shape you don't know in advance.
+**`for…in`** loops over the **property names (keys)** of an object — all **enumerable string-keyed** properties, **including inherited ones** (from an object it is linked to). An **enumerable** property shows up in such loops: ones you create are, built-ins like `toString` aren't (attributes: [Chapter 5](../05-objects-math-date-and-json/README.md)).
 
 ```js
 for (const key in object) {
   // key is a string: the current property's name
 }
 ```
-
-(An **enumerable** property is one that shows up in loops like this — ordinary properties you create are enumerable; built-in methods like `toString` are not. Property attributes are covered in [Chapter 5](../05-objects-math-date-and-json/README.md).)
 
 ### Example
 ```js
@@ -771,11 +734,10 @@ string note -> primary-ish
 order: 1, 2, b, a
 ```
 
-What the output teaches:
-1. **The loop variable is the key**; use bracket notation `person[key]` to get the value (`person.key` would look for a property literally named "key").
-2. **Inherited properties appear too.** `bike` has only `wheels` of its own, but the loop also visited `kind` from its prototype (the object it falls back to when a property is missing — [Chapter 9](../09-this-prototypes-and-classes/README.md)). Filter with `Object.hasOwn(obj, key)` (ES2022; older code uses `obj.hasOwnProperty(key)`), or avoid the issue with `Object.keys(obj)`, which returns only own enumerable keys.
-3. **On arrays it's a trap.** Arrays are objects whose indexes are property names, so `for…in` gives you **strings** (`"0"`, not `0`) and also visits any extra property someone attached (`note`) — or any enumerable property a library added to `Array.prototype`. Use `for…of`, a `for` loop or array methods for arrays.
-4. **Order:** integer-like keys come first in ascending numeric order, then other string keys in the order they were created.
+1. **The loop variable is the key** — read values with `person[key]` (`person.key` looks for a property named "key").
+2. **Inherited properties appear** — `kind` comes from `bike`'s prototype ([Chapter 9](../09-this-prototypes-and-classes/README.md)). Filter with `Object.hasOwn(obj, key)` (ES2022; older: `obj.hasOwnProperty(key)`) or use `Object.keys`.
+3. **Arrays are a trap** — you get index **strings** (`"0"`), plus extra properties (`note`) or anything enumerable added to `Array.prototype`. Use `for…of`, `for` or array methods.
+4. **Order:** integer-like keys ascending, then other string keys in creation order.
 
 ### Modern alternatives
 | Need | Use |
@@ -785,25 +747,23 @@ What the output teaches:
 | own `[key, value]` pairs | `for (const [k, v] of Object.entries(obj))` |
 | number of own properties | `Object.keys(obj).length` |
 
-These are what most modern code uses; `for…in` is mainly seen in older code and when you deliberately want inherited properties.
+`for…in` is mostly seen in older code or when you want inherited properties.
 
 ### TL;DR
-`for…in` iterates enumerable property **names** (strings), inherited ones included. Fine for plain objects (with `Object.hasOwn` if needed); don't use it on arrays.
+`for…in` iterates enumerable property **names** (strings), inherited included. Fine for plain objects (with `Object.hasOwn`); not for arrays.
 
 ---
 
 ## 3.10 The `for…of` loop
 
 ### What it is
-**`for…of`** (ES2015) loops over the **values** of any **iterable** — an object that knows how to hand out its values one at a time. Built-in iterables: arrays, strings, `Map`, `Set`, typed arrays (fixed-type arrays of raw numbers, used for binary data), the `arguments` object (a function's list of passed values), DOM collections such as `NodeList` (lists of page elements), and generators (functions that produce values one at a time). (How iterables work under the hood — the `Symbol.iterator` protocol, i.e. an agreed set of method names an object must provide — is in [Chapter 8](../08-maps-sets-iterators-and-generators/README.md).)
+**`for…of`** (ES2015) loops over the **values** of an **iterable** — an object that hands out values one at a time: arrays, strings, `Map`, `Set`, typed arrays, `arguments`, DOM collections like `NodeList`, generators. (The `Symbol.iterator` protocol behind it: [Chapter 8](../08-maps-sets-iterators-and-generators/README.md).) No index bookkeeping — the everyday choice for collections.
 
 ```js
 for (const value of iterable) {
   // value is the current element
 }
 ```
-
-It gives you the values directly, with no index bookkeeping, which makes it the everyday choice for walking a collection.
 
 ### Example
 ```js
@@ -865,13 +825,11 @@ for...in -> [ '0', '1' ] | for...of -> [ 'x', 'y' ]
 unchanged: [ 1, 2, 3 ]
 ```
 
-What the output teaches:
-1. **Strings** are iterated character by character — and correctly by **Unicode code point** (the unique number Unicode assigns to each character): the emoji counts as one character in `for…of`, while `.length` reports 4 because the emoji occupies two UTF-16 units ([Chapter 6](../06-strings-and-regular-expressions/README.md)).
-2. **Need the index as well?** Iterate `array.entries()`, which yields `[index, value]` pairs, and unpack them with array destructuring `[i, task]` (syntax that pulls items out of an array into separate variables) ([Chapter 5](../05-objects-math-date-and-json/README.md)).
-3. **Maps** yield `[key, value]` pairs; **Sets** yield each unique value once.
-4. **Plain objects are not iterable** → `TypeError`. Iterate `Object.keys/values/entries(obj)` instead.
-5. `for…in` gives index *strings*; `for…of` gives *values*.
-6. The loop variable is a **copy of each value**: reassigning it does not change the array. (If the values are objects, you *can* change their properties — the copy is a reference to the same object, [Chapter 2 §2.4](../02-variables-types-and-operators/README.md#24-primitives-vs-objects).) Use `const` for the loop variable unless you need to reassign it.
+1. **Strings** iterate by Unicode **code point** (the number Unicode assigns each character): the emoji is one character for `for…of`, but `.length` is 4 because it occupies two UTF-16 units ([Chapter 6](../06-strings-and-regular-expressions/README.md)).
+2. **Index too?** Iterate `array.entries()` (`[index, value]` pairs) with destructuring `[i, task]` ([Chapter 5](../05-objects-math-date-and-json/README.md)).
+3. **Maps** yield `[key, value]`; **Sets** each unique value once.
+4. **Plain objects aren't iterable** → `TypeError`; use `Object.keys/values/entries`.
+5. The loop variable is a **copy of each value** — reassigning it doesn't change the array (object values can still be mutated, [Chapter 2 §2.4](../02-variables-types-and-operators/README.md#24-primitives-vs-objects)). Use `const` unless reassigning.
 
 ### Trade-offs — `for…in` vs `for…of`
 
@@ -885,14 +843,13 @@ What the output teaches:
 | Supports `break`/`continue` | yes | yes |
 
 ### TL;DR
-`for…of` walks the values of arrays, strings, Maps, Sets and other iterables — the default loop for collections. Use `.entries()` for indexes and `Object.entries()` for plain objects.
+`for…of` walks values of iterables — the default for collections. `.entries()` for indexes, `Object.entries()` for plain objects.
 
 ---
 
 ## 3.11 `break`, `continue` and labels
 
 ### What it is
-Three tools change the normal flow of a loop:
 
 | Statement | Effect |
 |---|---|
@@ -900,7 +857,7 @@ Three tools change the normal flow of a loop:
 | **`continue`** | skips the rest of the current iteration and starts the next one (in a `for` loop, the final-expression still runs first) |
 | **`label:`** | names a statement (usually an outer loop) so `break label` / `continue label` can target it from inside a nested loop |
 
-The syntax is `break;`, `continue;`, `break labelName;`, `continue labelName;`, and a label is any identifier followed by a colon placed before a statement: `outer: for (…) { … }`.
+A label is an identifier plus colon before a statement: `outer: for (…) { … }`.
 
 ### Example
 ```js
@@ -969,27 +926,24 @@ odd numbers: 1,3,5
 some unpaid? true | find: 2
 ```
 
-Walk-through:
-- `break` at `i === 3` stops the loop, so only 0, 1, 2 print.
-- `continue` at `i === 2` skips that one print; the loop carries on with 3 and 4.
-- **Search-and-stop**: once the first unpaid order is found there's no reason to check the rest — `break` saves work.
-- **Labelled `break`**: a plain `break` inside the inner loop would exit only the inner loop and the outer loop would continue with `i = 2`. `break outer` ends both loops at `i=1, j=1`.
-- **Labelled `continue`**: as soon as a row contains a negative number, `continue rows` abandons that row and moves the *outer* loop to the next row, so the push is skipped.
-- **`continue` in a `while` loop** jumps straight back to the condition — if the counter update were below the `continue`, it would be skipped and the loop would never end.
+- **Search-and-stop**: `break` once the first unpaid order is found.
+- **Labelled `break`**: a plain inner `break` would let the outer loop continue with `i = 2`; `break outer` ends both at `i=1, j=1`.
+- **Labelled `continue`**: a negative abandons the row and advances the *outer* loop, skipping the push.
+- **`continue` in `while`** jumps straight to the condition — an update placed after it would be skipped (infinite loop).
 
 ### When not to use them
-- Many "loop + `break`" searches are clearer as array methods that stop early by themselves: `find`, `findIndex`, `some`, `every` ([Chapter 7](../07-arrays/README.md)) — as in the last line.
-- Labels are legitimate but rare; if you need them often, consider moving the nested loops into a function and using `return`, which exits all loops at once.
-- `break` and `continue` do **not** work inside `forEach` callbacks (`forEach` isn't a loop statement — the callback is a separate function). Use `for…of` if you need to stop early.
+- Search loops are often clearer as `find`, `findIndex`, `some`, `every` ([Chapter 7](../07-arrays/README.md)), which stop early themselves.
+- Labels are rare; alternatively move nested loops into a function and `return`.
+- `break`/`continue` don't work inside `forEach` callbacks (separate functions, not a loop statement) — use `for…of`.
 
 ### In the interview
-**"How do you exit a nested loop from the inner loop?"** Label the outer loop and use `break outerLabel`, or put the loops in a function and `return`. A plain `break` only exits the innermost loop.
+**"How do you exit a nested loop from the inner loop?"** Label the outer loop and `break outerLabel`, or put the loops in a function and `return`. Plain `break` exits only the innermost loop.
 
-- *Follow-up: Can you `break` out of `forEach`?* No — it's a `SyntaxError` inside the callback (not a loop); throwing works but is hacky. Use `for…of`, `some` or `find`.
-- *Follow-up: Does `continue` in a `for` loop skip the update expression?* No — the final-expression (e.g. `i++`) still runs before the next condition check.
+- *`break` out of `forEach`?* No — `SyntaxError` inside the callback; throwing works but is hacky. Use `for…of`, `some` or `find`.
+- *Does `continue` skip a `for` loop's update?* No — `i++` still runs before the next check.
 
 ### TL;DR
-`break` exits the loop, `continue` skips to the next iteration, labels let either target an outer loop. Prefer `find`/`some` for search-and-stop.
+`break` exits, `continue` skips to the next iteration, labels target an outer loop. Prefer `find`/`some` for search-and-stop.
 
 ---
 
@@ -1009,16 +963,16 @@ Walk-through:
 | Find the first match / check any / check all | `find` / `some` / `every` |
 | Wait for asynchronous work (work that finishes later, e.g. a network request) | `for await…of`, `await` in a loop ([Ch. 12](../12-asynchronous-javascript/README.md)) — never a busy `while` |
 
-Performance is rarely a reason to prefer one loop over another; modern engines optimise all of them. Choose the one that states your intent most clearly.
+Engines optimise all loops; choose the one that states intent most clearly.
 
 ---
 
 ## Chapter 3 TL;DR
 
-- **Conditionals** choose a path: `if / else if / else` (first truthy branch wins — order specific to general), the ternary `c ? a : b` for choosing values, and `switch` for one value against many `===` cases (`break` to stop fall-through, `default` as catch-all, braces for per-case variables).
-- **Loops** repeat a body: `for` (init; condition; update) for counting, `while` (check first, may run 0 times) for unknown counts, `do…while` (runs at least once), `for…in` (property **names**, inherited included — not for arrays), `for…of` (**values** of iterables — the default for collections).
-- **Nested loops** run the inner loop fully for each outer iteration (m × n work).
-- **`break`** exits, **`continue`** skips to the next iteration, **labels** target an outer loop; `forEach` can't be broken — use `for…of`, `find` or `some`.
-- Watch for off-by-one (`<` vs `<=`), infinite loops (update the counter before `continue`), and truthiness surprises in conditions.
+- **Conditionals:** `if / else if / else` (first truthy branch wins — specific to general), ternary `c ? a : b` for values, `switch` for one value vs many `===` cases (`break` against fall-through, `default` catch-all, braces for per-case variables).
+- **Loops:** `for` (init; condition; update) for counting, `while` (check first, maybe 0 runs) for unknown counts, `do…while` (at least once), `for…in` (property **names**, inherited included — not arrays), `for…of` (**values** of iterables — default for collections).
+- **Nested loops** run the inner loop fully per outer iteration (m × n).
+- **`break`** exits, **`continue`** skips, **labels** target an outer loop; `forEach` can't be broken — use `for…of`, `find`, `some`.
+- Watch off-by-one (`<` vs `<=`), infinite loops (update before `continue`), truthiness surprises.
 
 Next: [Chapter 4 — Functions, Scope and Closures](../04-functions-scope-and-closures/README.md).

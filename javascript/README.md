@@ -55,7 +55,7 @@ flowchart LR
 ## What's in here
 | Path | Purpose |
 |---|---|
-| `JavaScript-Handbook.pdf` | The whole book as one PDF, with a cover and a table of contents. |
+| `JavaScript-Handbook-Vol1.pdf`, `JavaScript-Handbook-Vol2.pdf` | The whole book in two PDFs (each under 350 pages), with cover and clickable contents. Vol 1: the language — setup, types and operators, control flow, functions and closures, objects, strings and regex, arrays, collections and generators, this/prototypes/classes, modules and tooling (Ch 1–10). Vol 2: errors, async, DOM, browser APIs and security, Node.js, testing and TypeScript, interview prep, cheat sheet, question bank (Ch 11–19). |
 | `interview/JavaScript-Interview-Edition.pdf` + `interview/INTERVIEW.md` | **Interview Edition** — a small (~40-page) fast-revision book: every chapter as must-know terms, key tables, tiny code snippets, likely questions and gotchas, plus a Top-25 question list, the event-loop ordering rules with three output puzzles, the from-scratch classics and a last-minute checklist. |
 | `capstones/CAPSTONES.md` + `capstones/JavaScript-Capstone-Projects.pdf` | **Capstone Projects**: 40 build-it-yourself design briefs, beginner to advanced — vanilla JavaScript and Node 24, from a calculator and a localStorage to-do list to a WebSocket chat, an offline-first PWA, a Promises/A+ library, a bundler, a CRDT editor and an HTTP server on raw TCP — each with requirements, architecture and data-model diagrams, milestones, hard parts, testing, trade-offs and interview questions. |
 | `chapters/NN-name/README.md` + `ChapterNN-Notes.pdf` | One chapter (Markdown source and its PDF). |
@@ -135,7 +135,7 @@ Timings in the outputs (sequential vs parallel `await`, worker demos) depend on 
 Requires Node 18+ and Google Chrome (the path is set in `tools/md2pdf.mjs`).
 
 ```bash
-bash tools/regen_pdfs.sh      # every ChapterNN-Notes.pdf + JavaScript-Handbook.pdf (cover title "JavaScript Handbook")
+bash tools/regen_pdfs.sh      # every ChapterNN-Notes.pdf + JavaScript-Handbook-Vol1.pdf + JavaScript-Handbook-Vol2.pdf (cover title "JavaScript Handbook")
 
 # one chapter only
 node tools/md2pdf.mjs chapters/12-asynchronous-javascript/Chapter12-Notes.pdf chapters/12-asynchronous-javascript/README.md

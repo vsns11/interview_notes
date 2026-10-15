@@ -1,22 +1,8 @@
 # Chapter 2 — The Math You Need for Machine Learning
 
-You do not need to be a mathematician to do machine learning, but four areas of math appear in every model, every library call and every interview: **linear algebra** (how data and models are stored and combined), **calculus** (how models learn), **probability** (how models express uncertainty) and **statistics** (how we judge results). A fifth, small area, **information theory**, explains the most common loss function (the formula that scores how wrong a model's predictions are) in classification.
+Four areas of math appear in every model, library call and interview: **linear algebra** (how data and models are stored and combined), **calculus** (how models learn), **probability** (how models express uncertainty) and **statistics** (how we judge results). A small fifth, **information theory**, explains the most common classification **loss** (the formula scoring how wrong predictions are). Each idea comes with a plain definition, a hand calculation and runnable **NumPy** code (the core Python library for fast calculations on arrays of numbers).
 
-This chapter teaches each idea with a plain definition, a small hand calculation, and NumPy code you can run (**NumPy** is the core Python library for fast calculations on arrays, i.e. blocks of numbers such as lists and grids). It keeps only what ML practitioners actually use.
-
-**What you'll learn**
-
-- Vectors, matrices, dot products and matrix multiplication, and why a model's prediction is "just" a matrix product
-- Transpose, inverse, determinant and norms; the intuition behind eigenvectors and SVD
-- Derivatives, partial derivatives, gradients and the chain rule
-- Gradient descent: by hand, in code, with plots, and the role of the learning rate
-- Random variables; Bernoulli, binomial and normal distributions; expectation and variance
-- Conditional probability and Bayes' theorem with a worked medical-test example
-- Mean, median, standard deviation, standardisation, correlation vs causation, sampling
-- Hypothesis tests, p-values and confidence intervals, read correctly
-- Entropy, cross-entropy and KL divergence, and why classifiers minimise "log loss"
-
-All code is in [`code/`](code/). Notation: bold or plain lowercase letters (x, w) are vectors, uppercase (X, A) are matrices, ŷ is a prediction, Σ means "sum of", and · is a dot product.
+All code is in [`code/`](code/). Notation: lowercase (x, w) = vectors, uppercase (X, A) = matrices, ŷ = prediction, Σ = "sum of", · = dot product.
 
 ---
 
@@ -24,34 +10,26 @@ All code is in [`code/`](code/). Notation: bold or plain lowercase letters (x, w
 
 ### What it is
 
-A **vector** is an ordered list of numbers, such as [2, 5, −3]. In ML, **one data point is one vector**: a house with 120 m², 3 bedrooms and 2 bathrooms is x = [120, 3, 2]. Each position is a **feature**, and the number of positions is the vector's **dimension**. Geometrically, a vector is an arrow from the origin (the zero point, where every coordinate is 0) to a point in space; a 3-feature house is a point in 3-D space, and a 784-pixel image is a point in 784-D space.
-
-### Why it matters
-
-Once data is a vector, "similar houses" becomes "nearby points", "a model" becomes "a set of weights to combine the numbers", and the computer can process millions of rows with fast array operations.
+A **vector** is an ordered list of numbers, such as [2, 5, −3]. In ML **one data point is one vector**: a house with 120 m², 3 bedrooms, 2 bathrooms is x = [120, 3, 2]. Each position is a **feature**; the count of positions is the **dimension**. Geometrically it is an arrow from the origin to a point: a 784-pixel image is a point in 784-D space.
 
 ### How it works
 
-| Operation | Rule | Example with a = [1, 2, 3], b = [4, 5, 6] |
+| Operation | Rule | Example, a = [1, 2, 3], b = [4, 5, 6] |
 |---|---|---|
-| Addition | Add position by position | a + b = [5, 7, 9] |
+| Addition | Position by position | a + b = [5, 7, 9] |
 | Scalar (single-number) multiplication | Multiply every entry | 2a = [2, 4, 6] |
-| **Dot product** a · b | Multiply position by position, then sum | 1·4 + 2·5 + 3·6 = **32** |
-| **L2 norm** ‖a‖₂ (length) | √(sum of squares) | √(1 + 4 + 9) = √14 ≈ 3.74 |
-| L1 norm ‖a‖₁ | Sum of absolute values | 1 + 2 + 3 = 6 |
+| **Dot product** a · b | Multiply position by position, sum | 1·4 + 2·5 + 3·6 = **32** |
+| **L2 norm** ‖a‖₂ (length) | √(sum of squares) | √14 ≈ 3.74 |
+| L1 norm ‖a‖₁ | Sum of absolute values | 6 |
 | Max norm ‖a‖∞ | Largest absolute value | 3 |
-| Unit vector | a / ‖a‖₂ (length 1, same direction) | [0.27, 0.53, 0.80] |
+| Unit vector | a / ‖a‖₂ | [0.27, 0.53, 0.80] |
 | Cosine similarity | (a · b) / (‖a‖ ‖b‖) | 32 / (3.74 · 8.77) ≈ 0.975 |
 
-**The dot product is the most important operation in ML.** (A *linear model* is one that predicts with a weighted sum of the features.) A linear model's prediction is a dot product plus a constant:
+**The dot product is the most important operation in ML.** A *linear model* (prediction = weighted sum of features) predicts ŷ = w · x + b = w₁x₁ + w₂x₂ + w₃x₃ + b. With w = [2, 10, 5] and x = [120, 3, 2]: w · x = 240 + 30 + 10 = **280**.
 
-ŷ = w · x + b = w₁x₁ + w₂x₂ + w₃x₃ + b
+Geometrically a · b = ‖a‖ ‖b‖ cos θ (θ = angle between the arrows): large when vectors point the same way, zero when perpendicular, negative when opposite. **Cosine similarity** keeps only the angle; search and recommender systems use it to compare **embeddings** (learned vectors representing meaning).
 
-With weights w = [2, 10, 5] and the house x = [120, 3, 2]: w · x = 2·120 + 10·3 + 5·2 = 240 + 30 + 10 = **280**.
-
-Geometrically, a · b = ‖a‖ ‖b‖ cos θ, where θ is the angle between the arrows. So the dot product is large when vectors point the same way, zero when they are perpendicular, and negative when they point in opposite directions. **Cosine similarity** keeps only the angle; it is how search engines and recommendation systems compare text or item **embeddings** (learned vectors that represent meaning).
-
-**Norms** measure size. The L2 norm is ordinary distance; the distance between two points is ‖a − b‖₂. L1 and L2 norms of the *weights* appear as regularisation penalties (extra terms added to the loss that discourage large weights, to reduce overfitting); Lasso and Ridge are the two classic penalised versions of linear regression, Lasso using L1 and Ridge using L2.
+**Norms** measure size; the distance between points is ‖a − b‖₂. L1 and L2 norms of the *weights* are **regularisation** penalties (extra loss terms discouraging large weights, to reduce overfitting): Lasso regression uses L1, Ridge uses L2.
 
 ### Code
 
@@ -80,18 +58,16 @@ unit vector = [ 0.6 -0.8]
 
 ### Common mistakes
 
-- Using `*` when you meant a dot product: `a * b` in NumPy is element-wise and returns a vector; `a @ b` (or `np.dot`) returns the sum.
-- Comparing distances between vectors whose features have wildly different scales (m² in hundreds, bedrooms in units). The large feature dominates. Standardise first (§2.8).
+- `a * b` in NumPy is element-wise (returns a vector); `a @ b` / `np.dot` is the dot product.
+- Comparing distances when features have wildly different scales (m² in hundreds, bedrooms in units): the large one dominates. Standardise first (§2.8).
 
 ### Self-check
 
-1. Dot product of [1, −1, 2] and [3, 4, 0.5]? → 3 − 4 + 1 = 0: the vectors are perpendicular.
-2. L2 norm of [6, 8]? → 10.
-3. Why is cosine similarity preferred over dot product for comparing documents? → It ignores length (document size) and compares only direction (content).
+1. Why cosine over dot product for documents? → It ignores length (document size) and compares direction (content).
 
 ### TL;DR
 
-A data point is a vector. The dot product (multiply and sum) is how a linear model combines features; norms measure size and distance; cosine similarity measures direction.
+A data point is a vector. The dot product is how a linear model combines features; norms measure size and distance; cosine similarity measures direction.
 
 ---
 
@@ -99,16 +75,11 @@ A data point is a vector. The dot product (multiply and sum) is how a linear mod
 
 ### What it is
 
-A **matrix** is a 2-D grid of numbers with m rows and n columns (shape m × n). In ML, **a dataset is a matrix**: each row is one example (a vector), each column is one feature. Four houses with three features form a 4 × 3 matrix X. Model weights are also stored as matrices: a neural-network layer that turns 3 inputs into 2 outputs has a 2 × 3 weight matrix.
+A **matrix** is an m × n grid of numbers. **A dataset is a matrix** (rows = examples, columns = features); so are weights (a layer mapping 3 inputs to 2 outputs has a 2 × 3 matrix).
 
 ### How matrix multiplication works
 
-To multiply A (m × n) by B (n × p):
-
-1. The inner sizes must match (n = n). The result has shape m × p.
-2. Entry (i, j) of the result = dot product of **row i of A** with **column j of B**.
-
-Worked example:
+A (m × n) times B (n × p): inner sizes must match; the result is m × p; entry (i, j) = **row i of A** · **column j of B**.
 
 ```
 A = | 1 2 |     B = | 5 6 |
@@ -118,22 +89,22 @@ A = | 1 2 |     B = | 5 6 |
 (A B)[1,0] = 3·5 + 4·7 = 43      (A B)[1,1] = 3·6 + 4·8 = 50
 ```
 
-Order matters: in general **AB ≠ BA** (here BA = [[23, 34], [31, 46]]).
+Order matters: **AB ≠ BA** in general (here BA = [[23, 34], [31, 46]]).
 
-**Why it matters: batch prediction is one matrix product.** For all four houses at once, ŷ = Xw + b. Each row of X dotted with w gives one prediction. Libraries run this on optimised CPU/GPU code (the CPU is the computer's general-purpose processor; a GPU is a graphics chip that performs thousands of simple calculations in parallel), which is why ML code avoids Python loops. A neural-network layer computes h = activation(Wx + b) in exactly the same way (an *activation function* is a simple non-linear function, such as "replace negatives with 0", applied to every number; without it, stacked layers would collapse into one linear map); deep networks are mostly long chains of matrix multiplications, which is why GPUs, built for fast matrix maths, power deep learning.
+**Batch prediction is one matrix product:** ŷ = Xw + b, each row of X dotted with w. Libraries run this as optimised CPU/GPU code (a GPU is a graphics chip doing thousands of simple calculations in parallel), so ML code avoids Python loops. A neural-network layer computes h = activation(Wx + b) (an *activation function* is a simple non-linear function, e.g. "replace negatives with 0"; without it stacked layers collapse into one linear map). Deep networks are long chains of matrix multiplications, which is why GPUs power deep learning.
 
 ### Transpose, identity, inverse, determinant
 
 | Concept | Definition | Example / use |
 |---|---|---|
-| **Transpose** Aᵀ | Swap rows and columns (shape n × m) | [[1, 2], [3, 4]]ᵀ = [[1, 3], [2, 4]]; Xᵀ appears in gradients and covariance (how features vary together) |
-| **Identity** I | 1s on the diagonal, 0s elsewhere; AI = A | The "1" of matrices |
-| **Inverse** A⁻¹ | The matrix with A A⁻¹ = I (only for square matrices with det ≠ 0) | "Undoes" A; used to solve linear equations |
-| **Determinant** det(A) | One number measuring how A scales area/volume; 0 means A squashes space flat and has no inverse | For 2 × 2: det = ad − bc = 1·4 − 2·3 = **−2** |
+| **Transpose** Aᵀ | Swap rows and columns (n × m) | [[1, 2], [3, 4]]ᵀ = [[1, 3], [2, 4]]; in gradients and covariance (how features vary together) |
+| **Identity** I | 1s on diagonal, 0s elsewhere; AI = A | The "1" of matrices |
+| **Inverse** A⁻¹ | A A⁻¹ = I (square matrices with det ≠ 0 only) | "Undoes" A; solves linear equations |
+| **Determinant** det(A) | How A scales area/volume; 0 = squashes space flat, no inverse | 2 × 2: ad − bc = 1·4 − 2·3 = **−2** |
 
-The 2 × 2 inverse by formula: A⁻¹ = (1/det) · [[d, −b], [−c, a]] = (1/−2) · [[4, −2], [−3, 1]] = [[−2, 1], [1.5, −0.5]].
+2 × 2 inverse: A⁻¹ = (1/det) · [[d, −b], [−c, a]] = (1/−2) · [[4, −2], [−3, 1]] = [[−2, 1], [1.5, −0.5]].
 
-**Solving equations.** The system x₁ + 2x₂ = 5, 3x₁ + 4x₂ = 11 is Ax = c. Then x = A⁻¹c = [1, 2]. In code, use `np.linalg.solve(A, c)` rather than computing the inverse: it is faster and numerically more accurate. The closed-form (computed directly by a formula, with no step-by-step search) linear-regression solution (the "normal equation") w = (XᵀX)⁻¹Xᵀy is solved the same way; scikit-learn's `LinearRegression` (scikit-learn is the standard Python machine-learning library) uses a least-squares solver (an algorithm that finds the weights minimising the sum of squared errors) based on matrix decompositions (rewriting a matrix as a product of simpler matrices) rather than an explicit inverse.
+**Solving equations.** x₁ + 2x₂ = 5, 3x₁ + 4x₂ = 11 is Ax = c, so x = A⁻¹c = [1, 2]. In code use `np.linalg.solve(A, c)`, not the inverse: faster and numerically more accurate. The **closed-form** (direct formula, no iterative search) linear-regression solution, the **normal equation** w = (XᵀX)⁻¹Xᵀy, is solved the same way; scikit-learn's `LinearRegression` uses a **least-squares** solver (finds weights minimising the sum of squared errors) based on matrix decompositions (rewriting a matrix as a product of simpler ones), not an explicit inverse.
 
 ### Code
 
@@ -175,30 +146,25 @@ solve A x = [5, 11] -> [1. 2.]
 layer output W @ x = [2.2 0.3]
 ```
 
-First house check: 2·120 + 10·3 + 5·2 + 50 = 330. ✓
-
 ### Common mistakes
 
-- **Shape errors.** Before multiplying, write the shapes: (4 × 3)(3,) → (4,). If inner sizes differ, you need a transpose or you have the wrong matrix.
-- Inverting nearly singular (almost non-invertible) matrices (det ≈ 0), e.g. when two features are almost copies of each other (*multicollinearity*). Results blow up; regularisation or `solve`/`lstsq` helps.
-- Confusing `*` (element-wise) with `@` (matrix product).
+- **Shape errors.** Write shapes first: (4 × 3)(3,) → (4,). Mismatched inner sizes mean a missing transpose or the wrong matrix.
+- Inverting nearly singular matrices (det ≈ 0), e.g. two features almost copies of each other (*multicollinearity*): results blow up. Regularisation or `solve`/`lstsq` helps.
 
 ### In the interview
 
 **30-second answer:** "A dataset is a matrix with examples as rows and features as columns, and a linear model's predictions for the whole dataset are one matrix-vector product, Xw + b. Neural network layers are matrix multiplications followed by nonlinearities (activation functions), which is why GPUs, which are very fast at matrix math, dominate deep learning."
 
-- *Is matrix multiplication commutative?* — No; AB ≠ BA in general, and the shapes may not even allow BA.
-- *When does a matrix have no inverse?* — When it is not square or its determinant is 0 (its columns are linearly dependent: at least one column can be built as a weighted sum of the others).
+- *Is matrix multiplication commutative?* — No; AB ≠ BA in general, and shapes may not even allow BA.
+- *When does a matrix have no inverse?* — Not square, or det = 0 (columns linearly dependent: one is a weighted sum of others).
 
 ### Self-check
 
-1. Shape of (100 × 20) @ (20 × 5)? → 100 × 5.
-2. det([[2, 1], [4, 2]])? → 2·2 − 1·4 = 0, so no inverse (the rows are multiples).
-3. Why prefer `np.linalg.solve` to `inv`? → Faster and more numerically stable.
+1. det([[2, 1], [4, 2]])? → 0: no inverse (rows are multiples).
 
 ### TL;DR
 
-A dataset is a matrix; predictions are Xw + b. Matrix multiplication = rows dotted with columns, order matters. Transpose swaps axes; the inverse undoes a matrix and exists only when det ≠ 0.
+A dataset is a matrix; predictions are Xw + b. Multiplication = rows dotted with columns, order matters. Transpose swaps axes; the inverse exists only when det ≠ 0.
 
 ---
 
@@ -206,18 +172,18 @@ A dataset is a matrix; predictions are Xw + b. Matrix multiplication = rows dott
 
 ### What it is
 
-Multiplying a vector by a matrix usually rotates and stretches it. An **eigenvector** of a square matrix A is a special direction that A only stretches (or flips), never rotates: A v = λ v. The stretch factor λ is the **eigenvalue**.
+A matrix usually rotates and stretches a vector. An **eigenvector** of square A is a direction A only stretches (or flips): A v = λ v; λ is the **eigenvalue**.
 
-Worked example: A = [[2, 1], [1, 2]] and v = [1, 1]. A v = [2+1, 1+2] = [3, 3] = 3 · [1, 1]. So v is an eigenvector with eigenvalue 3. The other eigenvector is [1, −1] with eigenvalue 1 (A[1, −1] = [1, −1]).
+Example: A = [[2, 1], [1, 2]], v = [1, 1]: A v = [3, 3] = 3v → eigenvalue 3. The other eigenvector is [1, −1] with eigenvalue 1.
 
-**Singular value decomposition (SVD)** extends the idea to any matrix, square or not: every m × n matrix M can be written as M = U Σ Vᵀ, meaning "rotate (Vᵀ), stretch along axes (Σ), rotate again (U)". The **singular values** on Σ's diagonal, sorted largest first, say how much each direction matters.
+**Singular value decomposition (SVD)** works for any matrix: M = U Σ Vᵀ, "rotate (Vᵀ), stretch along axes (Σ), rotate (U)". The **singular values** on Σ's diagonal, largest first, say how much each direction matters.
 
 ### Why it matters
 
-- **PCA (principal component analysis)**, the standard dimensionality-reduction method (reducing many features to a few that keep most of the information), finds the eigenvectors of the data's covariance matrix (a table of how much every pair of features varies together) (equivalently, the SVD of the centred data, i.e. data with each column's mean subtracted). The top eigenvectors are the directions along which data varies most; the eigenvalues say how much variance (spread, §2.6) each captures.
-- **Compression and denoising:** keeping only the top k singular values gives the best rank-k approximation (the closest matrix that can be built from only k independent directions) of a matrix (Eckart–Young theorem).
-- **Recommender systems:** matrix-factorisation methods, made famous during the Netflix Prize (2006–2009), approximate the huge user × movie ratings matrix as a product of two thin matrices, an idea closely related to SVD.
-- **PageRank**, Google's original ranking algorithm, is the leading eigenvector of a matrix built from the web's link graph (the network of which pages link to which).
+- **PCA (principal component analysis)**, the standard **dimensionality reduction** method (many features → a few that keep most information), takes eigenvectors of the data's **covariance matrix** (how every pair of features varies together) — equivalently the SVD of the centred data (column means subtracted). Top eigenvectors are the directions of most variation; eigenvalues say how much variance (§2.6) each captures.
+- **Compression/denoising:** keeping the top k singular values gives the best **rank-k approximation** (closest matrix built from only k independent directions) — Eckart–Young theorem.
+- **Recommenders:** matrix factorisation, made famous by the Netflix Prize (2006–2009), approximates the user × movie ratings matrix as a product of two thin matrices, an idea closely related to SVD.
+- **PageRank**, Google's original ranking, is the leading eigenvector of a matrix built from the web's link graph.
 
 ### Code
 
@@ -247,26 +213,18 @@ top 10 of 64 singular values keep 73.8% of the variance
 top 20 of 64 singular values keep 89.4% of the variance
 ```
 
-- The eigenvectors come out normalised to length 1, so [1, 1] appears as [0.707, 0.707].
-- For the 2-D cloud, one direction holds 91% of the variance: you could describe each point with one number instead of two and lose little.
-- On 8 × 8 digit images (64 pixels), 20 directions keep 89% of the variance:
+Eigenvectors come normalised ([1, 1] → [0.707, 0.707]). In the 2-D cloud one direction holds 91% of the variance; on 8 × 8 digit images (64 pixels), 20 directions keep 89%:
 
 ![SVD compression of a digit image](img/svd_compression.png)
 
 ### Common mistakes
 
-- Running PCA without centring (and usually standardising) the data.
-- Using `np.linalg.eig` on symmetric matrices like covariance; `eigh` is faster, more stable and returns real, sorted eigenvalues.
-
-### Self-check
-
-1. If A v = 5 v, what is v, and what is 5? → v is an eigenvector of A, 5 its eigenvalue.
-2. What does a large singular value mean? → That direction carries a lot of the matrix's "energy" (variance).
-3. Which ML technique is "eigenvectors of the covariance matrix"? → PCA.
+- PCA without centring (and usually standardising).
+- `np.linalg.eig` on symmetric matrices like covariance; `eigh` is faster, more stable and returns real, sorted eigenvalues.
 
 ### TL;DR
 
-Eigenvectors are directions a matrix only stretches; eigenvalues are the stretch amounts. SVD factors any matrix into rotate–stretch–rotate. Together they power PCA, compression and recommenders.
+Eigenvectors are directions a matrix only stretches; eigenvalues are the amounts. SVD factors any matrix into rotate–stretch–rotate. They power PCA, compression and recommenders.
 
 ---
 
@@ -274,13 +232,13 @@ Eigenvectors are directions a matrix only stretches; eigenvalues are the stretch
 
 ### What it is
 
-- A **derivative** f′(x) is the slope of a function at a point: how much the output changes per tiny change in the input. For f(x) = x², f′(x) = 2x, so at x = 3 the slope is 6: nudge x up by 0.001 and f rises by about 0.006.
-- A **partial derivative** ∂f/∂x is the slope with respect to one input while holding the others fixed.
-- The **gradient** ∇f is the vector of all partial derivatives. It points in the direction of steepest *increase*; its negative points downhill.
+- A **derivative** f′(x) is the slope at a point. f(x) = x² → f′(x) = 2x; at x = 3, nudging x by 0.001 raises f by ≈ 0.006.
+- A **partial derivative** ∂f/∂x is the slope along one input, others held fixed.
+- The **gradient** ∇f is the vector of all partials; it points to steepest *increase*, its negative downhill.
 
 ### Why it matters
 
-A model's **loss** is a function of its parameters. The gradient of the loss tells each parameter which way to move, and by how much, to reduce the error. That is all "learning" is for most models, from linear regression to GPT-scale networks.
+The **loss** is a function of the parameters; its gradient tells each parameter which way and how much to move to reduce error. That is "learning" for most models, from linear regression to GPT-scale networks.
 
 ### How it works: rules you actually need
 
@@ -292,30 +250,23 @@ A model's **loss** is a function of its parameters. The gradient of the loss tel
 | Constant multiple | (c f)′ = c f′ | (5x²)′ = 10x |
 | Exponential / log | (eˣ)′ = eˣ, (ln x)′ = 1/x | |
 | **Chain rule** | (f(g(x)))′ = f′(g(x)) · g′(x) | ((3x + 1)²)′ = 2(3x + 1) · 3 |
-| Sigmoid (S-shaped curve squashing any number into 0–1) | σ(z) = 1/(1 + e⁻ᶻ), σ′(z) = σ(z)(1 − σ(z)) | σ(0) = 0.5, σ′(0) = 0.25 |
+| **Sigmoid** (S-curve squashing any number into 0–1) | σ(z) = 1/(1 + e⁻ᶻ), σ′(z) = σ(z)(1 − σ(z)) | σ(0) = 0.5, σ′(0) = 0.25 |
 
-**Partial derivatives, worked.** f(x, y) = x²y + 3y at (2, 5):
-- ∂f/∂x: treat y as a constant → 2xy = 2·2·5 = **20**
-- ∂f/∂y: treat x as a constant → x² + 3 = 4 + 3 = **7**
-- Gradient ∇f(2, 5) = [20, 7].
+**Partials, worked.** f(x, y) = x²y + 3y at (2, 5): ∂f/∂x = 2xy = **20**; ∂f/∂y = x² + 3 = **7**; ∇f = [20, 7].
 
 ### The chain rule (the engine of backpropagation)
 
-When functions are nested, multiply the local slopes along the chain. A one-weight "neuron" (a single unit of a neural network: weighted input, then an activation) with squared error:
+For nested functions, multiply local slopes along the chain. A one-weight **neuron** (weighted input, then activation) with squared error: z = w·x → ŷ = σ(z) → L = (ŷ − y)², with x = 2, y = 1, w = 0.5:
 
-z = w·x → ŷ = σ(z) → L = (ŷ − y)²
-
-With x = 2, y = 1, w = 0.5:
-
-1. Forward: z = 1.0, ŷ = σ(1) = 0.7311, L = (0.7311 − 1)² = 0.0723
+1. Forward: z = 1.0, ŷ = σ(1) = 0.7311, L = 0.0723
 2. Local slopes: dL/dŷ = 2(ŷ − y) = −0.5379; dŷ/dz = ŷ(1 − ŷ) = 0.1966; dz/dw = x = 2
 3. Chain: dL/dw = −0.5379 × 0.1966 × 2 = **−0.2115**
 
-The negative sign says "increase w to reduce the loss" (makes sense: ŷ is below the target 1). **Backpropagation** is exactly this, applied efficiently to millions of weights, reusing shared intermediate products from the output layer backwards. Frameworks such as PyTorch (a popular Python deep-learning library) compute it automatically (*autograd*, short for automatic differentiation: the library records each operation and works out the derivatives for you).
+Negative → increase w to reduce the loss (ŷ is below the target). **Backpropagation** is this, applied efficiently to millions of weights from the output layer backwards, reusing shared intermediate products. PyTorch and similar libraries do it automatically (*autograd*, automatic differentiation: record each operation, derive gradients for you).
 
 ### Code: check every derivative numerically
 
-[`code/calculus.py`](code/calculus.py) compares hand-derived formulas with the **central difference** approximation f′(x) ≈ (f(x + h) − f(x − h)) / 2h, a standard "gradient check":
+[`code/calculus.py`](code/calculus.py) compares hand formulas with the **central difference** f′(x) ≈ (f(x + h) − f(x − h)) / 2h, a standard "gradient check":
 
 ```python
 def numerical_derivative(f, x, h=1e-5):
@@ -336,22 +287,20 @@ dL/dw via chain rule -0.21151 | numeric -0.21151
 MSE gradient: formula [-4.         -9.33333333] | numeric [-4.     -9.3333]
 ```
 
-**The MSE gradient formula** (MSE, mean squared error, is the average of the squared prediction errors), which you will see everywhere: for L(w) = (1/n) Σ (xᵢ·w − yᵢ)², ∇L = (2/n) Xᵀ(Xw − y). In words: multiply each example's error by its features and average. Here X has a column of 1s (so w[0] acts as the bias, the constant term b that shifts every prediction), y = [2, 4, 6], w = [0, 1]; the errors are [−1, −2, −3], giving gradient [2/3·(−6), 2/3·(−14)] = [−4, −9.33].
+**The MSE gradient** (MSE = mean squared error), seen everywhere: for L(w) = (1/n) Σ (xᵢ·w − yᵢ)², ∇L = (2/n) Xᵀ(Xw − y) — each example's error times its features, averaged. Here X has a column of 1s (so w[0] is the **bias**, the constant b shifting every prediction), y = [2, 4, 6], w = [0, 1]: errors [−1, −2, −3] give [2/3·(−6), 2/3·(−14)] = [−4, −9.33].
 
 ### Common mistakes
 
-- Forgetting a factor from the inner function in the chain rule (the "· 3" in ((3x + 1)²)′).
-- Thinking the gradient points downhill; it points uphill, so we step along **minus** the gradient.
+- Dropping the inner function's factor in the chain rule (the "· 3" in ((3x + 1)²)′).
+- The gradient points **uphill**; we step along **minus** the gradient.
 
 ### Self-check
 
-1. Derivative of 4x³ − 2x? → 12x² − 2.
-2. f(x, y) = 3x + xy². ∂f/∂y at (1, 2)? → 2xy = 4.
-3. Why does σ′(z) get tiny for very large |z|? → σ flattens near 0 and 1, so σ(1 − σ) → 0; this is the "vanishing gradient" problem in deep nets.
+1. Why does σ′(z) get tiny for large |z|? → σ flattens near 0 and 1, so σ(1 − σ) → 0: the "vanishing gradient" problem in deep nets.
 
 ### TL;DR
 
-Derivative = slope; partial derivative = slope along one input; gradient = vector of partials pointing uphill. The chain rule multiplies slopes through nested functions and is how backpropagation computes gradients.
+Derivative = slope; partial = slope along one input; gradient = vector of partials pointing uphill. The chain rule multiplies slopes through nested functions — that is backpropagation.
 
 ---
 
@@ -359,13 +308,11 @@ Derivative = slope; partial derivative = slope along one input; gradient = vecto
 
 ### What it is
 
-**Gradient descent** is an algorithm for finding the parameters that minimise a function: start somewhere, compute the gradient, take a small step in the opposite direction, repeat. Picture walking down a foggy hill by always stepping in the steepest downhill direction you can feel under your feet.
-
-Update rule: **w ← w − η · ∇L(w)**, where η (eta) is the **learning rate**, a hyperparameter (a setting you choose before training rather than one the model learns) that sets the step size.
+**Gradient descent** minimises a function: start somewhere, compute the gradient, step the opposite way, repeat (walking down a foggy hill by the steepest slope underfoot). Update: **w ← w − η · ∇L(w)**, where η (eta) is the **learning rate**, a **hyperparameter** (set before training, not learned) controlling step size.
 
 ### Worked by hand
 
-Minimise f(w) = (w − 3)², whose minimum is at w = 3. Gradient: f′(w) = 2(w − 3). Start at w = 0 with η = 0.1.
+Minimise f(w) = (w − 3)² (minimum at 3); f′(w) = 2(w − 3); start w = 0, η = 0.1.
 
 | Step | w | f(w) | gradient 2(w − 3) | new w = w − 0.1 · gradient |
 |---|---|---|---|---|
@@ -375,19 +322,19 @@ Minimise f(w) = (w − 3)², whose minimum is at w = 3. Gradient: f′(w) = 2(w 
 | 3 | 1.4640 | 2.3593 | −3.0720 | 1.7712 |
 | 4 | 1.7712 | 1.5099 | −2.4576 | 2.0170 |
 
-Each step closes 20% of the remaining distance to 3 (because w − 3 is multiplied by 1 − 2η = 0.8), and steps shrink as the slope flattens. The script prints the same table.
+Each step closes 20% of the remaining distance (w − 3 is multiplied by 1 − 2η = 0.8); steps shrink as the slope flattens.
 
 ### The learning rate
 
 ![Effect of the learning rate](img/gd_learning_rates.png)
 
-- **Too small (0.02):** safe but slow; after 12 steps w is only 1.16.
+- **Too small (0.02):** after 12 steps w is only 1.16.
 - **Good (0.3):** reaches 3.00 in 12 steps.
-- **Too large (1.05):** each step overshoots further than the last; w bounces across the valley and diverges (−6.42 and growing). For this function, any η > 1 diverges because |1 − 2η| > 1.
+- **Too large (1.05):** each step overshoots further; w diverges (−6.42 and growing). Here any η > 1 diverges because |1 − 2η| > 1.
 
 ### Gradient descent for linear regression
 
-[`code/gradient_descent.py`](code/gradient_descent.py) fits y = w·x + b to 100 noisy points generated from y = 4x + 7:
+[`code/gradient_descent.py`](code/gradient_descent.py) fits y = w·x + b to 100 noisy points from y = 4x + 7:
 
 ```python
 w, b, lr = 0.0, 0.0, 0.01
@@ -412,44 +359,40 @@ scikit-learn closed form: w=3.974 b=6.985
 
 ![Gradient descent fitting a line](img/gd_linear_regression.png)
 
-Gradient descent lands on the same answer as scikit-learn's exact solver. Notice w shoots past 4 early on and b creeps up slowly: the loss surface (the loss plotted as a landscape over all possible parameter values) is a long, narrow valley because x (0–10) and the constant 1 have very different scales. **Standardising features** makes the valley rounder and gradient descent much faster, one reason feature scaling matters.
+It matches scikit-learn's exact solver. w overshoots early while b creeps up: the **loss surface** (loss as a landscape over parameter values) is a long narrow valley because x (0–10) and the constant 1 have different scales. **Standardising features** rounds the valley and speeds convergence.
 
 ### Variants
 
-| Variant | Gradient computed on | Pros | Cons |
+| Variant | Gradient on | Pros | Cons |
 |---|---|---|---|
 | **Batch GD** | All n examples per step | Smooth, exact gradient | Slow per step on big data |
-| **Stochastic GD (SGD)** | One random example per step | Very cheap steps; noise can escape shallow local minima (dips that are lowest only nearby) | Noisy; needs a decaying learning rate |
-| **Mini-batch GD** | A small batch (e.g. 32–512) | Best of both; uses GPU parallelism | One more hyperparameter (batch size) |
+| **Stochastic GD (SGD)** | One random example | Very cheap steps; noise can escape shallow **local minima** (dips lowest only nearby) | Noisy; needs a decaying learning rate |
+| **Mini-batch GD** | Small batch (e.g. 32–512) | Best of both; uses GPU parallelism | Extra hyperparameter (batch size) |
 
-One pass over the whole training set is an **epoch**. Deep-learning optimisers (the algorithms that decide how to update the weights) such as Momentum, RMSProp and Adam are mini-batch gradient descent with smarter, adaptive step sizes.
+One pass over the training set is an **epoch**. Deep-learning **optimisers** (update rules) such as Momentum, RMSProp and Adam are mini-batch GD with adaptive step sizes.
 
-**Convex vs non-convex.** A convex loss (bowl-shaped, like MSE for linear regression or log loss for logistic regression) has no separate local minima: every minimum is a global one, so gradient descent with a suitable learning rate reaches the best possible loss. Neural-network losses are non-convex, with many local minima and saddle points (spots where the surface is flat but curves up in some directions and down in others); in practice, mini-batch methods still find good solutions.
+**Convex vs non-convex.** A convex (bowl-shaped) loss — MSE for linear regression, log loss for logistic regression — has no separate local minima, so GD with a suitable η reaches the global minimum. Neural-network losses are non-convex with many local minima and **saddle points** (flat spots curving up in some directions, down in others); mini-batch methods still find good solutions in practice.
 
 ### When not to use it
 
-If a closed-form or specialised solver exists and the data fits in memory (small linear regression), use it. Gradient descent shines when data is large, the model is complex, or no closed form exists.
+A closed-form solver exists and data fits in memory (small linear regression). GD shines with large data, complex models or no closed form.
 
 ### Common mistakes
 
-- Unscaled features → slow, zig-zagging convergence (the process of settling on the final answer).
-- Learning rate too large → loss grows or becomes NaN ("Not a Number", what a computer produces for invalid maths such as infinity minus infinity). First fix: divide η by 10.
-- Not shuffling data between epochs for SGD.
-- Stopping too early; plot the loss curve.
+- Unscaled features → slow, zig-zagging convergence.
+- η too large → loss grows or becomes NaN ("Not a Number", from invalid maths like ∞ − ∞). First fix: divide η by 10.
+- Not shuffling between SGD epochs; stopping too early (plot the loss curve).
 
 ### In the interview
 
 **30-second answer:** "Gradient descent minimises a loss by repeatedly moving parameters a small step opposite the gradient: w ← w − η∇L. The learning rate η controls step size; too small is slow, too large diverges. In practice we use mini-batch stochastic gradient descent, often with an adaptive optimiser like Adam, and we scale features so it converges quickly."
 
-- *Why mini-batches?* — Cheaper than full-batch, less noisy than single examples, and maps well to GPU parallelism.
-- *Does gradient descent always find the global minimum?* — Only guaranteed for convex problems with a suitable learning rate.
-- *What is an epoch?* — One full pass through the training data.
+- *Why mini-batches?* — Cheaper than full-batch, less noisy than single examples, maps well to GPUs.
+- *Always the global minimum?* — Guaranteed only for convex problems with a suitable η.
 
 ### Self-check
 
-1. Take one step on f(w) = w² from w = 4 with η = 0.25. → gradient 8, w = 4 − 2 = 2.
-2. Loss goes up every epoch. First suspect? → Learning rate too high.
-3. Why does scaling features help gradient descent? → It makes the loss surface more evenly curved, so one learning rate suits all directions.
+1. One step on f(w) = w² from w = 4, η = 0.25? → gradient 8, w = 2.
 
 ### TL;DR
 
@@ -461,35 +404,33 @@ w ← w − η ∇L. Pick η carefully, scale features, use mini-batches, watch 
 
 ### What it is
 
-A **random variable** is a quantity whose value comes from a random process: the outcome of a die roll, whether an email is spam, tomorrow's temperature. **Discrete** random variables take countable values (0, 1, 2, …); **continuous** ones take any value in a range. A **probability distribution** lists how likely each value is: a *probability mass function (PMF)* for discrete, a *probability density function (PDF)* for continuous (probabilities are areas under the PDF).
-
-Probability itself is a number between 0 (impossible) and 1 (certain) measuring how likely an event is, for example P(spam) = 0.2.
+**Probability** is a number from 0 (impossible) to 1 (certain), e.g. P(spam) = 0.2. A **random variable** takes its value from a random process (die roll, spam or not, tomorrow's temperature): **discrete** (countable values) or **continuous** (any value in a range). A **probability distribution** says how likely each value is: a *probability mass function (PMF)* for discrete, a *probability density function (PDF)* for continuous (probabilities are areas under it).
 
 ### The three distributions you'll meet most
 
 | Distribution | Models | Parameters | Mean | Variance | ML use |
 |---|---|---|---|---|---|
-| **Bernoulli** | One yes/no trial | p = P(1) | p | p(1 − p) | A binary label; logistic regression (a classic yes/no classifier) outputs p |
-| **Binomial** | Number of successes in n independent trials | n, p | np | np(1 − p) | Count of clicks out of n impressions (times an ad was shown); A/B tests (comparing two versions on random groups of users) |
-| **Normal (Gaussian)** | Continuous values clustered symmetrically around a mean | μ (mean), σ (std) | μ | σ² | Measurement noise, heights, errors of linear regression; weight initialisation (random starting weights) |
+| **Bernoulli** | One yes/no trial | p = P(1) | p | p(1 − p) | Binary label; logistic regression outputs p |
+| **Binomial** | Successes in n independent trials | n, p | np | np(1 − p) | Clicks out of n ad impressions; A/B tests (comparing two versions on random user groups) |
+| **Normal (Gaussian)** | Values clustered symmetrically around a mean | μ (mean), σ (std) | μ | σ² | Measurement noise, heights, linear-regression errors; weight initialisation |
 
-Worked binomial: P(exactly 3 successes in 10 trials, p = 0.3) = C(10, 3) · 0.3³ · 0.7⁷ = 120 · 0.027 · 0.0824 ≈ **0.2668**. C(10, 3) = 120 is the number of ways to choose which 3 trials succeed.
+Binomial: P(exactly 3 of 10, p = 0.3) = C(10, 3) · 0.3³ · 0.7⁷ = 120 · 0.027 · 0.0824 ≈ **0.2668** (C(10, 3) = 120 ways to pick the 3 successes).
 
-The **68–95–99.7 rule** for normal data: about 68% of values lie within 1σ of the mean, 95% within 2σ, 99.7% within 3σ. For heights ~ Normal(170, 10): P(height > 190) is the chance of being more than z = (190 − 170)/10 = 2 standard deviations above the mean ≈ **2.3%**.
+**68–95–99.7 rule:** ~68% of normal values lie within 1σ, 95% within 2σ, 99.7% within 3σ. Heights ~ Normal(170, 10): P(height > 190) = P(z > 2) ≈ **2.3%**.
 
 ![Bernoulli, binomial and normal distributions](img/distributions.png)
 
 ### Expectation and variance
 
-- **Expectation (mean)** E[X] = Σ x · P(x): the long-run average. Fair die: (1 + 2 + … + 6)/6 = **3.5**.
-- **Variance** Var[X] = E[(X − E[X])²]: the average squared distance from the mean. Die: [(−2.5)² + (−1.5)² + (−0.5)² + 0.5² + 1.5² + 2.5²]/6 = 17.5/6 ≈ **2.917**.
-- **Standard deviation** σ = √Var, in the same units as X (die: ≈ 1.71).
+- **Expectation (mean)** E[X] = Σ x · P(x), the long-run average. Fair die: **3.5**.
+- **Variance** Var[X] = E[(X − E[X])²], the average squared distance from the mean. Die: 17.5/6 ≈ **2.917**.
+- **Standard deviation** σ = √Var, in X's units (die ≈ 1.71).
 
-Useful rules: E[aX + b] = aE[X] + b; Var[aX + b] = a²Var[X]; for independent X and Y, Var[X + Y] = Var[X] + Var[Y].
+Rules: E[aX + b] = aE[X] + b; Var[aX + b] = a²Var[X]; independent X, Y: Var[X + Y] = Var[X] + Var[Y].
 
 ### Code
 
-[`code/probability.py`](code/probability.py) simulates each distribution and compares to theory:
+[`code/probability.py`](code/probability.py) simulates each distribution against theory:
 
 ```python
 flips = rng.random(100_000) < 0.3                  # Bernoulli(0.3)
@@ -511,18 +452,17 @@ die: E[X] = 3.500, Var[X] = 2.917 | simulated mean 3.510, var 2.925
 
 ### Common mistakes
 
-- Reading a PDF value as a probability. For continuous variables, P(X = exactly 170) = 0; only ranges have probability.
-- Assuming everything is normal. Incomes, session lengths and prices are usually right-skewed (most values are small, with a long tail of large ones); a log transform (replacing each value by its logarithm, which squeezes large values together) often helps.
+- Reading a PDF value as a probability: for continuous variables P(X = exactly 170) = 0; only ranges have probability.
+- Assuming normality. Incomes, session lengths and prices are usually **right-skewed** (mostly small, long tail of large values); a log transform often helps.
 
 ### Self-check
 
 1. Mean and variance of Binomial(100, 0.1)? → 10 and 9.
-2. Values within 2σ of the mean for normal data? → About 95%.
-3. Var[3X] if Var[X] = 2? → 9 · 2 = 18.
+2. Var[3X] if Var[X] = 2? → 18.
 
 ### TL;DR
 
-Random variables have distributions. Bernoulli = one yes/no, binomial = count of yeses, normal = symmetric bell. Expectation is the long-run average, variance the average squared spread.
+Bernoulli = one yes/no, binomial = count of yeses, normal = symmetric bell. Expectation = long-run average; variance = average squared spread.
 
 ---
 
@@ -530,33 +470,24 @@ Random variables have distributions. Bernoulli = one yes/no, binomial = count of
 
 ### What it is
 
-**Conditional probability** P(A | B) is the probability of A *given that* B happened: P(A | B) = P(A and B) / P(B). Knowing B narrows the world to the cases where B is true.
+**Conditional probability** P(A | B) = P(A and B) / P(B): the probability of A given B happened. Of 1,000 emails, 200 are spam; 120 spam and 40 normal emails contain "free": P(spam | free) = 120 / 160 = **0.75**, versus the base rate 0.2. A and B are **independent** if P(A | B) = P(A).
 
-Worked example with counts: of 1,000 emails, 200 are spam; 120 spam emails and 40 normal emails contain "free". Given an email contains "free", P(spam | free) = 120 / (120 + 40) = **0.75**, much higher than the base rate P(spam) = 0.2.
+**Bayes' theorem:** P(A | B) = P(B | A) · P(A) / P(B), i.e. **posterior = likelihood × prior / evidence**:
 
-Two events are **independent** if P(A | B) = P(A): knowing B tells you nothing about A.
-
-**Bayes' theorem** flips a conditional around:
-
-P(A | B) = P(B | A) · P(A) / P(B)
-
-In words: **posterior = likelihood × prior / evidence**.
-- **Prior** P(A): what you believed before seeing data.
-- **Likelihood** P(B | A): how probable the data is if A is true.
-- **Evidence** P(B): the overall probability of the data, = P(B | A)P(A) + P(B | not A)P(not A).
-- **Posterior** P(A | B): the updated belief.
+- **Prior** P(A): belief before the data.
+- **Likelihood** P(B | A): probability of the data if A is true.
+- **Evidence** P(B) = P(B | A)P(A) + P(B | not A)P(not A).
+- **Posterior** P(A | B): updated belief.
 
 ### Worked example: a medical test
 
-A disease affects 1% of people. A test catches 90% of sick people (sensitivity, P(+ | sick) = 0.90) and wrongly flags 5% of healthy people (false-positive rate 0.05, so specificity 0.95). You test positive. How likely are you to be sick?
+Disease prevalence 1%; the test catches 90% of sick people (**sensitivity** P(+ | sick) = 0.90) and flags 5% of healthy ones (false-positive rate 0.05, **specificity** 0.95). You test positive:
 
-1. Prior: P(sick) = 0.01
-2. Evidence: P(+) = 0.90 · 0.01 + 0.05 · 0.99 = 0.009 + 0.0495 = **0.0585**
-3. Posterior: P(sick | +) = 0.009 / 0.0585 = **0.154**
+1. Prior P(sick) = 0.01
+2. Evidence P(+) = 0.90 · 0.01 + 0.05 · 0.99 = **0.0585**
+3. Posterior P(sick | +) = 0.009 / 0.0585 = **0.154**
 
-Only about 15%! Intuition with 10,000 people: 100 are sick and 90 test positive; 9,900 are healthy and 495 test positive. Of 585 positives, only 90 are sick. When a condition is rare, false positives from the large healthy group swamp true positives. This is the **base-rate fallacy**, and it matters for every rare-event classifier (fraud, rare diseases, intrusion detection).
-
-Bayes also chains: after a *second* independent positive test, the posterior from step 3 becomes the new prior: 0.9 · 0.154 / (0.9 · 0.154 + 0.05 · 0.846) ≈ **0.766**.
+Only ~15%. Of 10,000 people, 100 are sick (90 test positive) and 9,900 healthy (495 test positive): only 90 of 585 positives are sick. This **base-rate fallacy** matters for every rare-event classifier (fraud, rare disease, intrusion detection). Bayes chains: after a second independent positive, the old posterior is the new prior: 0.9 · 0.154 / (0.9 · 0.154 + 0.05 · 0.846) ≈ **0.766**.
 
 ```python
 evidence = sens * prior + fpr * (1 - prior)
@@ -575,30 +506,24 @@ after a second independent positive test: 0.766
 
 ### Real-world examples
 
-- **Naive Bayes spam filters** apply Bayes' theorem with the simplifying ("naive") assumption that words are independent given the class. Paul Graham's 2002 essay "A Plan for Spam" popularised Bayesian spam filtering.
-- **Probability calibration:** a fraud model's 0.9 score should mean 90% of such cases are fraud; Bayes explains why scores trained on balanced samples must be adjusted when real fraud is rare.
+- **Naive Bayes spam filters** apply Bayes assuming words are independent given the class; Paul Graham's 2002 essay "A Plan for Spam" popularised them.
+- **Calibration:** a fraud score of 0.9 should mean 90% of such cases are fraud; Bayes explains why scores trained on balanced samples must be adjusted when real fraud is rare.
 
 ### Common mistakes
 
-- Confusing P(A | B) with P(B | A): P(positive | sick) = 0.9 is not P(sick | positive) = 0.15.
+- Confusing P(A | B) with P(B | A): P(+ | sick) = 0.9 is not P(sick | +) = 0.15.
 - Ignoring the prior (base rate).
 
 ### In the interview
 
 **30-second answer:** "Bayes' theorem updates a prior belief with evidence: P(A|B) = P(B|A)P(A)/P(B). A classic example is a test with 90% sensitivity and 5% false positives for a disease with 1% prevalence: a positive result gives only about a 15% chance of disease, because the healthy population is so much larger. It underlies Naive Bayes and explains why precision (the share of flagged cases that really are positive) is low for rare-event classifiers."
 
-- *What's "naive" in Naive Bayes?* — It assumes features are conditionally independent given the class.
-- *How does this relate to precision?* — P(sick | positive) is exactly the precision of the test.
-
-### Self-check
-
-1. P(A and B) = 0.1, P(B) = 0.4. P(A | B)? → 0.25.
-2. Why is the posterior so low in the medical example? → The prior is tiny, so false positives from healthy people outnumber true positives.
-3. Name the four parts of Bayes' theorem. → Prior, likelihood, evidence, posterior.
+- *What's "naive" in Naive Bayes?* — Features assumed conditionally independent given the class.
+- *Relation to precision?* — P(sick | positive) is exactly the test's precision.
 
 ### TL;DR
 
-P(A | B) = P(A and B) / P(B). Bayes: posterior ∝ likelihood × prior. Rare events + imperfect tests = many false alarms.
+P(A | B) = P(A and B) / P(B). Posterior ∝ likelihood × prior. Rare events + imperfect tests = many false alarms.
 
 ---
 
@@ -606,24 +531,20 @@ P(A | B) = P(A and B) / P(B). Bayes: posterior ∝ likelihood × prior. Rare eve
 
 ### What it is
 
-**Statistics** summarises data and quantifies how much we can trust conclusions drawn from it.
+**Statistics** summarises data and quantifies how far conclusions can be trusted.
 
 | Measure | Definition | Robust to outliers? |
 |---|---|---|
-| **Mean** | Sum ÷ count; the "central tendency" | No |
-| **Median** | Middle value when sorted | Yes |
+| **Mean** | Sum ÷ count | No |
+| **Median** | Middle sorted value | Yes |
 | **Mode** | Most frequent value | Yes |
-| **Variance** | Average squared distance from the mean; high = spread out | No |
-| **Standard deviation** | √variance, in original units | No |
-| **Percentiles / IQR** | Values below which a % of data falls; IQR = 75th − 25th percentile | Yes |
+| **Variance** | Average squared distance from the mean | No |
+| **Standard deviation** | √variance, original units | No |
+| **Percentiles / IQR** | Value below which a % of data falls; IQR = 75th − 25th percentile | Yes |
 
-**Worked example.** Salaries (in $1000s): 40, 42, 45, 47, 50, 52, 55, 300 (one CEO).
-- Mean = 631 / 8 = **78.9**; median = (47 + 50)/2 = **48.5**. The single outlier drags the mean far above what a typical person earns; the median barely notices.
-- **Population vs sample std:** dividing by n (NumPy's default `ddof=0`) describes this exact group; dividing by n − 1 (`ddof=1`, the default in pandas, Python's main library for data tables) gives an unbiased (correct on average) variance estimate when the data is a sample from a bigger population. For large n the difference is negligible.
+**Worked example.** Salaries ($1000s): 40, 42, 45, 47, 50, 52, 55, 300 (one CEO). Mean = **78.9**, median = **48.5**: one outlier drags the mean far above a typical salary. **Population vs sample std:** dividing by n (NumPy default `ddof=0`) describes this exact group; n − 1 (`ddof=1`, the pandas default) gives an unbiased variance estimate for a sample of a larger population; negligible difference for large n.
 
-**Standardisation (z-scores).** Subtract the mean and divide by the standard deviation: z = (x − μ)/σ. The result has mean 0 and standard deviation 1, and z says "how many standard deviations from the mean". For x = [2, 4, 4, 4, 5, 5, 7, 9]: μ = 5, σ = 2, so 9 → (9 − 5)/2 = **2.0** and 2 → **−1.5**.
-
-Standardising puts features on a common scale so that no feature dominates just because of its units. It speeds up gradient descent and is essential for distance-based methods (k-NN, which predicts from the nearest stored examples; k-means, which groups nearby points; SVMs, which draw a widest-margin boundary between classes) and regularised models. scikit-learn's `StandardScaler` does exactly this, learning μ and σ from the training data only.
+**Standardisation (z-scores):** z = (x − μ)/σ gives mean 0, std 1; z = "standard deviations from the mean". For x = [2, 4, 4, 4, 5, 5, 7, 9]: μ = 5, σ = 2, so 9 → **2.0**, 2 → **−1.5**. It stops features dominating through units, speeds up gradient descent, and is essential for distance-based methods (k-NN, k-means, SVMs) and regularised models. scikit-learn's `StandardScaler` learns μ and σ from training data only.
 
 Output of [`code/statistics_basics.py`](code/statistics_basics.py):
 
@@ -637,13 +558,11 @@ z mean 0.0, z std 1.0
 
 ### Self-check
 
-1. House prices are right-skewed. Mean or median for a "typical" price? → Median.
-2. z-score of 130 when μ = 100, σ = 15? → 2.
-3. Why fit the scaler on training data only? → Using test data to compute μ and σ leaks test information.
+1. Why fit the scaler on training data only? → Test data in μ and σ leaks test information.
 
 ### TL;DR
 
-Mean and std summarise centre and spread but are pulled by outliers; median and IQR are robust. Standardise features to mean 0, std 1 before distance-based or gradient-based models.
+Mean and std are pulled by outliers; median and IQR are robust. Standardise to mean 0, std 1 before distance- or gradient-based models.
 
 ---
 
@@ -651,14 +570,12 @@ Mean and std summarise centre and spread but are pulled by outliers; median and 
 
 ### What it is
 
-**Correlation** (Pearson's r, from −1 to +1) measures how strongly two variables move together *in a straight line*. r = +1: perfect increasing line; −1: perfect decreasing line; 0: no *linear* relationship. **Causation** means changing one variable actually changes the other.
+**Correlation** (Pearson's r, −1 to +1) measures how strongly two variables move together *in a straight line*: +1 perfect increasing line, −1 perfect decreasing, 0 no *linear* relationship. **Causation** means changing one actually changes the other. Correlation without causation comes from:
 
-Correlation does not prove causation. Common reasons for correlation without causation:
-
-1. **Confounder:** a third variable drives both. Hot weather increases both ice-cream sales and swimming (hence drownings).
+1. **Confounder:** a third variable drives both (hot weather raises ice-cream sales and swimming, hence drownings).
 2. **Reverse causation:** the arrow runs the other way.
-3. **Coincidence:** with enough variables, some correlate by chance.
-4. **Selection bias:** the way data was collected creates the pattern.
+3. **Coincidence:** with enough variables some correlate by chance.
+4. **Selection bias:** the data collection creates the pattern.
 
 ```python
 temp = rng.uniform(10, 35, 365)
@@ -675,20 +592,20 @@ corr after controlling for temperature = -0.06
 corr(x, x^2) = -0.00  (perfect dependence, zero LINEAR correlation)
 ```
 
-Once temperature is accounted for, the relationship vanishes. The last line shows the opposite trap: y = x² is completely determined by x, yet r = 0 because the relationship is not a line.
+Controlling for temperature removes the relationship. Conversely y = x² is fully determined by x yet r = 0 because the relationship is not a line.
 
 ### Why it matters for ML
 
-Most ML models find correlations, not causes. That is fine for *prediction* (umbrella sales predict rain), but dangerous for *decisions* ("sell more umbrellas to cause rain"). To learn causal effects you need **randomised experiments (A/B tests)** or specialised causal-inference methods.
+Models find correlations, not causes: fine for *prediction* (umbrella sales predict rain), dangerous for *decisions* ("sell umbrellas to cause rain"). Causal effects need **randomised experiments (A/B tests)** or causal-inference methods.
 
 ### Self-check
 
-1. Countries with more hospitals have more deaths. Causal? → Probably a confounder: population size.
-2. r = 0. Are the variables independent? → Not necessarily; there may be a non-linear relationship.
+1. More hospitals, more deaths. Causal? → Likely confounded by population size.
+2. r = 0 means independent? → Not necessarily; there may be a non-linear relationship.
 
 ### TL;DR
 
-Correlation measures linear co-movement; it can come from confounders, reverse causation or chance. Use experiments to establish cause.
+Correlation measures linear co-movement and can come from confounders, reverse causation or chance. Use experiments to establish cause.
 
 ---
 
@@ -696,9 +613,9 @@ Correlation measures linear co-movement; it can come from confounders, reverse c
 
 ### What it is
 
-A **population** is everything you care about (all customers); a **sample** is the part you measure. A **statistic** computed from a sample (e.g. the sample mean) estimates a **parameter** of the population. A good sample is **random** and **representative**; biased samples give biased estimates no matter how large (Chapter 1's *Literary Digest* poll).
+A **population** is everything you care about; a **sample** is what you measure. A sample **statistic** (e.g. sample mean) estimates a population **parameter**. Samples must be **random** and **representative**; a biased sample gives biased estimates however large (Chapter 1's *Literary Digest* poll).
 
-The **central limit theorem (CLT)**: if you take many random samples of size n and compute each sample's mean, those means are approximately normally distributed around the true mean, even if the population itself is skewed, provided n is reasonably large. Their spread, the **standard error**, is **σ/√n**. Quadrupling the sample size halves the uncertainty.
+**Central limit theorem (CLT):** means of many random samples of size n are approximately normal around the true mean, even for a skewed population, if n is reasonably large. Their spread, the **standard error**, is **σ/√n**: quadrupling n halves the uncertainty.
 
 ### Code
 
@@ -717,12 +634,7 @@ n=50: mean of sample means 49.89, std of sample means 7.11 (theory sigma/sqrt(n)
 
 ![Central limit theorem](img/clt.png)
 
-With n = 50 the sample means form a bell curve even though the population is heavily skewed. The CLT is why normal-based confidence intervals and t-tests (standard tests for comparing averages; both explained in §2.11) work for averages of most real data, and why larger test sets give more reliable accuracy estimates.
-
-### Self-check
-
-1. Standard error of a mean with σ = 20, n = 100? → 2.
-2. How much larger must a sample be to halve the standard error? → 4×.
+At n = 50 the means form a bell despite the skew — why normal-based CIs and t-tests (§2.11) work for averages of real data, and why larger test sets give more reliable accuracy.
 
 ### TL;DR
 
@@ -734,24 +646,24 @@ Sample means cluster normally around the truth with spread σ/√n. Random, repr
 
 ### What it is
 
-A **hypothesis test** asks whether an observed effect could plausibly be random noise.
+A **hypothesis test** asks whether an effect could plausibly be noise:
 
-1. State the **null hypothesis H₀** (no effect: "the new model does not change load time") and the **alternative H₁** (there is an effect).
-2. Choose a **significance level α** before looking, usually 0.05.
-3. Compute a **test statistic** from the data (e.g. a t-statistic: the difference in means divided by its standard error).
-4. Compute the **p-value**: *if H₀ were true*, the probability of seeing a result at least this extreme.
-5. If p < α, **reject H₀** ("statistically significant"); otherwise you **fail to reject** it (not the same as proving H₀).
+1. State the **null hypothesis H₀** (no effect) and **alternative H₁**.
+2. Choose **significance level α** beforehand, usually 0.05.
+3. Compute a **test statistic** (e.g. t = difference in means / its standard error).
+4. **p-value**: *if H₀ were true*, the probability of a result at least this extreme.
+5. p < α → **reject H₀** ("statistically significant"); otherwise **fail to reject** (not proof of H₀).
 
 | Error | Meaning | Probability |
 |---|---|---|
-| **Type I (false positive)** | Reject H₀ when it is true | α |
+| **Type I (false positive)** | Reject a true H₀ | α |
 | **Type II (false negative)** | Miss a real effect | β; **power** = 1 − β |
 
-A **confidence interval (CI)** gives a range of plausible values for a parameter: estimate ± (critical value × standard error), where the *critical value* is a cut-off read from a reference distribution (about 1.96 for 95% with large samples). A 95% CI is built by a method that, over many repeated experiments, captures the true value 95% of the time.
+A **confidence interval (CI)** = estimate ± critical value × standard error (the *critical value* comes from a reference distribution, ≈ 1.96 for 95% with large samples). A 95% CI comes from a method that captures the true value in 95% of repeated experiments.
 
 ### Worked example: an A/B test
 
-Page load times (ms), 60 users each: old model mean 202.7, new model mean 187.3, difference −15.4 ms. Welch's t-test (which does not assume equal variances):
+Page load times, 60 users each: old 202.7 ms, new 187.3 ms (−15.4 ms). Welch's t-test (no equal-variance assumption):
 
 ```python
 t, p = stats.ttest_ind(new, old, equal_var=False)
@@ -769,34 +681,33 @@ accuracy 0.850, bootstrap 95% CI [0.800, 0.900]
 coverage of 2000 simulated 95% CIs: 0.949
 ```
 
-- p = 0.0075: if the new model truly made no difference, a gap this large would appear less than 1% of the time. We reject H₀.
-- The CI for the new mean is 187.3 ± 2.001 × 4.02 (2.001 is the t critical value for 59 degrees of freedom, roughly the sample size minus the number of quantities estimated from it; it approaches 1.96 for large samples).
-- **Bootstrap CI** for a model's test accuracy: resample the 200 test predictions with replacement 5,000 times and take the 2.5th and 97.5th percentiles. An accuracy of 85% on 200 examples is really "somewhere between about 80% and 90%": worth remembering before celebrating a 1-point improvement on a small test set.
-- The last line verifies the meaning of "95%": in 2,000 simulated experiments, 94.9% of the intervals contained the true mean.
+- p = 0.0075: with no real difference, a gap this large would appear < 1% of the time → reject H₀.
+- 2.001 is the t critical value for 59 **degrees of freedom** (roughly sample size minus quantities estimated); it approaches 1.96 for large samples.
+- **Bootstrap CI** for test accuracy: resample the 200 test predictions with replacement 5,000 times, take the 2.5th and 97.5th percentiles. 85% on 200 examples really means "about 80–90%" — remember this before celebrating a 1-point gain on a small test set.
+- 94.9% of 2,000 simulated 95% intervals contained the true mean.
 
 ### Common mistakes
 
-- **"p = 0.03 means a 3% chance H₀ is true."** No. The p-value assumes H₀ is true and measures how surprising the data is.
-- **Significant ≠ important.** With huge samples, trivial differences become significant; always report the effect size (how big the difference actually is, e.g. "15 ms faster") and its CI.
-- **Multiple comparisons / p-hacking:** test 20 useless features at α = 0.05 and expect one "significant" result by chance. Correct for it (e.g. Bonferroni: use α/20) or pre-register the test (write down what you will test before seeing the data).
-- Stopping an A/B test the moment p dips below 0.05 ("peeking") inflates false positives.
+- **"p = 0.03 means a 3% chance H₀ is true."** No: p assumes H₀ and measures how surprising the data is.
+- **Significant ≠ important.** Huge samples make trivial differences significant; report the **effect size** ("15 ms faster") with its CI.
+- **Multiple comparisons / p-hacking:** testing 20 useless features at α = 0.05 yields ~one "significant" by chance. Correct (Bonferroni: α/20) or pre-register (write down the test before seeing data).
+- "Peeking": stopping an A/B test as soon as p < 0.05 inflates false positives.
 
 ### In the interview
 
 **30-second answer:** "A p-value is the probability of seeing data at least as extreme as ours if the null hypothesis were true. If it's below a pre-chosen α, like 0.05, we reject the null. It's not the probability the null is true, and significance isn't practical importance, so I report effect sizes with confidence intervals and correct for multiple comparisons."
 
-- *What's statistical power?* — The probability of detecting a real effect; it rises with sample size and effect size.
-- *How would you compare two models' accuracy?* — Evaluate on the same test set and use a paired test (e.g. McNemar's test, which compares the examples one model gets right and the other gets wrong) or bootstrap the difference.
+- *Statistical power?* — Probability of detecting a real effect; rises with sample size and effect size.
+- *Comparing two models' accuracy?* — Same test set, paired test (e.g. McNemar's, comparing examples one model gets right and the other wrong) or bootstrap the difference.
 
 ### Self-check
 
-1. p = 0.2, α = 0.05. Conclusion? → Fail to reject H₀; the data is consistent with no effect (it doesn't prove no effect).
-2. What does a 95% CI of [0.80, 0.90] for accuracy tell you? → The true accuracy is plausibly anywhere in that range; small differences inside it may be noise.
-3. Type I error? → A false positive: rejecting a true null.
+1. p = 0.2, α = 0.05? → Fail to reject H₀; consistent with no effect (doesn't prove it).
+2. Accuracy CI [0.80, 0.90]? → True accuracy plausibly anywhere in range; small differences inside it may be noise.
 
 ### TL;DR
 
-Set α, compute p; p < α → reject H₀. p is not P(H₀ true). Report effect sizes with confidence intervals, beware multiple testing.
+Set α, compute p; p < α → reject H₀. p is not P(H₀ true). Report effect sizes with CIs; beware multiple testing.
 
 ---
 
@@ -804,26 +715,25 @@ Set α, compute p; p < α → reject H₀. p is not P(H₀ true). Report effect 
 
 ### What it is
 
-- **Entropy** H(p) = −Σ p(x) log₂ p(x) measures the average **uncertainty** (or surprise) in a distribution, in bits. A fair coin has 1 bit; a coin that lands heads 90% of the time has 0.469 bits; a certain outcome has 0.
-- **Cross-entropy** H(p, q) = −Σ p(x) log q(x) measures the average surprise when reality follows p but you *predict* with q. It is always ≥ H(p), and equals it only when q = p.
-- **KL divergence** KL(p ‖ q) = Σ p(x) log (p(x)/q(x)) = H(p, q) − H(p): the *extra* surprise from using q instead of the truth. It is ≥ 0, is 0 only when q = p, and is **not symmetric**.
+- **Entropy** H(p) = −Σ p(x) log₂ p(x): average **uncertainty** (surprise) in bits. Fair coin 1 bit; 90/10 coin 0.469; certain outcome 0.
+- **Cross-entropy** H(p, q) = −Σ p(x) log q(x): average surprise when reality follows p but you predict q. Always ≥ H(p), equal only when q = p.
+- **KL divergence** KL(p ‖ q) = Σ p(x) log (p(x)/q(x)) = H(p, q) − H(p): *extra* surprise from using q. ≥ 0, 0 only when q = p, **not symmetric**.
 
 ### Why it matters
 
-- **Classification loss.** For a labelled example, the true distribution p is one-hot (probability 1 on the right class). Cross-entropy then simplifies to −log q(correct class): the model is penalised by how little probability it gave the right answer. Averaged over the data, this is **log loss**, the loss minimised by logistic regression and nearly every neural-network classifier, including language models predicting the next token (the word or word-piece a text model reads and writes).
-- **Decision trees** choose splits that most reduce entropy (information gain).
-- **KL divergence** appears in variational autoencoders (neural networks that learn to compress data and generate new samples), knowledge distillation (training a small model to copy a big model's predicted probabilities), and in RLHF (reinforcement learning from human feedback, the step that tunes chatbots using human ratings), where it keeps a fine-tuned language model close to its original.
+- **Classification loss.** With a **one-hot** true distribution (probability 1 on the right class), cross-entropy = −log q(correct class). Averaged, this is **log loss**, minimised by logistic regression and nearly every neural classifier, including language models predicting the next **token** (word or word-piece).
+- **Decision trees** pick splits that most reduce entropy (**information gain**).
+- **KL** appears in variational autoencoders (networks that compress data and generate samples), **knowledge distillation** (a small model copying a big model's probabilities), and **RLHF** (RL from human feedback), where it keeps a fine-tuned language model close to its original.
 
 ### Worked numbers
 
 True p = [0.7, 0.2, 0.1], model q = [0.5, 0.3, 0.2] (base 2):
 
-- H(p) = −(0.7 log₂0.7 + 0.2 log₂0.2 + 0.1 log₂0.1) = 0.360 + 0.464 + 0.332 = **1.157 bits**
+- H(p) = 0.360 + 0.464 + 0.332 = **1.157 bits**
 - H(p, q) = −(0.7 log₂0.5 + 0.2 log₂0.3 + 0.1 log₂0.2) = 0.700 + 0.347 + 0.232 = **1.280 bits**
-- KL(p ‖ q) = 1.280 − 1.157 = **0.123 bits**
+- KL(p ‖ q) = **0.123 bits**
 
-Log loss for labels [1, 0, 1, 1] and predicted P(class 1) = [0.9, 0.2, 0.6, 0.99] (natural log):
-−¼ [ln 0.9 + ln 0.8 + ln 0.6 + ln 0.99] = ¼ [0.105 + 0.223 + 0.511 + 0.010] = **0.2123**.
+Log loss, labels [1, 0, 1, 1], predicted P(class 1) = [0.9, 0.2, 0.6, 0.99] (natural log): −¼ [ln 0.9 + ln 0.8 + ln 0.6 + ln 0.99] = **0.2123**.
 
 ```python
 manual = -np.mean(y_true * np.log(p_pred) + (1 - y_true) * np.log(1 - p_pred))
@@ -848,23 +758,21 @@ log loss by hand = 0.2123 | sklearn = 0.2123
   true class predicted with p=0.01: loss = 4.605
 ```
 
-The last four lines show why log loss punishes **confident mistakes** heavily: giving the true class 1% probability costs 460 times more than giving it 99%.
+Log loss punishes **confident mistakes**: giving the true class 1% costs 460× more than giving it 99%.
 
 ### Common mistakes
 
-- Mixing log bases: information theory often uses log₂ (bits); ML libraries use the natural log (nats). Only the scale changes.
-- Treating KL as a distance; it is asymmetric and does not satisfy the triangle inequality (the rule that going directly from A to C is never longer than going via B).
-- Predicting exact 0 or 1 probabilities; log(0) is −∞. Libraries clip probabilities (force them into a range such as 0.000000000000001 to 0.999999999999999) for this reason.
+- Mixing log bases: log₂ (bits) vs natural log (nats, used by ML libraries); only the scale changes.
+- Treating KL as a distance: it is asymmetric and violates the triangle inequality (going A→C directly is never longer than via B).
+- Predicting exact 0 or 1: log(0) = −∞, so libraries clip probabilities (e.g. to 1e-15 … 1 − 1e-15).
 
 ### Self-check
 
-1. Entropy of a fair 4-sided die? → log₂4 = 2 bits.
-2. Cross-entropy loss when the true class gets probability 0.5? → −ln 0.5 ≈ 0.693.
-3. When is KL(p ‖ q) = 0? → When q = p.
+1. Loss when the true class gets 0.5? → −ln 0.5 ≈ 0.693.
 
 ### TL;DR
 
-Entropy = uncertainty; cross-entropy = surprise when predicting with q; KL = the gap between them. Classification models minimise cross-entropy (log loss), which punishes confident errors hardest.
+Entropy = uncertainty; cross-entropy = surprise predicting with q; KL = the gap. Classifiers minimise cross-entropy (log loss), which punishes confident errors hardest.
 
 ---
 
@@ -872,18 +780,16 @@ Entropy = uncertainty; cross-entropy = surprise when predicting with q; KL = the
 
 | Area | Key idea | Where it shows up |
 |---|---|---|
-| Vectors | A data point is a vector; dot product = multiply and sum | Linear models, embeddings, similarity search |
-| Matrices | A dataset is a matrix; predictions = Xw + b | Every model; neural-net layers; GPUs |
-| Transpose / inverse / det | Swap axes; undo a matrix; det = 0 means no inverse | Normal equation, gradients, covariance |
+| Vectors | Data point = vector; dot product = multiply and sum | Linear models, embeddings, similarity search |
+| Matrices | Dataset = matrix; predictions = Xw + b | Every model; neural-net layers; GPUs |
+| Transpose / inverse / det | Swap axes; undo a matrix; det = 0 → no inverse | Normal equation, gradients, covariance |
 | Eigen / SVD | Main directions and their strengths | PCA, compression, recommenders |
-| Derivatives / gradients | Slope of the loss for each parameter | How every model learns |
+| Derivatives / gradients | Slope of the loss per parameter | How every model learns |
 | Chain rule | Multiply slopes through nested functions | Backpropagation |
 | Gradient descent | w ← w − η∇L; tune η, scale features | Training almost everything |
-| Distributions | Bernoulli, binomial, normal; mean and variance | Labels, noise, A/B tests |
+| Distributions | Bernoulli, binomial, normal; mean, variance | Labels, noise, A/B tests |
 | Bayes | Posterior ∝ likelihood × prior; mind the base rate | Naive Bayes, rare-event precision |
 | Statistics | Median vs mean, standardisation, CLT, σ/√n | Preprocessing, trusting results |
-| Correlation ≠ causation | Confounders; use experiments for causes | Interpreting models |
+| Correlation ≠ causation | Confounders; experiments for causes | Interpreting models |
 | Tests and CIs | p-value, α, CI, bootstrap; significance ≠ importance | Model comparison, A/B tests |
 | Information theory | Entropy, cross-entropy, KL | Log loss, decision trees, LLM training |
-
-A little of each goes a long way: you now have everything needed to read the math in the rest of this book.

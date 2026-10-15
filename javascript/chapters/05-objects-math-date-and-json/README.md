@@ -1,41 +1,25 @@
 # Chapter 5 — Objects, Math, Date and JSON
 
-Almost everything interesting in a JavaScript program is an **object**: a user profile, an HTTP response (the reply a web server sends back to a request — see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)), a configuration file, a DOM element (one piece of a web page, like a button, as the browser represents it to JavaScript), even an array or a function. This chapter teaches the everyday object toolkit — creating objects, reading and changing their properties, copying and merging them, locking them down — and then three built-in objects you will use constantly: **`Math`** for numbers, **`Date`** for time, and **`JSON`** for sending data between programs.
+Almost everything interesting in JavaScript is an **object**: a user profile, an HTTP response (a web server's reply — [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)), a config file, a DOM element (one piece of a web page as the browser exposes it), even arrays and functions. This chapter covers the object toolkit — creating, reading, changing, copying, merging and locking objects — then three built-ins you'll use constantly: **`Math`**, **`Date`** and **`JSON`**.
 
-**What you'll learn**
+**What you'll learn:** the object toolkit (§5.1–5.8), the built-in objects (§5.9), `Math` (§5.10), `Date` and **Temporal** (§5.11), and JSON (§5.12).
 
-1. What an object is, object literals, and how keys and values are stored.
-2. Dot vs bracket access, computed keys, shorthand properties, adding/updating/deleting properties, checking whether a key exists, key order.
-3. Methods and `this` inside a method (the short version — the full rules are in [Chapter 9](../09-this-prototypes-and-classes/README.md)).
-4. Spread and rest with objects, shallow vs deep copies, and destructuring.
-5. The `Object.*` static methods: `keys`, `values`, `entries`, `fromEntries`, `assign`, `create`, `is`, and the reflection/locking family.
-6. Property descriptors, `freeze` / `seal` / `preventExtensions`, getters and setters.
-7. Optional chaining `?.` for safely reading deep data.
-8. The built-in ("native") objects at a glance.
-9. `Math`: constants, rounding, min/max, powers, trigonometry, random numbers.
-10. `Date`: creating, reading, changing, comparing and formatting dates — plus the state of **Temporal**, its modern replacement.
-11. `JSON.stringify` and `JSON.parse`, including replacers, revivers and what JSON cannot represent.
+**Before you start:** variables, types, operators ([Chapter 2](../02-variables-types-and-operators/README.md)); functions and arrows ([Chapter 4](../04-functions-scope-and-closures/README.md)). Arrays: [Chapter 7](../07-arrays/README.md); `Map`/`Set` (often better lookup tables): [Chapter 8](../08-maps-sets-iterators-and-generators/README.md).
 
-**Before you start.** You should know variables, primitive types and operators ([Chapter 2](../02-variables-types-and-operators/README.md)) and functions and arrow functions ([Chapter 4](../04-functions-scope-and-closures/README.md)). Arrays get their own chapter ([Chapter 7](../07-arrays/README.md)), and `Map` / `Set` — which are often better than plain objects for lookup tables — are in [Chapter 8](../08-maps-sets-iterators-and-generators/README.md).
-
-All runnable code is in [`code/`](code/). Every file is an ES module (`.mjs` — a file that uses the modern `import`/`export` system, [Chapter 10](../10-modules-and-tooling/README.md)), which means it runs in **strict mode** (a stricter variant of JavaScript where some silent failures become errors). Outputs shown are real, produced with Node 24.
+Code is in [`code/`](code/). Every file is an ES module (`.mjs`, the `import`/`export` system — [Chapter 10](../10-modules-and-tooling/README.md)), so it runs in **strict mode** (silent failures become errors). Outputs are real Node 24 output.
 
 ---
 
 ## 5.1 What an object is
 
 ### What it is
-An **object** is a collection of **properties**. Each property is a **key** (a name, normally a string) paired with a **value** (any JavaScript value — a number, a string, another object, a function). A property whose value is a function is called a **method**.
-
-Think of an object as a labelled filing box: every drawer has a label (the key) and holds something (the value). A real car is a good mental model: it has *properties* such as colour, brand and model, and it can *do* things such as drive or brake — those actions are its methods.
-
-Compare that with a **primitive** (string, number, boolean, `null`, `undefined`, bigint, symbol), which is a single, unchangeable value. An object groups many related values — and the behaviour that works on them — under one name.
+An **object** is a collection of **properties**: each a **key** (normally a string) paired with a **value** (any value — number, string, object, function). A property whose value is a function is a **method**. A car has properties (colour, brand) and methods (drive, brake). Unlike a **primitive** (string, number, boolean, `null`, `undefined`, bigint, symbol) — a single unchangeable value — an object groups related values and behaviour under one name.
 
 ### Why it matters
-Real data is structured. A user is not "a string"; it is a name, an email, a list of roles, a signup date. Objects let you keep those pieces together, pass them around as one thing, and attach behaviour to them. JSON (section 5.12), the format of nearly every web API (a service other programs call over the internet to fetch or send data), is basically a text version of JavaScript objects and arrays.
+Real data is structured: a user is a name, email, roles, signup date. Objects keep those together and attach behaviour. JSON (§5.12), the format of nearly every web API (a service other programs call over the internet), is a text version of objects and arrays.
 
 ### How it works — creating objects with a literal
-The simplest and by far the most common way to make an object is an **object literal**: curly braces containing `key: value` pairs separated by commas.
+An **object literal** — curly braces with comma-separated `key: value` pairs — is the most common way:
 
 ```js
 const car = {
@@ -48,19 +32,17 @@ const car = {
 };
 ```
 
-- `{ ... }` creates a new object each time this line runs.
-- `color`, `brand`, `model` are properties holding strings.
-- `drive` is a method. `drive() { ... }` is **method shorthand** (ES2015) for `drive: function () { ... }`.
-- A trailing comma after the last property is allowed and makes diffs (the line-by-line "what changed" view in version control) cleaner.
+- `{ ... }` creates a new object each time the line runs.
+- `drive() { ... }` is **method shorthand** (ES2015) for `drive: function () { ... }`.
+- A trailing comma is allowed and keeps diffs (version-control "what changed" views) clean.
 
-Other ways to create objects exist — `new Object()` (never needed), `Object.create(proto)` (section 5.6), constructor functions and classes ([Chapter 9](../09-this-prototypes-and-classes/README.md)) — but literals cover 90% of everyday code.
+Alternatives — `new Object()` (never needed), `Object.create(proto)` (§5.6), constructors and classes ([Chapter 9](../09-this-prototypes-and-classes/README.md)) — but literals cover ~90% of code.
 
 ---
 
 ## 5.2 Reading, adding, updating and deleting properties
 
 ### Dot notation vs bracket notation
-There are two ways to reach a property:
 
 | | Dot notation `obj.key` | Bracket notation `obj['key']` / `obj[expr]` |
 |---|---|---|
@@ -69,13 +51,11 @@ There are two ways to reach a property:
 | Readability | Cleaner; the default choice | A little noisier |
 | Typical use | `user.name`, `config.port` | `headers['content-type']`, `row[columnName]`, `scores[2024]` |
 
-Rule of thumb: **use dot notation unless you can't** — the key has special characters, or it is only known at run time (while the program is running, not when you write it).
+**Use dot notation unless you can't** — special characters, or a key known only at **run time** (while the program runs).
 
 ### Computed keys and shorthand properties
-Two ES2015 features make literals more flexible:
-
-- **Computed keys** — write `[expression]: value` and the *result* of the expression becomes the key.
-- **Shorthand properties** — `{ name, age }` means `{ name: name, age: age }` when variables with those names exist.
+- **Computed keys** (ES2015) — `[expression]: value` uses the expression's *result* as the key.
+- **Shorthand properties** — `{ name, age }` means `{ name: name, age: age }`.
 
 [`code/01_object_basics.mjs`](code/01_object_basics.mjs) (first part):
 
@@ -113,10 +93,10 @@ undefined
 { name: 'Ada', age: 36 }
 ```
 
-Reading a property that does not exist gives `undefined` — no error. Reading a property *of* `undefined` (for example `laptop.color.length`) **is** an error (`TypeError`); section 5.8 shows how `?.` avoids it.
+A missing property reads as `undefined`; reading a property *of* `undefined` (`laptop.color.length`) throws `TypeError` — §5.8's `?.` avoids it.
 
 ### Adding, updating and deleting
-Objects are **mutable**: you can change them after creation. Assigning to a key that exists updates it; assigning to a new key adds it. `delete obj.key` removes a property entirely.
+Objects are **mutable**: assigning to an existing key updates it, to a new key adds it; `delete obj.key` removes it.
 
 ```js
 laptop.brand = 'Dell';          // update (dot)
@@ -153,14 +133,13 @@ true false
 | `obj.hasOwnProperty('key')` | No | Yes, but fails on objects without a prototype; prefer `Object.hasOwn` |
 | `obj.key !== undefined` | Yes | **No** — a key explicitly set to `undefined` looks missing |
 
-(*Inherited* keys come from the object's **prototype** — a fallback object JavaScript checks when a key isn't found on the object itself; section 5.6.)
+(*Inherited* keys come from the object's **prototype** — the fallback object checked when a key isn't found on the object itself; §5.6.)
 
 ### Key order
-People often say "objects have no order". That was never quite true and has been fully specified since ES2020 for the common operations (`Object.keys`, `for...in`, `JSON.stringify`, …). The order of own keys is:
-
-1. **Integer-like keys** (`'0'`, `'1'`, `'42'`) in ascending numeric order;
-2. then other **string keys** in the order they were added;
-3. then **symbol keys** in the order they were added (only reported by functions that include symbols).
+Order is fully specified since ES2020 for `Object.keys`, `for...in`, `JSON.stringify` etc.:
+1. **Integer-like keys** (`'0'`, `'42'`) ascending;
+2. other **string keys** in insertion order;
+3. **symbol keys** in insertion order (only reported by symbol-aware functions).
 
 ```js
 const ordered = { b: 1, 2: 'two', a: 2, 1: 'one', [Symbol('s')]: 3 };
@@ -175,10 +154,10 @@ Output:
 [ '1', '2', 'b', 'a', Symbol(s) ]
 ```
 
-So the order is deterministic (always the same for the same input), but it is *not* pure insertion order when keys look like numbers. If you need a keyed collection where insertion order always wins (or keys that are not strings), use a `Map` ([Chapter 8](../08-maps-sets-iterators-and-generators/README.md)).
+Deterministic, but not pure insertion order for number-like keys. For insertion order always (or non-string keys) use a `Map` ([Chapter 8](../08-maps-sets-iterators-and-generators/README.md)).
 
 ### Objects are references
-A variable holding an object holds a **reference** — an arrow pointing at the object — not the object itself. Copying the variable copies the arrow.
+A variable holds a **reference** to the object; copying the variable copies the reference.
 
 ```js
 const a = { n: 1 };
@@ -200,27 +179,27 @@ Output:
 TypeError: Assignment to constant variable.
 ```
 
-- `===` on objects asks "same object?", not "same contents?". Two separate literals with equal contents are never `===`.
-- `const` freezes the **binding** (the variable cannot point elsewhere), not the object. To stop mutation, use `Object.freeze` (section 5.6).
+- `===` on objects means "same object?", not "same contents?".
+- `const` freezes the **binding**, not the object — use `Object.freeze` (§5.6).
 
 ### Common mistakes
-- Writing `obj.key` when the key is in a variable: `obj.field` looks for a property literally named `"field"`. Use `obj[field]`.
-- Using a number-like string key and expecting insertion order.
+- `obj.field` when the key is in variable `field` — looks for a property literally named "field"; use `obj[field]`.
+- Expecting insertion order for number-like keys.
 - Believing `const` makes an object immutable.
-- Comparing objects with `===` to test "equal contents" — compare the fields, or serialize both deliberately (convert each to a string such as JSON and compare the strings).
+- `===` for "equal contents" — compare fields, or deliberately serialize both (e.g. to JSON) and compare strings.
 
 ### Self-check
-1. How do you read a property named `first-name`? → `obj['first-name']` — the dash makes it an invalid identifier.
-2. `const k = 'x'; ({ [k]: 1 })` produces what? → `{ x: 1 }`.
-3. `'toString' in {}` vs `Object.hasOwn({}, 'toString')`? → `true` (inherited) vs `false` (not own).
-4. What does `Object.keys({ z: 1, 10: 1, 2: 1 })` return? → `['2', '10', 'z']`.
+1. Read a property named `first-name`? → `obj['first-name']`.
+2. `const k = 'x'; ({ [k]: 1 })`? → `{ x: 1 }`.
+3. `'toString' in {}` vs `Object.hasOwn({}, 'toString')`? → `true` vs `false`.
+4. `Object.keys({ z: 1, 10: 1, 2: 1 })`? → `['2', '10', 'z']`.
 
 ---
 
 ## 5.3 Methods and `this`
 
 ### What it is
-A **method** is a function stored as a property. When you call it as `obj.method()`, JavaScript sets the special keyword **`this`** inside the function to `obj` — the object to the left of the dot. That is how one method can read the object's other properties.
+Calling `obj.method()` sets **`this`** inside the method to `obj` (the object left of the dot), so a method can read the object's other properties.
 
 ```js
 const person = {
@@ -233,10 +212,10 @@ const person = {
 person.greet();   // Hi, I'm Grace Hopper
 ```
 
-Methods can be called with brackets too: `person['greet']()`.
+Brackets work too: `person['greet']()`.
 
 ### Common mistakes
-- **Arrow functions as methods.** Arrow functions do not get their own `this`; they borrow it from the surrounding code. An arrow method on an object literal therefore does *not* see the object:
+- **Arrow functions as methods** — arrows borrow `this` from surrounding code, so they don't see the object:
 
 ```js
 const counter = {
@@ -253,10 +232,10 @@ Output (from [`code/05_getters_setters_optional.mjs`](code/05_getters_setters_op
 undefined 1
 ```
 
-- **Detaching a method.** `const f = person.greet; f();` loses `this` (it becomes `undefined` in strict mode). The full set of rules — default, implicit, explicit (`call`/`apply`/`bind`) and `new` binding — is in [Chapter 9, section 9.1](../09-this-prototypes-and-classes/README.md).
+- **Detaching a method** — `const f = person.greet; f();` loses `this` (`undefined` in strict mode). Full rules (default, implicit, explicit `call`/`apply`/`bind`, `new`): [Chapter 9, section 9.1](../09-this-prototypes-and-classes/README.md).
 
 ### Returning `this` for chaining
-A method that returns `this` lets calls be chained, the style used by jQuery (a classic library for manipulating web pages), query builders (libraries that build database queries step by step) and many test libraries:
+Returning `this` enables chained calls — the style of jQuery, query builders (step-by-step database query libraries) and test libraries:
 
 ```js
 deposit(amount) { this._balance += amount; return this; }
@@ -268,15 +247,11 @@ deposit(amount) { this._balance += amount; return this; }
 ## 5.4 Spread, rest and copying objects
 
 ### What it is
-- **Spread** `{ ...source }` (ES2018) copies the *own* (not inherited), *enumerable* (visible to loops and listing methods) properties of `source` into a new object literal.
-- **Rest** in destructuring `const { a, ...others } = obj` collects "everything I didn't name" into a new object.
-
-Both use the same three dots; spread *expands* an object into a literal, rest *gathers* leftovers into a variable.
+- **Spread** `{ ...source }` (ES2018) copies `source`'s *own* (not inherited), *enumerable* (visible to loops and listing methods) properties into a new literal.
+- **Rest** in destructuring, `const { a, ...others } = obj`, gathers the un-named properties into a new object.
 
 ### How it works
-1. Properties are copied left to right.
-2. If the same key appears twice, the **later one wins** — this is how you apply overrides on top of defaults.
-3. Only the top level is copied. Nested objects are shared (a **shallow copy**).
+Properties copy left to right; for duplicate keys the **later one wins** (overrides on top of defaults); only the top level is copied — nested objects are shared (a **shallow copy**).
 
 From [`code/02_object_static_methods.mjs`](code/02_object_static_methods.mjs):
 
@@ -307,41 +282,41 @@ Output:
 Delhi Pune
 ```
 
-The last line is the classic bug: changing `shallow.address.city` also changed `original`, because both point to the *same* inner address object. **`structuredClone(value)`** (a global in browsers and Node 17+) makes a true **deep copy** — it copies nested objects, arrays, `Date`, `Map`, `Set`, typed arrays and even circular references (an object that points back to itself, directly or through others). It cannot copy functions, DOM nodes or class identity (instances — objects created from a class — come back as plain objects).
+The last line is the classic bug: `shallow` and `original` share the inner address object. **`structuredClone(value)`** (global in browsers and Node 17+) makes a **deep copy** — nested objects, arrays, `Date`, `Map`, `Set`, typed arrays, even circular references (objects pointing back to themselves). It can't copy functions, DOM nodes or class identity (class instances come back as plain objects).
 
 ### Trade-offs: ways to copy or merge
 
-(A *getter* is a property that runs a function when read; a *setter* runs one when written — section 5.7.)
+(*Getter*/*setter*: a property that runs a function when read/written — §5.7.)
 
 | Technique | Depth | Mutates target? | Copies getters as getters? | Notes |
 |---|---|---|---|---|
 | `{ ...a, ...b }` | Shallow | No (new object) | No — getters are *called*, values copied | Most common; readable |
 | `Object.assign(target, a, b)` | Shallow | **Yes** — writes into `target` | No — getters called, setters on target triggered | Use `Object.assign({}, ...)` for a fresh object |
 | `structuredClone(obj)` | Deep | No | No | Handles Date/Map/Set/cycles; throws on functions |
-| `JSON.parse(JSON.stringify(obj))` | Deep | No | No | Lossy: Dates → strings, drops `undefined`/functions, fails on cycles and BigInt (section 5.12) |
+| `JSON.parse(JSON.stringify(obj))` | Deep | No | No | Lossy: Dates → strings, drops `undefined`/functions, fails on cycles and BigInt (§5.12) |
 
 ### Real-world examples
-- Redux reducers (functions that compute an app's next state in the Redux library) and React state updates (changing the data a React component displays): `return { ...state, loading: false }` — create a new object instead of mutating.
-- Config loaders: `{ ...defaultConfig, ...fileConfig, ...envConfig }` — later layers override earlier ones.
-- Removing sensitive fields before logging or sending: `const { password, ...safe } = user`.
+- Redux reducers and React state updates: `return { ...state, loading: false }` — new object, no mutation.
+- Layered config: `{ ...defaultConfig, ...fileConfig, ...envConfig }`.
+- Stripping sensitive fields: `const { password, ...safe } = user`.
 
 ### In the interview
-**30-second answer:** "Spread copies an object's own enumerable properties into a new literal; later keys override earlier ones. It's shallow — nested objects are shared. For a deep copy I use `structuredClone`, which handles Dates, Maps, Sets and cycles; the JSON round-trip is lossy."
+**30-second answer:** "Spread copies own enumerable properties into a new literal; later keys override. It's shallow — nested objects are shared. For deep copies I use `structuredClone` (Dates, Maps, Sets, cycles); the JSON round-trip is lossy."
 
-- *Is `Object.assign` the same as spread?* Nearly; but `assign` mutates its first argument and triggers setters on it, while spread always creates a new object.
-- *How would you deep-merge two configs?* Recurse: for each key, if both values are plain objects, merge them recursively; otherwise take the right-hand value. Or use a library such as lodash `merge` (lodash is a popular collection of utility functions).
+- *`Object.assign` vs spread?* `assign` mutates its first argument and triggers its setters; spread always makes a new object.
+- *Deep-merge two configs?* Recurse: if both values are plain objects merge them, else take the right-hand value — or lodash `merge` (a popular utility library).
 
 ### Self-check
 1. `{ ...{ a: 1 }, a: 2 }` → `{ a: 2 }`.
-2. After `const c = { ...o }`, does `c.list.push(1)` change `o.list`? → Yes; shallow copy.
-3. What does `structuredClone` do with a method? → Throws a `DataCloneError`.
+2. After `const c = { ...o }`, does `c.list.push(1)` change `o.list`? → Yes (shallow).
+3. `structuredClone` of a method? → Throws `DataCloneError`.
 
 ---
 
 ## 5.5 Destructuring objects
 
 ### What it is
-**Destructuring** (ES2015) unpacks properties into variables in one statement: `const { a, b } = obj` is short for `const a = obj.a, b = obj.b`.
+**Destructuring** (ES2015) unpacks properties into variables: `const { a, b } = obj` ≈ `const a = obj.a, b = obj.b`.
 
 ### How it works
 From [`code/03_destructuring.mjs`](code/03_destructuring.mjs):
@@ -386,28 +361,26 @@ anonymous / viewer / true
 TypeError
 ```
 
-Key points:
+- `{ id: orderId }` — "take `id`, store in `orderId`": the **right** of the colon is the new variable.
+- Defaults apply only for `undefined`, **not** `null`.
+- In `customer: { name }`, `customer` is only a path — no variable is created.
+- **Parameter destructuring** gives "named arguments": order-independent options with defaults; trailing `= {}` makes a no-argument call safe.
+- Assigning to *existing* variables needs parentheses (else `{` starts a block).
+- Destructuring `null`/`undefined` throws `TypeError`.
 
-- `{ id: orderId }` reads as "take property `id`, store it in `orderId`" — the name on the **right** of the colon is the new variable.
-- Defaults (`= 'pending'`) apply only when the value is `undefined` — **not** when it is `null`.
-- In the nested pattern `customer: { name }`, `customer` is only a path; no `customer` variable is created.
-- **Parameter destructuring** gives JavaScript "named arguments": callers pass an object, order does not matter, and each option has its own default. The trailing `= {}` makes calling with no argument safe.
-- Assigning to *existing* variables needs parentheses, otherwise `{` starts a block.
-- Destructuring `null` or `undefined` throws a `TypeError`.
-
-Array destructuring (`const [first, second] = arr`) is covered in [Chapter 7](../07-arrays/README.md).
+Array destructuring (`const [first, second] = arr`): [Chapter 7](../07-arrays/README.md).
 
 ### Self-check
-1. `const { a: { b } } = { a: { b: 5 } }` — which variables exist? → Only `b` (value 5).
-2. `const { n = 10 } = { n: 0 }` → `n` is `0`; defaults only replace `undefined`.
-3. Why write `function f({ x } = {})`? → So `f()` with no argument does not throw.
+1. `const { a: { b } } = { a: { b: 5 } }` — variables? → Only `b` (5).
+2. `const { n = 10 } = { n: 0 }` → `n` is `0`.
+3. Why `function f({ x } = {})`? → So `f()` doesn't throw.
 
 ---
 
 ## 5.6 `Object.*` static methods, descriptors and locking
 
 ### What it is
-The global `Object` holds **static methods** — helpers you call as `Object.method(obj)`, not on the object itself. They fall into four groups:
+`Object` holds **static methods** called as `Object.method(obj)`:
 
 | Group | Methods | What they do |
 |---|---|---|
@@ -446,7 +419,7 @@ pears  0
 plums  12
 ```
 
-The pattern **entries → array methods → `fromEntries`** is the idiomatic (natural, conventional for the language) way to "map" or "filter" an object, since objects have no `.map` of their own. All three listing methods return only **own, enumerable, string-keyed** properties — no inherited ones, no symbols — in the key order from section 5.2. (`for...in` also walks inherited enumerable keys, which is why `Object.keys`/`entries` with `for...of` is preferred; see [Chapter 3](../03-control-flow-and-loops/README.md).)
+**entries → array methods → `fromEntries`** is the idiomatic way to map/filter an object (objects have no `.map`). The listing methods return only **own, enumerable, string-keyed** properties in §5.2's order — unlike `for...in`, which also walks inherited keys ([Chapter 3](../03-control-flow-and-loops/README.md)).
 
 ### `Object.create` and `Object.is`
 
@@ -469,12 +442,12 @@ false true
 false true true false
 ```
 
-- `Object.create(animal)` makes an empty object whose **prototype** — the fallback object consulted when a property is not found — is `animal`. `dog` has only `name` of its own; `speak` is found on the prototype. Prototypes are explained properly in [Chapter 9](../09-this-prototypes-and-classes/README.md).
-- `Object.create(null)` gives an object with *no* prototype — no inherited `toString`, `constructor` or `__proto__` — handy as a dictionary (a plain key-to-value lookup table) whose keys come from users.
-- `Object.is` is `===` with two fixes: `NaN` equals itself, and `+0` and `-0` are different. `Map` and `Set` use almost the same rule (they treat `+0` and `-0` as equal).
+- `Object.create(animal)` makes an empty object whose **prototype** is `animal`; `speak` is found there ([Chapter 9](../09-this-prototypes-and-classes/README.md)).
+- `Object.create(null)` has *no* prototype — no inherited `toString`, `constructor`, `__proto__` — a safe dictionary for user-supplied keys.
+- `Object.is` = `===` except `NaN` equals itself and `+0`/`-0` differ. `Map`/`Set` use nearly the same rule (but treat `+0` and `-0` as equal).
 
 ### Property descriptors
-Every property has hidden settings called **attributes**, collected in a **property descriptor**:
+Every property has hidden **attributes**, collected in a **property descriptor**:
 
 | Attribute | Meaning | Default for normal assignment | Default via `defineProperty` |
 |---|---|---|---|
@@ -482,7 +455,7 @@ Every property has hidden settings called **attributes**, collected in a **prope
 | `writable` | Can the value be changed? | `true` | `false` |
 | `enumerable` | Shows up in `Object.keys`, `for...in`, spread, `JSON.stringify`? | `true` | `false` |
 | `configurable` | Can the property be deleted or its attributes changed? | `true` | `false` |
-| `get` / `set` | Accessor functions (instead of `value`/`writable`) — section 5.7 | — | `undefined` |
+| `get` / `set` | Accessor functions (instead of `value`/`writable`) — §5.7 | — | `undefined` |
 
 From [`code/04_descriptors_freeze.mjs`](code/04_descriptors_freeze.mjs):
 
@@ -527,7 +500,7 @@ delete non-configurable sku -> TypeError
 [ 'name', 'price' ] [ Symbol(secret) ]
 ```
 
-Notice the asymmetry: a property created by plain assignment has every flag `true`; one created with `defineProperty` has every flag you omit set to `false`. In **strict mode** (modules, classes, `'use strict'`) writing a read-only property throws a `TypeError`; in old **sloppy mode** the write is silently ignored — a nasty source of "why didn't my change stick?" bugs.
+Plain assignment sets every flag `true`; `defineProperty` sets every omitted flag `false`. Writing a read-only property throws in **strict mode** but is silently ignored in **sloppy mode** ("why didn't my change stick?").
 
 ### Locking an object: preventExtensions, seal, freeze
 
@@ -535,19 +508,13 @@ Notice the asymmetry: a property created by plain assignment has every flag `tru
 const ext = { a: 1 };  Object.preventExtensions(ext);
 const sealed = { a: 1 }; Object.seal(sealed);
 const frozen = { a: 1, inner: { b: 1 } }; Object.freeze(frozen);
-
-tryIt('preventExtensions: add   ', () => { ext.z = 1; });
-tryIt('preventExtensions: change', () => { ext.a = 2; });
-tryIt('preventExtensions: delete', () => { delete ext.a; });
-tryIt('seal: add                ', () => { sealed.z = 1; });
-tryIt('seal: change             ', () => { sealed.a = 2; });
 tryIt('seal: delete             ', () => { delete sealed.a; });
-tryIt('freeze: change           ', () => { frozen.a = 2; });
 tryIt('freeze: nested change    ', () => { frozen.inner.b = 2; }); // freeze is shallow!
+// ... the file tries add / change / delete on each of the three objects
 console.log(Object.isExtensible(ext), Object.isSealed(sealed), Object.isFrozen(frozen), Object.isFrozen(frozen.inner));
 ```
 
-Output:
+Output (full run — one `tryIt` per operation):
 
 ```text
 preventExtensions: add    -> TypeError
@@ -567,7 +534,7 @@ false true true false
 | `Object.seal` | ✗ | ✗ | ✓ | + every property `configurable: false` |
 | `Object.freeze` | ✗ | ✗ | ✗ | + every data property `writable: false` |
 
-All three are **shallow**: `frozen.inner` is still an ordinary, changeable object. A small recursive helper freezes everything:
+All three are **shallow**. A recursive helper freezes everything:
 
 ```js
 function deepFreeze(obj) {
@@ -580,36 +547,36 @@ const config = deepFreeze({ db: { host: 'localhost', port: 5432 } });
 tryIt('deepFreeze: nested change', () => { config.db.port = 1; });   // -> TypeError
 ```
 
-Finally, `Object.setPrototypeOf(obj, proto)` changes an existing object's prototype. It works, but engines optimise objects by their shape (the engine's internal record of which properties an object has, in which order), and swapping the prototype later can make code using that object slower — create it with the right prototype via `Object.create` instead.
+`Object.setPrototypeOf(obj, proto)` works, but engines optimise by object **shape** (internal record of which properties exist, in which order), and swapping prototypes later can slow code — use `Object.create` up front.
 
 ### When not to use it
-- Don't `freeze` large hot-path (run very frequently, where speed matters) data "just in case"; it adds little safety in modules you control. Freeze exported constants and configuration, or use TypeScript's `readonly` for compile-time safety (errors caught by a checker before the code runs; TypeScript adds type labels to JavaScript) ([Chapter 16](../16-testing-and-typescript/README.md)).
-- Don't reach for `defineProperty` for ordinary data — plain assignment is clearer. Use it for library-style work: hidden (non-enumerable) helpers, read-only constants, lazy getters (which compute a value only the first time it is asked for).
+- Don't `freeze` large **hot-path** data (speed-critical, run very often) "just in case"; freeze exported constants and config, or use TypeScript's `readonly` for compile-time safety (checked before running — [Chapter 16](../16-testing-and-typescript/README.md)).
+- Don't `defineProperty` ordinary data; use it for library-style hidden (non-enumerable) helpers, read-only constants, lazy getters (computed on first access).
 
 ### Common mistakes
 - Assuming `Object.freeze` is deep.
-- Using `defineProperty` and forgetting that omitted flags default to `false` — the property silently becomes hidden and read-only.
-- Expecting `Object.keys` to include symbol keys or non-enumerable keys; use `Reflect.ownKeys` for "everything own".
+- Omitted `defineProperty` flags default to `false` — the property silently becomes hidden and read-only.
+- Expecting `Object.keys` to include symbol or non-enumerable keys — use `Reflect.ownKeys` for "everything own".
 
 ### In the interview
-**30-second answer:** "Every property has a descriptor: value, writable, enumerable, configurable — or get/set for accessors. `preventExtensions` stops additions, `seal` also stops deletions, `freeze` also stops writes. All three are shallow, and violations throw only in strict mode."
+**30-second answer:** "Every property has a descriptor: value, writable, enumerable, configurable — or get/set for accessors. `preventExtensions` stops additions, `seal` also deletions, `freeze` also writes. All shallow; violations throw only in strict mode."
 
-- *How do you make a truly immutable object?* Deep-freeze recursively, or use immutable data structures (ones that are never changed in place — every update produces a new version; e.g. the Immer library, persistent collections) — `const` alone does nothing for contents.
-- *What's the difference between `Object.keys` and `Object.getOwnPropertyNames`?* The latter includes non-enumerable string keys (e.g. an array's `length`).
-- *When is `Object.is` different from `===`?* `NaN` vs `NaN` (true) and `0` vs `-0` (false).
+- *Truly immutable object?* Deep-freeze, or immutable data structures (every update yields a new version — e.g. Immer, persistent collections). `const` does nothing for contents.
+- *`Object.keys` vs `Object.getOwnPropertyNames`?* The latter includes non-enumerable string keys (e.g. an array's `length`).
+- *`Object.is` vs `===`?* `NaN`/`NaN` (true) and `0`/`-0` (false).
 
 ### Self-check
-1. After `Object.seal(o)`, can you do `o.x = 5` for an existing `x`? → Yes, values stay writable.
-2. What does `Object.defineProperty(o, 'k', { value: 1 })` make `Object.keys(o)` show? → Not `k` — it is non-enumerable.
-3. Which method lists symbol keys? → `Object.getOwnPropertySymbols` (or `Reflect.ownKeys` for all).
-4. Is `Object.isFrozen({})` true? → No; but `Object.isFrozen(Object.freeze({}))` is.
+1. After `Object.seal(o)`, can you assign an existing `o.x`? → Yes.
+2. `Object.defineProperty(o, 'k', { value: 1 })` — does `Object.keys(o)` show `k`? → No (non-enumerable).
+3. Which lists symbol keys? → `Object.getOwnPropertySymbols` (or `Reflect.ownKeys`).
+4. `Object.isFrozen({})`? → No; `Object.isFrozen(Object.freeze({}))` is.
 
 ---
 
 ## 5.7 Getters and setters
 
 ### What it is
-An **accessor property** looks like a normal property from the outside but runs a function when read (**getter**, `get`) or written (**setter**, `set`). It is how you compute a value on demand or validate an assignment without changing how callers use the object.
+An **accessor property** looks like a normal property but runs a function when read (**getter**, `get`) or written (**setter**, `set`) — computing on demand or validating assignments without changing how callers use the object.
 
 ### How it works
 From [`code/05_getters_setters_optional.mjs`](code/05_getters_setters_optional.mjs):
@@ -652,28 +619,26 @@ RangeError: balance must be a non-negative number
 40
 ```
 
-1. `account.balance` (no parentheses) calls the getter.
-2. `account.balance = 250` calls the setter with `250`; the setter validates and stores into the "backing" property `_balance`.
-3. The descriptor has `get`/`set` instead of `value`/`writable`.
-4. `rect.area` is **derived** — always up to date with `w` and `h`, never stored.
-
-The getter and the backing property **must have different names**; a setter that does `this.balance = v` would call itself forever. The underscore is only a convention; truly private state uses closures ([Chapter 4](../04-functions-scope-and-closures/README.md)) or class `#private` fields ([Chapter 9](../09-this-prototypes-and-classes/README.md)).
+- `account.balance` (no parentheses) calls the getter; assignment calls the setter, which validates and stores into the **backing** property `_balance`.
+- The descriptor has `get`/`set` instead of `value`/`writable`.
+- `rect.area` is **derived** — always current, never stored.
+- Getter and backing property **must have different names** — `this.balance = v` inside the setter would recurse forever. The underscore is only convention; true privacy uses closures ([Chapter 4](../04-functions-scope-and-closures/README.md)) or `#private` fields ([Chapter 9](../09-this-prototypes-and-classes/README.md)).
 
 ### When not to use it
-Getters should be cheap and side-effect free — readers assume a property read is instant. Anything slow (network, heavy computation) belongs in an explicit method like `loadBalance()`. A getter with no setter makes the property read-only (the write throws in strict mode).
+Readers expect property reads to be instant and side-effect free — slow work (network, heavy computation) belongs in a method like `loadBalance()`. A getter without a setter makes the property read-only (writes throw in strict mode).
 
 ### Real-world examples
-Vue's reactivity (v2; Vue is a UI framework, and *reactivity* means the screen updates automatically when data changes) was built on `defineProperty` getters/setters; MobX and many ORMs (Object-Relational Mappers — libraries that map database rows to objects; e.g. computed fields in models) use accessors; DOM properties such as `element.innerHTML` and `input.value` are accessors on prototypes.
+Vue 2's **reactivity** (screen updates automatically when data changes) was built on `defineProperty` accessors; MobX and many ORMs (Object-Relational Mappers, mapping database rows to objects) use them for computed fields; DOM properties like `innerHTML` and `input.value` are accessors on prototypes.
 
 ---
 
 ## 5.8 Optional chaining `?.`
 
 ### The problem it solves
-Data from APIs is often incomplete. Reading `res.data.user.name` throws `TypeError: Cannot read properties of undefined` if any link in the chain is missing. Before ES2020 people wrote `res && res.data && res.data.user && res.data.user.name`.
+API data is often incomplete: `res.data.user.name` throws `TypeError: Cannot read properties of undefined` if any link is missing. Pre-ES2020: `res && res.data && res.data.user && res.data.user.name`.
 
 ### How it works
-`a?.b` means: "if `a` is `null` or `undefined`, stop and return `undefined`; otherwise read `a.b`". It comes in three forms: `obj?.prop`, `obj?.[expr]`, and `fn?.(args)`. The whole rest of the chain is skipped once a `?.` short-circuits.
+`a?.b`: if `a` is `null`/`undefined`, stop and return `undefined`; else read `a.b`. Forms: `obj?.prop`, `obj?.[expr]`, `fn?.(args)`; the rest of the chain is skipped once it short-circuits.
 
 ```js
 const res = { data: { user: { name: 'Ana', tags: ['a'] } } };
@@ -693,18 +658,18 @@ undefined undefined
 Guest
 ```
 
-Pair `?.` with the **nullish coalescing operator `??`** ([Chapter 2](../02-variables-types-and-operators/README.md)) to supply a default only when the result is `null`/`undefined` (unlike `||`, which also replaces `0`, `''` and `false`).
+Pair with **`??`** ([Chapter 2](../02-variables-types-and-operators/README.md)) for a default only on `null`/`undefined` (`||` also replaces `0`, `''`, `false`).
 
 ### Common mistakes
-- Sprinkling `?.` everywhere. If a value *must* exist, let the code fail loudly — hiding a bug behind `undefined` makes it surface far away.
-- `?.` cannot be used on the left side of an assignment: `obj?.x = 1` is a `SyntaxError`.
-- `?.` only guards against `null`/`undefined`; `(5)?.toFixed` still works and `''?.length` is `0`.
+- `?.` everywhere — if a value *must* exist, fail loudly instead of hiding a bug.
+- `obj?.x = 1` is a `SyntaxError`.
+- `?.` guards only `null`/`undefined`: `(5)?.toFixed` works, `''?.length` is `0`.
 
 ---
 
 ## 5.9 JavaScript's built-in (native) objects
 
-JavaScript ships with a standard library of **built-in objects** available in every environment (browser, Node, Deno, Bun) with no import. Some are **constructors** (you call them with `new`, or as converters), some are **namespaces** (plain objects holding static functions, never instantiated):
+**Built-in objects** exist in every environment (browser, Node, Deno, Bun) without import. Some are **constructors** (called with `new` or as converters), some **namespaces** (plain objects of static functions):
 
 | Built-in | Kind | Used for | Where in this book |
 |---|---|---|---|
@@ -716,22 +681,22 @@ JavaScript ships with a standard library of **built-in objects** available in ev
 | `RegExp` | constructor | Pattern matching on text | [Ch 6](../06-strings-and-regular-expressions/README.md) |
 | `Map`, `Set`, `WeakMap`, `WeakSet`, `WeakRef` | constructors | Keyed collections, unique values | [Ch 8](../08-maps-sets-iterators-and-generators/README.md) |
 | `Promise` | constructor | Results that arrive later | [Ch 12](../12-asynchronous-javascript/README.md) |
-| `Error` (+ `TypeError`, `RangeError`, …) | constructors | Exceptions (error objects that are thrown to stop normal flow) | [Ch 11](../11-errors-and-debugging/README.md) |
+| `Error` (+ `TypeError`, `RangeError`, …) | constructors | Exceptions (error objects thrown to stop normal flow) | [Ch 11](../11-errors-and-debugging/README.md) |
 | `Math` | namespace | Mathematical constants and functions | 5.10 |
 | `JSON` | namespace | Converting to/from JSON text | 5.12 |
-| `Intl` | namespace | Locale-aware (adapting to a language and region, e.g. `en-US`) formatting (dates, numbers, lists) | 5.11, Ch 6 |
+| `Intl` | namespace | Locale-aware (language + region, e.g. `en-US`) formatting (dates, numbers, lists) | 5.11, Ch 6 |
 | `Reflect`, `Proxy` | namespace / constructor | Meta-programming: `Reflect` exposes object operations as functions (`Reflect.ownKeys`, 5.2); a `Proxy` wraps an object and intercepts reads and writes (how Vue 3 reactivity and Immer work) | overview only |
 | `ArrayBuffer`, typed arrays | constructors | Raw binary data | Ch 7 |
 | `globalThis` | the global object | Access to globals in any environment | Ch 1 |
 
-Environment objects such as `document`, `window`, `fetch` or Node's `process` are **not** part of the language; they come from the host (the program that runs the engine: browser or Node) — see Chapters 13–15.
+`document`, `window`, `fetch`, Node's `process` are **not** language built-ins — they come from the host (browser or Node; Chapters 13–15).
 
 ---
 
 ## 5.10 `Math`
 
 ### What it is
-`Math` is a **namespace object**: a plain object holding mathematical constants and functions as properties. It is not a constructor — you never write `new Math()` (that throws a `TypeError`); you call `Math.floor(x)` directly. In class terminology all its members are **static** (belong to `Math` itself rather than to instances).
+`Math` is a **namespace object** of constants and functions — not a constructor (`new Math()` throws `TypeError`); call `Math.floor(x)` directly. All members are **static**.
 
 ### Constants
 
@@ -756,7 +721,7 @@ Environment objects such as `document`, `window`, `fetch` or Node's `process` ar
 | Random | `random()` | Float in **[0, 1)** — 0 possible, 1 never |
 | Integer tricks | `clz32`, `imul` | Low-level 32-bit helpers |
 
-Newer additions: `Math.f16round` (ES2025, rounds to half-precision float; in Node 24) and `Math.sumPrecise` (ES2026, adds a list of numbers without accumulated rounding error — not yet in Node 24, so check support before use).
+Newer: `Math.f16round` (ES2025, rounds to half-precision float; in Node 24) and `Math.sumPrecise` (ES2026, sums without accumulated rounding error — not in Node 24; check support).
 
 ### How it works — examples
 From [`code/06_math.mjs`](code/06_math.mjs):
@@ -799,12 +764,10 @@ area 78.53981633974483 78.53981633974483
 100 0 42
 ```
 
-What to notice:
-
-- **`round` rounds halves up toward +∞**: `Math.round(-3.5)` is `-3`, not `-4`. This is different from "round half away from zero" in many other languages.
-- **`floor` vs `trunc`** only differ for negatives: floor goes down (−3.5 → −4), trunc chops the fraction (−3.5 → −3).
-- **`toFixed` returns a string** and suffers from binary floating point: `1.005` is stored as 1.00499999…, so `(1.005).toFixed(2)` is `"1.00"`. For money, work in integer cents or use `Intl.NumberFormat` for display (see [Chapter 2](../02-variables-types-and-operators/README.md) on float precision).
-- `Math.max()` with no arguments is `-Infinity` (the identity for "max" — a starting value that never changes the answer), and any argument that converts to `NaN` (such as `'x'`) makes the result `NaN` — numeric strings like `'5'` are converted and work. Spreading a *huge* array into `max`/`min` can exceed the engine's argument limit; use `reduce` for arrays with hundreds of thousands of items.
+- **`round` rounds halves toward +∞**: `Math.round(-3.5)` is `-3` (not "half away from zero" as in many languages).
+- **`floor` vs `trunc`** differ only for negatives: −3.5 → −4 vs −3.
+- **`toFixed` returns a string** and inherits binary-float error: 1.005 is stored as 1.00499999…, so `(1.005).toFixed(2)` is `"1.00"`. For money use integer cents, display with `Intl.NumberFormat` ([Chapter 2](../02-variables-types-and-operators/README.md)).
+- `Math.max()` with no arguments is `-Infinity` (the identity for max); any argument converting to `NaN` (`'x'`) gives `NaN` (numeric strings like `'5'` work). Spreading a *huge* array can exceed the engine's argument limit — use `reduce` for hundreds of thousands of items.
 
 ```js
 console.log(Math.abs(-7), Math.sign(-7), Math.sqrt(81), Math.cbrt(27), Math.hypot(3, 4));
@@ -824,45 +787,39 @@ Output:
 angle of (1,1): 45 deg
 ```
 
-Trigonometric functions take **radians** (a full circle is 2π radians = 360°). `Math.sin(Math.PI)` is not exactly 0 because π itself cannot be stored exactly.
+Trig uses **radians** (2π = 360°); `Math.sin(Math.PI)` isn't exactly 0 because π can't be stored exactly.
 
 ### Random integers
-`Math.random()` returns a float `x` with `0 ≤ x < 1`. To get an integer between `min` and `max` **inclusive**:
-
-1. Multiply by the number of possible results, `max - min + 1` → float in `[0, count)`.
-2. `Math.floor` → integer `0 … count-1`.
-3. Add `min` → integer `min … max`.
+`Math.random()` gives `0 ≤ x < 1`. For an integer in `[min, max]` **inclusive**: multiply by the count `max - min + 1` (float in `[0, count)`), `Math.floor` (integer `0 … count-1`), add `min` (integer `min … max`):
 
 ```js
 const randInt = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
 ```
 
-The demo draws 30,000 values from `randInt(1, 3)` and confirms all land in `{1, 2, 3}` roughly evenly. Using `Math.round` instead of `floor` is a classic bug: the two end values then get only half the probability of the middle ones.
+The demo draws 30,000 values from `randInt(1, 3)`; all land in `{1, 2, 3}` roughly evenly. Using `Math.round` instead of `floor` is a classic bug: the end values get half the probability.
 
-**`Math.random` is not cryptographically secure** (unpredictable enough to resist attackers) — its output can be predicted. For tokens, IDs, passwords or anything security-related use the Web Crypto API: `crypto.randomUUID()` (a UUID is a random 128-bit identifier, practically guaranteed to be unique) or `crypto.getRandomValues(new Uint32Array(1))` (global in browsers and Node).
+**`Math.random` is not cryptographically secure** (its output can be predicted by attackers). For tokens, IDs, passwords use the Web Crypto API: `crypto.randomUUID()` (a **UUID** is a random 128-bit, practically unique identifier) or `crypto.getRandomValues(new Uint32Array(1))` (global in browsers and Node).
 
 ### In the interview
-- *Why does `0.1 + 0.2 !== 0.3`, and how do you round to two decimals?* IEEE-754 binary floats (the standard binary format computers use for decimal numbers) can't store 0.1 exactly. Compare with a tolerance (`Math.abs(a - b) < Number.EPSILON`), round with `Math.round(x * 100) / 100`, or use integers (cents).
+- *`0.1 + 0.2 !== 0.3`; round to two decimals?* IEEE-754 binary floats can't store 0.1 exactly. Compare with a tolerance (`Math.abs(a - b) < Number.EPSILON`), round with `Math.round(x * 100) / 100`, or use cents.
 - *Random integer in [a, b]?* `Math.floor(Math.random() * (b - a + 1)) + a`.
-- *Max of an array?* `Math.max(...arr)` for normal sizes; `arr.reduce((m, x) => x > m ? x : m)` for very large ones.
+- *Max of an array?* `Math.max(...arr)`; `arr.reduce((m, x) => x > m ? x : m)` for huge arrays.
 
 ### Self-check
 1. `Math.round(-2.5)`? → `-2`.
 2. `Math.trunc(-4.7)` vs `Math.floor(-4.7)`? → `-4` vs `-5`.
-3. Can `Math.random()` return 1? → No; `[0, 1)`.
-4. Convert 180° to radians. → `Math.PI`.
+3. Can `Math.random()` return 1? → No.
+4. 180° in radians? → `Math.PI`.
 
 ---
 
 ## 5.11 `Date`
 
 ### What it is
-A `Date` object represents **one instant in time**, stored internally as a single number: the milliseconds elapsed since the **Unix epoch**, 1 January 1970 00:00:00 **UTC** (Coordinated Universal Time — the time-zone-free reference clock). Everything else — year, month, hour, weekday — is *computed* from that number, either in **local time** (the time zone of the computer running the code) or in UTC.
-
-That single fact explains most `Date` surprises: a `Date` has no time zone of its own; the time zone comes in only when you read or print it.
+A `Date` is **one instant in time**, stored as milliseconds since the **Unix epoch**, 1 January 1970 00:00:00 **UTC** (Coordinated Universal Time). Year, month, hour, weekday are *computed* from that number in **local time** (the running machine's zone) or UTC. A `Date` has no time zone of its own — the zone appears only when you read or print it.
 
 ### Why it matters
-Calendars, reminders, booking systems, logs, subscriptions, "posted 3 hours ago" — all need time. `Date` is also infamous for pitfalls (0-based months, mutability, parsing quirks, DST — daylight-saving time, when clocks jump an hour in spring and autumn), which is why the language now has **Temporal** (end of this section).
+Calendars, bookings, logs, subscriptions, "3 hours ago" all need time. `Date` is infamous for pitfalls — 0-based months, mutability, parsing quirks, DST (daylight-saving time, clocks jumping an hour) — hence the new **Temporal** API (end of section).
 
 ### Creating dates
 
@@ -870,14 +827,14 @@ Calendars, reminders, booking systems, logs, subscriptions, "posted 3 hours ago"
 |---|---|---|
 | `new Date()` | The current instant | `new Date()` |
 | `new Date(ms)` | Instant `ms` milliseconds after the epoch (negative = before 1970) | `new Date(0)` → 1970-01-01T00:00:00Z |
-| `new Date(string)` | Parsed from text; reliable only for **ISO 8601** (the international standard date-time text format: `YYYY-MM-DDTHH:mm:ss.sssZ`) | `new Date('2024-03-10T14:30:00Z')` |
+| `new Date(string)` | Parsed from text; reliable only for **ISO 8601** (`YYYY-MM-DDTHH:mm:ss.sssZ`) | `new Date('2024-03-10T14:30:00Z')` |
 | `new Date(y, m, d?, h?, min?, s?, ms?)` | Built from **local-time** parts; **month is 0-based** (0 = January, 11 = December); omitted day = 1, omitted time parts = 0 | `new Date(2024, 0, 31, 9, 15)` |
 | `Date.now()` | Not a Date — just the current ms number | handy for timing |
 | `Date.UTC(y, m, …)` | ms number for those parts **in UTC** | `new Date(Date.UTC(2024, 0, 1))` |
 
-Calling `Date()` *without* `new` returns a string, not a Date — always use `new`.
+`Date()` *without* `new` returns a string — always use `new`.
 
-From [`code/07_date.mjs`](code/07_date.mjs) (the script pins the time zone with `process.env.TZ = 'America/New_York'` — `process.env` holds environment variables, settings passed to a program from outside — so output is repeatable):
+From [`code/07_date.mjs`](code/07_date.mjs) (it pins `process.env.TZ = 'America/New_York'` — `process.env` holds environment variables — for repeatable output):
 
 ```js
 const now = new Date();                                   // current moment
@@ -914,9 +871,9 @@ Sun Jan 01 2023 00:00:00 GMT-0500 (Eastern Standard Time)
 NaN Invalid Date
 ```
 
-- A **date-only** ISO string (`'2023-01-01'`) is treated as **UTC midnight** — which in New York is still 31 December. A date-*time* string without `Z` or an offset is treated as **local**. This inconsistency is in the spec, for historical reasons.
-- Non-ISO strings (`'March 25, 2015'`, `'03/25/2015'`) are parsed in an implementation-specific way (each engine may do it differently). They usually work in modern engines, but the spec does not guarantee them — prefer ISO strings or numeric parts.
-- An unparseable string gives an **Invalid Date**: a Date whose time value is `NaN`. Test with `Number.isNaN(d.getTime())`.
+- A **date-only** ISO string is **UTC midnight** (still 31 December in New York); a date-*time* string without `Z`/offset is **local** — a historical inconsistency in the spec.
+- Non-ISO strings (`'March 25, 2015'`, `'03/25/2015'`) are parsed implementation-specifically (each engine may differ) — prefer ISO or numeric parts.
+- Unparseable input gives an **Invalid Date** (time value `NaN`): test `Number.isNaN(d.getTime())`.
 
 ### Reading components — getters
 
@@ -945,13 +902,10 @@ UTC  : 2024 6 4 4 23
 offset minutes (UTC - local): 240
 ```
 
-Month `6` is **July**; weekday `4` is **Thursday**. The same instant is 19:30 in New York and 23:30 UTC.
+Month `6` = **July**, weekday `4` = **Thursday**; the instant is 19:30 in New York, 23:30 UTC.
 
 ### Changing components — setters
-Setters (`setFullYear`, `setMonth`, `setDate`, `setHours`, `setMinutes`, `setSeconds`, `setMilliseconds`, `setTime`, plus `setUTC…` twins) **mutate** the Date in place. Two properties make them useful:
-
-1. Some accept several parts at once: `setFullYear(year, month?, day?)`, `setHours(h, m?, s?, ms?)`.
-2. Out-of-range values **roll over** into the next unit — day 32 of January becomes 1 February, day 0 becomes the last day of the previous month.
+Setters (`setFullYear`, `setMonth`, `setDate`, `setHours`, `setMinutes`, `setSeconds`, `setMilliseconds`, `setTime`, plus `setUTC…`) **mutate** in place. Some take several parts (`setFullYear(year, month?, day?)`, `setHours(h, m?, s?, ms?)`); out-of-range values **roll over** (Jan 32 → Feb 1; day 0 → last day of previous month).
 
 ```js
 const b = new Date(2024, 5, 15);
@@ -975,10 +929,10 @@ Sat Jan 04 2025
 days in Feb 2024: 29
 ```
 
-`addDays` copies first (`new Date(date)`) so the caller's Date isn't mutated, then relies on rollover to cross the year boundary. The "month-end overflow" (`Jan 31 + 1 month = Mar 2`) is a real bug source in billing code — decide explicitly whether you want the last day of the month instead.
+`addDays` copies first so the caller's Date isn't mutated, and rollover crosses the year. "Month-end overflow" (`Jan 31 + 1 month = Mar 2`) is a real billing bug — decide explicitly if you want the month's last day.
 
 ### Differences and comparisons
-Subtracting two Dates converts both to milliseconds (via `valueOf`) and gives the difference as a number.
+Subtracting Dates converts both to ms (via `valueOf`).
 
 ```js
 const start = new Date('2023-01-01');
@@ -1000,9 +954,9 @@ Output:
 false true true
 ```
 
-- 1 Jan to 31 Dec is 364 days apart (add 1 if you count both ends).
-- Across the March **daylight-saving time** (DST) switch, two local midnights are only 47 hours apart, giving 1.958 "days". Round, or compute in UTC.
-- `<` and `>` work on Dates (they compare the numbers), but `===` compares object identity. Compare `getTime()` values for equality.
+- 1 Jan → 31 Dec is 364 days (add 1 to count both ends).
+- Across the March DST switch two local midnights are 47 hours apart (1.958 "days") — round, or compute in UTC.
+- `<`/`>` compare the numbers; `===` compares identity — compare `getTime()` for equality.
 
 ### Formatting
 
@@ -1012,7 +966,7 @@ false true true
 | `toJSON()` | same as ISO | Used automatically by `JSON.stringify` |
 | `toString()` | `Sun Mar 10 2024 10:30:00 GMT-0400 (Eastern Daylight Time)` | Debugging |
 | `toDateString()` / `toTimeString()` | `Sun Mar 10 2024` / `10:30:00 GMT-0400 (…)` | Debugging |
-| `toUTCString()` | `Sun, 10 Mar 2024 14:30:00 GMT` | HTTP headers (extra name/value lines sent with a web request or response) |
+| `toUTCString()` | `Sun, 10 Mar 2024 14:30:00 GMT` | HTTP headers (name/value lines sent with a request or response) |
 | `toLocaleDateString(locale, opts)` / `toLocaleTimeString` / `toLocaleString` | `3/10/2024` (en-US), `10/03/2024` (en-GB), `10.3.2024` (de-DE) | Showing dates to people |
 | `Intl.DateTimeFormat(locale, opts).format(d)` | reusable formatter | Formatting many dates |
 | `Intl.RelativeTimeFormat` | `yesterday`, `in 3 weeks` | "time ago" labels |
@@ -1033,15 +987,13 @@ Mar 10, 2024
 yesterday | in 3 weeks
 ```
 
-The `timeZone` option lets you *display* an instant in any IANA zone (the official worldwide time-zone database names: `'Asia/Kolkata'`, `'Europe/Berlin'`) — but `Date` itself still cannot *do arithmetic* in a chosen zone. That gap is what Temporal fills.
+`timeZone` *displays* an instant in any IANA zone (official time-zone database names: `'Asia/Kolkata'`, `'Europe/Berlin'`), but `Date` can't *do arithmetic* in a chosen zone — the gap Temporal fills.
 
 ### Temporal — the modern replacement (status in 2026)
-**Temporal** is a new global namespace of immutable date/time types designed to fix `Date`'s problems. Verified status (September 2026):
+**Temporal** is a new global namespace of immutable date/time types. Verified status (September 2026):
 
-- It reached **Stage 4** (finished) at the TC39 meeting of **March 2026**; TC39's finished-proposals list slots it into the **ES2027** edition (some articles say "ES2026"; the ES2026 snapshot was already cut).
-- It is shipped by default in **Firefox 139+**, **Chrome/Edge 144+** and **Node.js 26+**. **Safari** stable did not yet ship it at the time of writing, and **Node 24** (this book's runtime) does not have it — our script prints `Temporal available here: false`. Use the `@js-temporal/polyfill` or `temporal-polyfill` package where it's missing (a **polyfill** is code that adds a missing built-in feature to older environments).
-
-Its main types:
+- Reached **Stage 4** at the TC39 meeting of **March 2026**; TC39's finished-proposals list places it in **ES2027** (some articles say "ES2026"; that snapshot was already cut).
+- Shipped by default in **Firefox 139+**, **Chrome/Edge 144+** and **Node.js 26+**. **Safari** stable hasn't shipped it yet, and **Node 24** (this book's runtime) lacks it — our script prints `Temporal available here: false`. Use `@js-temporal/polyfill` or `temporal-polyfill` (a **polyfill** adds a missing built-in to older environments).
 
 | Type | Represents | Example |
 |---|---|---|
@@ -1052,7 +1004,7 @@ Its main types:
 | `Temporal.Duration` | A length of time | "2 hours 30 minutes" |
 | `Temporal.Now` | Current time in various forms | `Temporal.Now.plainDateISO()` |
 
-A taste (Node 26 / Chrome 144 / Firefox 139 — not run in this book's Node 24):
+A taste (Node 26 / Chrome 144 / Firefox 139 — not run on Node 24):
 
 ```js
 const due = Temporal.PlainDate.from('2024-01-31').add({ months: 1 });
@@ -1061,44 +1013,44 @@ const meeting = Temporal.ZonedDateTime.from('2026-03-28T09:00[Europe/Berlin]');
 meeting.add({ days: 1 }).toString();             // DST-aware: still 09:00 local the next day
 ```
 
-Why it's better: values are **immutable** (every operation returns a new object), months are **1-based**, parsing is strict ISO, time zones and calendars are first-class, and there are separate types for "an instant" and "a date on a wall calendar". Until Temporal is everywhere you target, libraries like **date-fns**, **Luxon** or **Day.js** fill the gap.
+Better because: **immutable** values, **1-based** months, strict ISO parsing, first-class time zones and calendars, and separate types for "instant" vs "wall-calendar date". Until it's everywhere you target, use **date-fns**, **Luxon** or **Day.js**.
 
 ### Common mistakes
-- Forgetting that months are 0-based (`new Date(2024, 1, 1)` is **February** 1).
-- Confusing `getDate()` (day of month) with `getDay()` (day of week).
-- Parsing `'2023-01-01'` and being surprised it shows 31 December in the Americas.
-- Mutating a Date that other code also holds (setters change it in place). Copy with `new Date(d)` first.
-- Storing local-time strings in databases. Store UTC (ISO strings or epoch ms) and convert only for display.
-- Computing "days between" with raw division across DST.
+- 0-based months (`new Date(2024, 1, 1)` is **February** 1).
+- `getDate()` (day of month) vs `getDay()` (weekday).
+- `'2023-01-01'` showing 31 December in the Americas.
+- Mutating a shared Date — copy with `new Date(d)` first.
+- Storing local-time strings — store UTC (ISO or epoch ms), convert for display.
+- "Days between" by raw division across DST.
 
 ### Real-world examples
-- APIs send ISO 8601 strings (`"2024-05-01T08:00:00Z"`); clients parse with `new Date(str)` and display with `Intl.DateTimeFormat`.
-- Performance timing uses `Date.now()` (or better, `performance.now()` which is monotonic — it only ever goes forward, even if the system clock is changed — and sub-millisecond).
-- JWT tokens (JSON Web Tokens — signed login tokens passed between client and server) store expiry as **seconds** since the epoch — multiply by 1000 before passing to `new Date`.
+- APIs send ISO 8601 (`"2024-05-01T08:00:00Z"`); clients parse with `new Date(str)` and display with `Intl.DateTimeFormat`.
+- Timing uses `Date.now()` or better `performance.now()` — **monotonic** (never goes backward, even if the clock changes) and sub-millisecond.
+- JWTs (JSON Web Tokens — signed login tokens) store expiry in **seconds** since the epoch — multiply by 1000 for `new Date`.
 
 ### In the interview
-**30-second answer:** "A Date is a wrapper around one number — milliseconds since 1970 UTC. Getters compute local or UTC parts from it. Months are 0-based, setters mutate and roll over, date-only ISO strings parse as UTC. For display I use `Intl.DateTimeFormat`; for serious date math I use Temporal (now standard, shipping in Chrome, Firefox and Node 26) or a library."
+**30-second answer:** "A Date wraps one number — ms since 1970 UTC; getters compute local or UTC parts. Months are 0-based, setters mutate and roll over, date-only ISO strings parse as UTC. I display with `Intl.DateTimeFormat`; for serious date math I use Temporal (standard, shipping in Chrome, Firefox and Node 26) or a library."
 
-- *How do you get the number of days in a month?* `new Date(year, month + 1, 0).getDate()` — day 0 of the next month.
-- *How do you check a Date is valid?* `!Number.isNaN(d.getTime())`.
-- *Why might `new Date('2024-01-01')` show the wrong day?* It's parsed as UTC midnight, then shown in local time west of UTC.
+- *Days in a month?* `new Date(year, month + 1, 0).getDate()`.
+- *Valid Date?* `!Number.isNaN(d.getTime())`.
+- *Why does `new Date('2024-01-01')` show the wrong day?* Parsed as UTC midnight, shown in a zone west of UTC.
 
 ### Self-check
-1. `new Date(2025, 11, 25).getMonth()`? → `11` (December).
-2. What does `getDay()` return for a Sunday? → `0`.
-3. `new Date(2024, 0, 32)` is which date? → 1 February 2024.
-4. How many ms in a day? → 86,400,000 (ignoring DST days).
-5. Which format should you store? → UTC — ISO 8601 or epoch milliseconds.
+1. `new Date(2025, 11, 25).getMonth()`? → `11`.
+2. `getDay()` for Sunday? → `0`.
+3. `new Date(2024, 0, 32)`? → 1 February 2024.
+4. ms in a day? → 86,400,000 (ignoring DST days).
+5. Store which format? → UTC — ISO 8601 or epoch ms.
 
 ---
 
 ## 5.12 JSON
 
 ### What it is
-**JSON** (JavaScript Object Notation) is a *text* format for structured data, standardised as ECMA-404 / RFC 8259 (an RFC is a numbered internet standards document). It borrows JavaScript's literal syntax but is much stricter, and it is language-independent — Python, Java, Go and every database speak it. The global `JSON` namespace has two functions:
+**JSON** (JavaScript Object Notation) is a *text* format for structured data, standardised as ECMA-404 / RFC 8259 (an RFC is a numbered internet standards document). It borrows JS literal syntax but is stricter, and every language and database speaks it.
 
-- `JSON.stringify(value, replacer?, space?)` → turns a value into a JSON **string** (serialisation).
-- `JSON.parse(text, reviver?)` → turns a JSON string back into values (deserialisation).
+- `JSON.stringify(value, replacer?, space?)` → JSON **string** (serialisation).
+- `JSON.parse(text, reviver?)` → values (deserialisation).
 
 ### JSON syntax rules (vs JS literals)
 
@@ -1144,9 +1096,9 @@ string 136
 {"id":42,"total":19.99,"paid":true,"coupon":null,"items":[{"...
 ```
 
-1. The result is a **string**. The Date became an ISO string because `Date.prototype.toJSON` exists.
-2. The third argument `space` (a number of spaces up to 10, or a string such as `'\t'`) pretty-prints.
-3. The second argument, the **replacer**, is either an **array** of allowed keys, or a **function** `(key, value) => newValue` called for every property (return `undefined` to drop it).
+1. The result is a **string**; the Date became ISO via `Date.prototype.toJSON`.
+2. `space` (up to 10 spaces, or a string like `'\t'`) pretty-prints.
+3. The **replacer** is an **array** of allowed keys or a **function** `(key, value) => newValue` per property (`undefined` drops it).
 
 ### What JSON silently changes or refuses
 
@@ -1184,7 +1136,7 @@ circular -> TypeError
 | Circular reference | **throws** `TypeError` | throws | — |
 | Non-enumerable or symbol keys | skipped | — | — |
 
-Any object can define **`toJSON()`** to control its own representation — here a money object serialises as a decimal string. To send a `Map`, convert it first: `Object.fromEntries(map)` or `[...map]`.
+Any object can define **`toJSON()`** to control its representation. Convert a `Map` first: `Object.fromEntries(map)` or `[...map]`.
 
 ### How `parse` works
 
@@ -1215,10 +1167,10 @@ just a string 3.5 [ true, null ]
 9007199254740992
 ```
 
-- JSON has no date type: dates come back as **strings**. A **reviver** function `(key, value) => newValue` runs on every value (innermost first) and can convert them back.
-- Invalid JSON throws a `SyntaxError` — always wrap `JSON.parse` of external input in `try/catch`.
-- Any JSON value can be the top level, not only objects.
-- Integers above `Number.MAX_SAFE_INTEGER` (2⁵³ − 1) lose precision: `9007199254740993` became `…992`. APIs such as Twitter/X send large IDs as strings for exactly this reason. The ES2026 feature **"JSON.parse source text access"** gives the reviver a third argument whose `source` property is the original text, so you can rebuild an exact BigInt (Node 24 already supports it):
+- No date type: dates return as **strings**; a **reviver** `(key, value) => newValue` runs on every value (innermost first) to restore them.
+- Invalid JSON throws `SyntaxError` — wrap `JSON.parse` of external input in `try/catch`.
+- Any JSON value can be top level.
+- Integers above `Number.MAX_SAFE_INTEGER` (2⁵³ − 1) lose precision (`…993` → `…992`) — why APIs like Twitter/X send big IDs as strings. ES2026's **"JSON.parse source text access"** passes the reviver a third argument whose `source` is the original text, so you can rebuild an exact BigInt (Node 24 supports it):
 
 ```js
 const exact = JSON.parse('{"id": 9007199254740993}', (key, value, ctx) =>
@@ -1239,40 +1191,40 @@ Output:
 { when: '1970-01-01T00:00:00.000Z', tags: {}, n: 1 } { when: 1970-01-01T00:00:00.000Z, tags: Set(1) { 'x' }, n: 1 }
 ```
 
-The JSON round-trip turned the Date into a string and emptied the Set; `structuredClone` kept both. Use `structuredClone` for copying; use JSON for **transport** (HTTP bodies, files, `localStorage` (the browser's small built-in key-value store), message queues (services that hold messages until another program picks them up — see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md))).
+JSON turned the Date into a string and emptied the Set; `structuredClone` kept both. Use `structuredClone` for copying, JSON for **transport** — HTTP bodies, files, `localStorage` (the browser's small key-value store), message queues (services holding messages until another program takes them — [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)).
 
 ### Real-world examples
-- `fetch` responses: `await response.json()` is `JSON.parse` on the body; sending uses `body: JSON.stringify(data)` with `Content-Type: application/json` ([Chapter 14](../14-browser-apis-and-security/README.md)).
-- `package.json` (a project's settings and dependency list), `tsconfig.json` (TypeScript's settings) and most config files are JSON (tsconfig actually allows comments — it is "JSONC", not strict JSON).
-- `localStorage` stores only strings, so objects go through `JSON.stringify` / `JSON.parse`.
-- Logging pipelines emit one JSON object per line ("NDJSON") so tools like Elasticsearch (a search engine often used to store and search logs) can index fields (build fast lookup structures for them).
+- `fetch`: `await response.json()` parses the body; send with `body: JSON.stringify(data)` and `Content-Type: application/json` ([Chapter 14](../14-browser-apis-and-security/README.md)).
+- `package.json` (project settings and dependencies), `tsconfig.json` (TypeScript settings — actually "JSONC", allowing comments) and most config files.
+- `localStorage` stores only strings → `JSON.stringify`/`JSON.parse`.
+- Log pipelines emit one JSON object per line ("NDJSON") so tools like Elasticsearch (a search engine for logs) can index fields.
 
 ### In the interview
-**30-second answer:** "`JSON.stringify` serialises to a string, dropping functions/undefined/symbols in objects, turning NaN/Infinity into null, Dates into ISO strings via `toJSON`, and throwing on BigInt and cycles. `JSON.parse` is strict — double quotes, no trailing commas — and takes a reviver to restore types like Dates."
+**30-second answer:** "`JSON.stringify` serialises to a string, dropping functions/undefined/symbols in objects, turning NaN/Infinity into null and Dates into ISO strings via `toJSON`, and throwing on BigInt and cycles. `JSON.parse` is strict — double quotes, no trailing commas — and takes a reviver to restore types like Dates."
 
-- *How do you handle circular structures?* Use a replacer with a `WeakSet` (a set of objects that doesn't keep them alive in memory, [Chapter 8](../08-maps-sets-iterators-and-generators/README.md)) of seen objects to drop or mark repeats, or restructure the data; `structuredClone` can *copy* cycles but that doesn't help sending JSON.
-- *Why does `JSON.stringify({a: undefined})` give `{}`?* `undefined` properties are omitted.
-- *Is JSON a subset of JavaScript?* Since ES2019 ("JSON superset"), yes — every valid JSON text is a valid JS expression.
+- *Circular structures?* A replacer tracking seen objects in a `WeakSet` (doesn't keep them alive, [Chapter 8](../08-maps-sets-iterators-and-generators/README.md)) to drop/mark repeats, or restructure; `structuredClone` copies cycles but doesn't help sending JSON.
+- *`JSON.stringify({a: undefined})` → `{}`?* `undefined` properties are omitted.
+- *Is JSON a subset of JavaScript?* Since ES2019 ("JSON superset"), yes.
 
 ### Self-check
 1. `JSON.stringify([undefined])`? → `"[null]"`.
 2. `JSON.stringify({ d: new Date(0) })`? → `{"d":"1970-01-01T00:00:00.000Z"}`.
-3. Is `{"a":1,}` valid JSON? → No — trailing comma.
-4. What's the reviver's job? → Transform parsed values (e.g., strings back into Dates).
+3. `{"a":1,}` valid? → No — trailing comma.
+4. Reviver's job? → Transform parsed values (e.g. strings → Dates).
 
 ---
 
 ## Chapter TL;DR
 
-- **Objects** are key → value collections; create with literals `{}`; use **dot** access for fixed identifier keys and **bracket** access for dynamic or unusual keys. Computed keys `[expr]` and shorthand `{ name }` shorten literals.
-- Key order is defined: integer-like keys ascending, then string keys by insertion, then symbols.
+- **Objects** are key → value collections; literals `{}`; **dot** for fixed identifier keys, **bracket** for dynamic/unusual keys; computed keys `[expr]` and shorthand `{ name }`.
+- Key order: integer-like ascending, then strings by insertion, then symbols.
 - Variables hold **references**; `===` compares identity; `const` doesn't freeze contents.
-- **Spread** `{...a, ...b}` and **`Object.assign`** are **shallow**; later keys win. **`structuredClone`** deep-copies.
-- **Destructuring** unpacks properties with renames (`{ id: orderId }`), defaults (only for `undefined`), nesting, and in parameters.
-- **`Object.keys/values/entries/fromEntries`** list and rebuild objects; `hasOwn` checks own keys; `Object.is` fixes `NaN` and `-0`; `Object.create(proto | null)` sets the prototype.
-- **Descriptors** (`writable`, `enumerable`, `configurable`, `get`/`set`) control behaviour; `preventExtensions` < `seal` < `freeze`, all shallow.
-- **Getters/setters** compute or validate on property access; keep them cheap.
-- **`?.`** short-circuits on `null`/`undefined`; pair with **`??`** for defaults.
-- **`Math`** is a namespace: `round` (halves toward +∞), `floor`/`ceil`/`trunc`, `max/min(...arr)`, `**`, radians for trig; random int = `Math.floor(Math.random() * (max - min + 1)) + min`; use `crypto` for security.
-- **`Date`** = ms since 1970 UTC; months 0-based, `getDay` is weekday, setters mutate and roll over, date-only ISO parses as UTC; format with `Intl`. **Temporal** is standard (Stage 4, March 2026) and shipping in Chrome, Firefox and Node 26, not Node 24/Safari.
-- **`JSON.stringify`** drops/changes non-JSON values and throws on BigInt/cycles; **`JSON.parse`** is strict and takes a reviver.
+- **Spread** and **`Object.assign`** are **shallow** (later keys win); **`structuredClone`** deep-copies.
+- **Destructuring**: renames (`{ id: orderId }`), defaults (only `undefined`), nesting, parameters.
+- **`Object.keys/values/entries/fromEntries`**; `hasOwn` for own keys; `Object.is` fixes `NaN`/`-0`; `Object.create(proto | null)` sets the prototype.
+- **Descriptors** (`writable`, `enumerable`, `configurable`, `get`/`set`); `preventExtensions` < `seal` < `freeze`, all shallow.
+- **Getters/setters** compute or validate on access; keep them cheap.
+- **`?.`** short-circuits on `null`/`undefined`; pair with **`??`**.
+- **`Math`**: `round` (halves toward +∞), `floor`/`ceil`/`trunc`, `max/min(...arr)`, radians for trig; random int = `Math.floor(Math.random() * (max - min + 1)) + min`; `crypto` for security.
+- **`Date`** = ms since 1970 UTC; months 0-based, `getDay` = weekday, setters mutate and roll over, date-only ISO parses as UTC; format with `Intl`. **Temporal**: Stage 4 (March 2026), shipping in Chrome, Firefox, Node 26 — not Node 24/Safari.
+- **`JSON.stringify`** drops/changes non-JSON values, throws on BigInt/cycles; **`JSON.parse`** is strict and takes a reviver.

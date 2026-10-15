@@ -1,44 +1,31 @@
 # Chapter 11 — CNNs and Computer Vision
 
-An image is just a grid of numbers — a 224×224 colour photo is 224 × 224 × 3 = 150,528 numbers. Feeding that into the dense networks of Chapter 10 (networks where every neuron is connected to every input value) works badly: far too many weights, and no notion that neighbouring pixels belong together or that a cat is still a cat when it moves ten pixels to the left. **Convolutional neural networks (CNNs)** fix both problems with one idea: slide a small learnable filter across the image and reuse it everywhere. That idea, plus depth, took computer vision from "barely works" to superhuman on some **benchmarks** (standard shared datasets and scoring rules used to compare models) within a decade.
+An image is a grid of numbers — a 224×224 colour photo is 224 × 224 × 3 = 150,528 of them. Dense networks (Chapter 10) handle that badly: far too many weights, and no notion that neighbouring pixels belong together or that a cat shifted ten pixels is still a cat. **Convolutional neural networks (CNNs)** fix both with one idea: slide a small learnable filter across the image and reuse it everywhere. That idea plus depth took vision from "barely works" to superhuman on some **benchmarks** (standard shared datasets and scoring rules) within a decade.
 
-**What you'll learn**
+**What you'll learn:** convolution (kernels, stride, padding, channels, output size); pooling and CNN architecture; receptive field; the famous architectures LeNet → ViT; transfer learning; augmentation; detection (IoU, NMS, YOLO) and segmentation (U-Net); a small PyTorch CNN on scikit-learn's 8×8 digits, trained on CPU in seconds.
 
-1. Convolution: kernels, stride, padding, channels, output-size formula — with a worked 3×3 example.
-2. Pooling, and how conv + pool + dense layers make a CNN architecture.
-3. Receptive field and why stacks of 3×3 convolutions work.
-4. The famous architectures: LeNet → AlexNet → VGG → Inception → ResNet (skip connections) → MobileNet/EfficientNet → Vision Transformer.
-5. Transfer learning and fine-tuning.
-6. Data augmentation for images.
-7. Vision tasks beyond classification: object detection (IoU, NMS, the YOLO idea) and segmentation (the U-Net idea).
-8. A small PyTorch CNN on scikit-learn's 8×8 digits, trained on CPU in seconds. (**PyTorch** is a popular Python deep-learning library; **scikit-learn** is Python's classic machine-learning library; the **CPU** is the computer's ordinary general-purpose processor.)
-
-Prerequisites: Chapter 10 (neurons, backprop, optimizers, BatchNorm, dropout, PyTorch training loop). All code is in `code/`; outputs are real.
-
-> **Key terms from Chapter 10, in one breath:** **backprop** (backpropagation) works out how much each weight contributed to the error — that number is the weight's **gradient**; an **optimizer** such as **SGD** (stochastic gradient descent, small steps downhill on mini-batches of data) or **Adam** uses gradients to update the weights; **BatchNorm** (BN) rescales each channel's activations to a steady mean and spread so training is stable; **dropout** randomly switches off units during training so the network can't rely on any single one. The **training loop** repeats: predict, measure the loss, backprop, update.
+Prerequisites: Chapter 10 — backprop/gradients, optimizers (SGD, Adam), BatchNorm, dropout, the PyTorch training loop. All code is in `code/`; outputs are real.
 
 ---
 
 ## 11.1 Convolution
 
 ### What it is
-A **convolutional layer** slides a small grid of weights — a **kernel** or **filter**, typically 3×3 — over the image. At each position it multiplies the kernel element-wise with the patch of pixels underneath and sums the result into a single number. Doing this at every position produces a new grid called a **feature map** (or activation map). A layer has many kernels, each producing its own feature map, each detecting a different pattern.
-
-Analogy: a flashlight with a stencil. You sweep the same stencil across the whole picture; wherever the picture matches the stencil's pattern, the light shines bright.
+A **convolutional layer** slides a small grid of weights — a **kernel** or **filter**, typically 3×3 — over the image. At each position it multiplies the kernel element-wise with the pixel patch underneath and sums to one number; doing this everywhere produces a **feature map** (activation map). A layer has many kernels, each producing its own feature map and detecting a different pattern.
 
 ### The problem it solves
 
 | Problem with dense layers on images | How convolution fixes it |
 |---|---|
-| Huge parameter counts (150k inputs × 1,000 units = 150M weights for one layer) | **Weight sharing**: one 3×3×3 kernel has 27 weights (+1 bias, a learned constant offset) regardless of image size |
-| Ignores spatial structure — pixel order could be shuffled | **Local connectivity**: each output only looks at a small neighbourhood |
-| A pattern learned in one place must be re-learned in every other place | **Translation equivariance**: shift the input, and the feature map shifts the same way — the same detector works everywhere |
+| Huge parameter counts (150k inputs × 1,000 units = 150M weights for one layer) | **Weight sharing**: one 3×3×3 kernel has 27 weights (+1 bias) regardless of image size |
+| Ignores spatial structure — pixel order could be shuffled | **Local connectivity**: each output looks only at a small neighbourhood |
+| A pattern learned in one place must be re-learned everywhere | **Translation equivariance**: shift the input and the feature map shifts the same way |
 
-Parameter comparison from `code/conv_by_hand.py`:
+From `code/conv_by_hand.py`:
 ```
 Conv2d(3->16, 3x3) params: 448  vs Linear(32*32*3 -> 16) params: 49168
 ```
-(3·3·3 + 1) · 16 = 448 versus (3,072 + 1) · 16 = 49,168 — and the conv layer's count doesn't change with image size.
+(3·3·3 + 1) · 16 = 448 versus (3,072 + 1) · 16 = 49,168 — and the conv count doesn't change with image size.
 
 ### How it works — worked 3×3 example
 Input X (5×5, one channel) and a vertical-edge kernel K:
@@ -51,12 +38,12 @@ X =  1 2 0 1 3        K =  1 0 -1
      0 2 1 0 2
 ```
 
-1. Place K on the top-left 3×3 patch [[1,2,0],[0,1,3],[2,1,0]]. Multiply element by element and add: left column (1+0+2)·1 + middle column ·0 + right column (0+3+0)·(−1) = 3 − 3 = **0**.
-2. Slide one step right and repeat; at the end of the row move one step down.
-3. The patch centred on the middle pixel is [[1,3,2],[1,0,1],[0,2,3]]: left column 1+1+0 = 2, right column 2+1+3 = 6, so the output is 2 − 6 = **−4** — a strong response: it's brighter on the right than on the left, a vertical edge.
-4. Add the bias (0 here) and, in a real network, apply an activation such as ReLU (rectified linear unit: keeps positive values and turns negatives into 0).
+1. Top-left patch [[1,2,0],[0,1,3],[2,1,0]]: left column (1+0+2)·1 + middle ·0 + right column (0+3+0)·(−1) = 3 − 3 = **0**.
+2. Slide one step right; at the end of the row move one down.
+3. Centre patch [[1,3,2],[1,0,1],[0,2,3]]: left column 2, right column 6 → **−4** — brighter on the right than the left: a vertical edge.
+4. Add the bias (0 here) and, in a real network, apply an activation such as ReLU.
 
-The full output with stride 1 and no padding is 3×3:
+Full output, stride 1, no padding:
 ```
 stride=1 padding=0 -> output (3, 3) (formula 3), matches torch: True
 [[ 0.  0. -1.]
@@ -64,7 +51,7 @@ stride=1 padding=0 -> output (3, 3) (formula 3), matches torch: True
  [ 0. -1.  0.]]
 ```
 
-Strictly, deep-learning "convolution" is **cross-correlation** — the kernel isn't flipped as in the mathematical definition. Since kernels are learned, the distinction doesn't matter; PyTorch's `F.conv2d` does exactly what the loop below does.
+Strictly, deep-learning "convolution" is **cross-correlation** — the kernel isn't flipped. Since kernels are learned, it doesn't matter; PyTorch's `F.conv2d` does exactly this loop:
 
 ```python
 # code/conv_by_hand.py (core)
@@ -82,12 +69,10 @@ def conv2d(x, k, stride=1, padding=0):
 ```
 
 ### Stride and padding
-- **Stride** s: how many pixels the kernel jumps each move. Stride 2 halves the output's height and width — a cheap way to **downsample** (reduce the resolution).
-- **Padding** p: extra border (usually zeros) around the input. Without it, every 3×3 conv shrinks the image by 2 pixels and edge pixels are under-used. **"Same" padding** (p = 1 for a 3×3 kernel, p = 2 for 5×5) keeps the size unchanged at stride 1. **"Valid"** means no padding.
+- **Stride** s: pixels the kernel jumps per move. Stride 2 halves height and width — a cheap way to **downsample**.
+- **Padding** p: extra (usually zero) border. Without it each 3×3 conv shrinks the image by 2 and under-uses edge pixels. **"Same"** padding (p = 1 for 3×3, p = 2 for 5×5) keeps size at stride 1; **"valid"** = no padding.
 
-**Output size formula** (per spatial dimension):
-
-  **out = ⌊(n + 2p − k) / s⌋ + 1**
+**Output size** (per spatial dimension): **out = ⌊(n + 2p − k) / s⌋ + 1**
 
 | n | k | s | p | out | Check |
 |---|---|---|---|---|---|
@@ -110,37 +95,33 @@ stride=1 padding=1 -> output (5, 5) (formula 5), matches torch: True
 ```
 
 ### Channels
-Real images have 3 **channels** (red, green, blue), and hidden feature maps have many (64, 128, 512…). A kernel always spans **all input channels**: a 3×3 kernel on a 64-channel input is really 3×3×64 = 576 weights, producing one output channel. A layer with C_out kernels produces C_out channels.
+Images have 3 **channels** (RGB); hidden feature maps have many (64, 128, 512…). A kernel always spans **all input channels**: a 3×3 kernel on 64 channels is 3×3×64 = 576 weights producing one output channel; C_out kernels give C_out channels.
 
-- Weights in a conv layer: **k × k × C_in × C_out** (+ C_out biases).
-- PyTorch **tensor** (a multi-dimensional array of numbers) layout: **N × C × H × W** (batch, channels, height, width — a **batch** is the group of images processed together in one step). `nn.Conv2d(in_channels, out_channels, kernel_size, stride=1, padding=0)`.
-- A **1×1 convolution** mixes channels at each pixel without looking at neighbours — used to cheaply change the number of channels (Inception, ResNet **bottlenecks** — layers that temporarily squeeze to fewer channels to save compute).
-- A **depthwise-separable convolution** splits a conv into a per-channel k×k spatial conv plus a 1×1 conv that mixes channels (MobileNet, Xception, EfficientNet). Cost per output pixel: standard = k²·C_in·C_out; separable = k²·C_in + C_in·C_out. The ratio is 1/C_out + 1/k² — for k = 3, C_in = C_out = 256: 1/256 + 1/9 ≈ 0.115, about 8.7× cheaper.
+- Conv weights: **k × k × C_in × C_out** (+ C_out biases).
+- PyTorch tensor layout: **N × C × H × W** (batch, channels, height, width). `nn.Conv2d(in_channels, out_channels, kernel_size, stride=1, padding=0)`.
+- A **1×1 convolution** mixes channels at each pixel without looking at neighbours — cheaply changes channel count (Inception, ResNet **bottlenecks**: layers that temporarily squeeze to fewer channels to save compute).
+- A **depthwise-separable convolution** = per-channel k×k spatial conv + 1×1 channel-mixing conv (MobileNet, Xception, EfficientNet). Cost per output pixel: standard k²·C_in·C_out vs separable k²·C_in + C_in·C_out; ratio 1/C_out + 1/k² — for k = 3, C_in = C_out = 256: ≈ 0.115, about 8.7× cheaper.
 
 ### What do kernels detect?
-`code/edge_filters.py` applies classic hand-designed kernels to a digit. A CNN **learns** kernels like these — first-layer filters of trained networks look like edge, colour-blob and stripe detectors.
+`code/edge_filters.py` applies classic hand-designed kernels to a digit. A CNN **learns** kernels like these — trained first-layer filters look like edge, colour-blob and stripe detectors.
 
 ![Hand-made kernels on a digit](img/edge_filters.png)
-*Figure — A "0" digit and the feature maps from Sobel vertical/horizontal edge detectors (red = positive response, blue = negative), a blur and a sharpen kernel.*
+*Figure — A "0" digit and the feature maps from Sobel vertical/horizontal edge detectors (red = positive, blue = negative), a blur and a sharpen kernel.*
 
 ### Common mistakes
-- Mixing up N×C×H×W (PyTorch) and N×H×W×C (TensorFlow/Keras default, NumPy images) — transpose with `permute(0, 3, 1, 2)`.
-- Forgetting padding and being surprised when the image shrinks layer after layer.
-- Computing the **flatten** size (flattening unrolls a C×H×W feature map into one long vector for a dense layer) by hand wrongly — pass a dummy tensor through the conv part and print its shape, or use `nn.LazyLinear`.
+- Mixing up N×C×H×W (PyTorch) and N×H×W×C (TensorFlow/Keras, NumPy images) — fix with `permute(0, 3, 1, 2)`.
+- Forgetting padding, then wondering why the image shrinks layer after layer.
+- Computing the **flatten** size (C×H×W unrolled into one vector for a dense layer) wrongly by hand — pass a dummy tensor through and print the shape, or use `nn.LazyLinear`.
 
 ### In the interview
-**30-second answer:** "A conv layer slides small learned kernels, each spanning all input channels, across the image and sums the element-wise products into a feature map. Weight sharing makes the parameter count independent of image size, and locality plus sharing give translation equivariance. Output size is ⌊(n + 2p − k)/s⌋ + 1; stride downsamples, padding preserves size; 1×1 convs mix channels cheaply."
+**30-second answer:** "A conv layer slides small learned kernels, each spanning all input channels, across the image and sums element-wise products into a feature map. Weight sharing makes the parameter count independent of image size; locality plus sharing give translation equivariance. Output size is ⌊(n + 2p − k)/s⌋ + 1; stride downsamples, padding preserves size; 1×1 convs mix channels cheaply."
 
-- *Q: Output of a 224×224×3 image through `Conv2d(3, 64, 7, stride=2, padding=3)`?* A: 64 × 112 × 112; weights 7·7·3·64 + 64 = 9,472.
-- *Q: Is convolution translation invariant (output unchanged when the input shifts)?* A: Equivariant — the feature map shifts with the input; pooling and global pooling add (approximate) invariance.
-
-### Self-check
-1. 5×5 input, 3×3 kernel, stride 1, padding 0 — output size? → 3×3.
-2. Weights in a 3×3 conv from 64 to 64 channels (no bias)? → 3·3·64·64 = 36,864.
-3. Why is "convolution" in deep learning really cross-correlation? → The kernel isn't flipped; since it is learned, it makes no difference.
+- *Q: 224×224×3 through `Conv2d(3, 64, 7, stride=2, padding=3)`?* A: 64 × 112 × 112; weights 7·7·3·64 + 64 = 9,472.
+- *Q: Is convolution translation invariant?* A: Equivariant — the feature map shifts with the input; pooling and global pooling add (approximate) invariance.
+- *Q: Weights in a 3×3 conv, 64 → 64 channels, no bias?* A: 3·3·64·64 = 36,864.
 
 ### TL;DR
-A conv layer slides shared k×k×C_in kernels over the input; out = ⌊(n + 2p − k)/s⌋ + 1; weights = k·k·C_in·C_out. Weight sharing + locality = far fewer parameters and translation equivariance.
+Shared k×k×C_in kernels slide over the input; out = ⌊(n + 2p − k)/s⌋ + 1; weights = k·k·C_in·C_out. Weight sharing + locality = few parameters and translation equivariance.
 
 ---
 
@@ -148,13 +129,13 @@ A conv layer slides shared k×k×C_in kernels over the input; out = ⌊(n + 2p �
 
 ### What it is
 A **pooling layer** downsamples each feature map independently by summarising small windows:
-- **Max pooling** (most common, 2×2 window, stride 2): keep the largest value — "was the feature present anywhere in this window?"
-- **Average pooling**: take the mean.
-- **Global average pooling (GAP)**: average each whole feature map to a single number — used at the end of modern CNNs instead of big dense layers.
+- **Max pooling** (usually 2×2, stride 2): keep the largest value — "was the feature present in this window?"
+- **Average pooling**: the mean.
+- **Global average pooling (GAP)**: average each whole feature map to one number — used at the end of modern CNNs instead of big dense layers.
 
-Pooling has **no learnable parameters**. It shrinks H and W (2×2/2 halves them), cutting compute, growing the receptive field (the patch of the input image a unit can "see" — defined properly below), and adding a little tolerance to small shifts (**local translation invariance**).
+Pooling has **no parameters**. It halves H and W (2×2/2), cutting compute, growing the receptive field, and adding tolerance to small shifts (**local translation invariance**).
 
-Max-pool 2×2 stride 2 of the 5×5 padded-conv output above (the last row and column are dropped because the 2×2 windows don't fit):
+Max-pool 2×2/2 of the 5×5 padded-conv output above (last row/column dropped — windows don't fit):
 ```
 max-pool 2x2/2 of the padded-conv output (5x5 -> 2x2):
  [[0. 0.]
@@ -163,9 +144,7 @@ avg-pool via torch:
  [[-2.25 -0.5 ]
  [-1.75 -0.5 ]]
 ```
-Top-left window [[−3, −2], [−4, 0]] → max 0, mean −2.25.
-
-Many modern networks replace pooling with **stride-2 convolutions** (learned downsampling) and use pooling only at the very end (GAP).
+Top-left window [[−3, −2], [−4, 0]] → max 0, mean −2.25. Many modern networks use **stride-2 convolutions** (learned downsampling) instead and pool only at the end (GAP).
 
 ### The standard CNN architecture
 
@@ -181,19 +160,17 @@ flowchart LR
     H --> I["Softmax: class probabilities"]
 ```
 
-1. **Feature extractor ("backbone")**: repeated blocks of conv → normalization (usually BatchNorm) → activation, with periodic downsampling. As you go deeper, spatial size **shrinks** and the number of channels **grows** (e.g. 64 → 128 → 256 → 512): fewer, more abstract, more numerous features.
-2. **Classifier ("head")**: flatten or global-average-pool, then one or more dense layers producing class **logits** (raw, unnormalised scores, one per class); **softmax** (turns logits into probabilities that sum to 1) + **cross-entropy** (a loss that is large when the true class gets low probability) for training.
+1. **Backbone (feature extractor)**: repeated conv → BatchNorm → activation blocks with periodic downsampling. Deeper = spatial size **shrinks**, channels **grow** (64 → 128 → 256 → 512) — keeping capacity and roughly constant compute per layer while features become more abstract and numerous.
+2. **Head (classifier)**: flatten or GAP, then dense layer(s) producing class **logits**; softmax + cross-entropy for training.
 
-The learned features form a hierarchy (Zeiler & Fergus visualised this in 2013): **edges and colours → textures and corners → object parts → whole objects**.
+Learned features form a hierarchy (Zeiler & Fergus, 2013): **edges and colours → textures and corners → object parts → whole objects**.
 
 ### Receptive field
-The **receptive field (RF)** of a unit is the region of the input image that can influence it. A 3×3 conv has RF 3. Stacking layers grows it. Track two numbers per layer — the RF and the **jump** (how many input pixels one step in this layer's output corresponds to, i.e. the product of all strides so far):
+The **receptive field (RF)** of a unit is the input region that can influence it. Track RF and the **jump** (product of strides so far — input pixels per output step):
 
   RF_new = RF_old + (k − 1) · jump_old,  jump_new = jump_old · s
 
-Worked through the VGG pattern below: conv3 → 1 + 2·1 = 3; conv3 → 3 + 2·1 = 5; maxpool 2/2 → 5 + 1·1 = 6, jump becomes 2; conv3 → 6 + 2·2 = 10; conv3 → 10 + 2·2 = 14.
-
-`code/receptive_field.py`:
+VGG pattern: conv3 → 3; conv3 → 5; maxpool 2/2 → 6, jump 2; conv3 → 10; conv3 → 14. `code/receptive_field.py`:
 ```
 Three 3x3 convs (stride 1) vs one 7x7 conv, on a 32x32 input
 layer                  out size   RF  jump
@@ -216,22 +193,21 @@ conv3x3                      56   24     4
 conv3x3                      56   32     4
 maxpool2                     28   36     8
 ```
-**Key insight (VGG, 2014):** three stacked 3×3 convs see the same 7×7 region as one 7×7 conv, but use 27C² instead of 49C² weights and add two extra **nonlinearities** (activation functions — they let the network model relationships that aren't straight lines). That's why almost every modern CNN uses 3×3 kernels. Downsampling makes the RF grow much faster ("jump" doubles after each pool), which is how deep layers come to "see" the whole object. (The *effective* receptive field — where influence is actually strong — is smaller and roughly Gaussian-shaped, i.e. a bell curve peaked at the centre.)
+**Key insight (VGG, 2014):** three stacked 3×3 convs see the same 7×7 region as one 7×7 conv but use 27C² instead of 49C² weights and add two extra nonlinearities — hence 3×3 kernels everywhere. Downsampling makes the RF grow much faster (jump doubles per pool), which is how deep layers "see" whole objects. The *effective* RF (where influence is actually strong) is smaller and roughly Gaussian.
 
 ### Self-check
-1. Output size of a 32×32 input after conv(k=5, s=1, p=0)? → 28×28.
+1. 32×32 input, conv(k=5, s=1, p=0)? → 28×28.
 2. Parameters of `Conv2d(64, 128, 3)`? → 3·3·64·128 + 128 = 73,856.
-3. Why do channel counts grow as spatial size shrinks? → To keep representational capacity (how much information the layer can hold) (and roughly the compute per layer) while features become more abstract and numerous.
-4. RF of two 3×3 convs (stride 1)? → 5×5.
+3. RF of two stacked 3×3 convs (stride 1)? → 5×5.
 
 ### TL;DR
-Pooling (usually 2×2 max) halves H and W with no parameters. CNN = backbone of conv-BN-ReLU blocks with downsampling + head of GAP and dense layers. Stacked 3×3 convs grow the receptive field cheaply.
+2×2 max-pool halves H and W with no parameters. CNN = backbone of conv-BN-ReLU blocks with downsampling + head of GAP and dense layers. Stacked 3×3 convs grow the receptive field cheaply.
 
 ---
 
 ## 11.3 A small CNN on 8×8 digits (PyTorch, CPU)
 
-scikit-learn's `load_digits` has 1,797 grayscale 8×8 images of handwritten digits (pixel values 0–16). It's tiny, so a CNN trains on a laptop CPU in a few seconds.
+scikit-learn's `load_digits`: 1,797 grayscale 8×8 handwritten digits (pixel values 0–16) — trains on a laptop CPU in seconds.
 
 ```python
 # code/digits_cnn.py (core)
@@ -261,11 +237,8 @@ sched = torch.optim.lr_scheduler.OneCycleLR(opt, max_lr=3e-3, total_steps=epochs
 # ... standard loop: forward, cross_entropy, zero_grad, backward, step, sched.step()
 ```
 
-**AdamW** is the Adam optimizer with **weight decay** (a small pull of every weight toward zero, which discourages **overfitting** — memorising the training data instead of learning patterns that generalise) applied separately from the gradient step; **OneCycleLR** is a learning-rate schedule (the **learning rate**, LR, is the step size of each weight update) that ramps the step size up and then back down over training. A **stratified** split keeps each class's proportion the same in train and test; a **DataLoader** feeds the data in shuffled batches.
+**AdamW** = Adam with decoupled weight decay; **OneCycleLR** ramps the learning rate up then down over training. The script trains for 40 epochs an **MLP** with a similar parameter budget, the CNN, and the CNN with **shift augmentation** (each training image randomly moved up to 1 pixel), then tests on the normal test set and on the test set **shifted 1 pixel right**.
 
-The script trains three models for 40 **epochs** (full passes over the training data) — an **MLP** (multi-layer perceptron: the plain dense network of Chapter 10) with a similar parameter budget, the CNN, and the CNN with **shift augmentation** (each training image randomly moved up to 1 pixel) — then tests all three on the normal test set and on the test set **shifted 1 pixel right**.
-
-Output:
 ```
 train (1257, 1, 8, 8)  test (540, 1, 8, 8)
 MLP                        params= 7210  test accuracy=0.9759
@@ -278,50 +251,49 @@ misclassified (count, true, predicted): [(2, 8, 1), (2, 3, 9), (1, 9, 7), (1, 9,
 ```
 
 ![Digits CNN results](img/digits_cnn.png)
-*Figure — Left: test accuracy per epoch. Middle: the 16 first-layer kernels the CNN learned. Right: confusion matrix (a table counting true class vs predicted class) — nearly everything on the diagonal; the few errors are 8↔1 and 3↔9 type confusions.*
+*Figure — Left: test accuracy per epoch. Middle: the 16 learned first-layer kernels. Right: confusion matrix — nearly all on the diagonal; errors are 8↔1 and 3↔9 type.*
 
-What it shows:
-- **Fewer parameters, higher accuracy**: the CNN (6.2k parameters) beats the MLP (7.2k) — 99.1% vs 97.6%.
-- **Built-in spatial bias**: shift every test image by one pixel and the MLP collapses to 47% (every "pixel feature" moved), while the CNN keeps 86% thanks to shared kernels and pooling.
-- **Augmentation buys robustness**: trained with random shifts, the CNN keeps 98% on shifted images — at the cost of half a point on the unshifted test set here (a small, typical trade-off on a tiny dataset).
+- **Fewer parameters, higher accuracy**: CNN (6.2k) beats MLP (7.2k), 99.1% vs 97.6%.
+- **Built-in spatial bias**: shift every test image one pixel and the MLP collapses to 47% (every "pixel feature" moved); the CNN keeps 86% thanks to shared kernels and pooling.
+- **Augmentation buys robustness**: with random shifts the CNN keeps 98% on shifted images, at a half-point cost on unshifted test — a typical trade-off on a tiny dataset.
 
-### TL;DR
-On tiny 8×8 digits a two-block CNN beats a larger MLP (99.1% vs 97.6%) and is far more robust to shifts; shift augmentation makes it nearly shift-proof.
-
-For real images (28×28 MNIST — a classic handwritten-digit dataset; 32×32 CIFAR-10 — small photos in 10 classes; 224×224 ImageNet — described in §11.4), the same code works with more blocks and channels; you'd load data with `torchvision.datasets` (PyTorch's companion library for images) and run on a **GPU** (graphics processing unit — a chip that does thousands of multiplications in parallel, which is what neural networks need).
+For real images (28×28 MNIST, 32×32 CIFAR-10, 224×224 ImageNet) the same code works with more blocks and channels, `torchvision.datasets` for loading, and a GPU.
 
 ### Common mistakes
-- Forgetting the channel dimension (8×8 images must be reshaped to 1×8×8).
-- Evaluating with the model still in `train()` mode (BatchNorm and dropout behave differently). Call `model.eval()` before testing: it turns dropout off and makes BatchNorm use the averages it stored during training.
+- Forgetting the channel dimension (8×8 must become 1×8×8).
+- Evaluating in `train()` mode — call `model.eval()`: dropout off, BatchNorm uses its stored running averages.
 - Too much downsampling for small images: 8×8 can only be halved three times.
+
+### TL;DR
+On 8×8 digits a two-block CNN beats a larger MLP (99.1% vs 97.6%) and is far more shift-robust; shift augmentation makes it nearly shift-proof.
 
 ---
 
 ## 11.4 Famous architectures — a timeline
 
 ### What it is
-A handful of architectures, most of them winners of the **ImageNet Large Scale Visual Recognition Challenge (ILSVRC)** — 1.28 million training images across 1,000 classes — each introduced an idea that is still in use.
+Most are winners of the **ImageNet Large Scale Visual Recognition Challenge (ILSVRC)** — 1.28M training images, 1,000 classes — each introducing an idea still in use. **Top-5 error** = true class not in the model's 5 best guesses.
 
 | Year | Model | Depth / params | Key idea | Result |
 |---|---|---|---|---|
-| 1998 | **LeNet-5** (LeCun et al.) | 7 layers, ~60k | Conv → pool → conv → pool → dense; trained with backprop | Read handwritten digits on bank cheques in production |
-| 2012 | **AlexNet** (Krizhevsky, Sutskever, Hinton) | 8 layers, ~60M | ReLU, dropout, heavy augmentation, trained on 2 GPUs | ILSVRC top-5 error (true class not in the model's 5 best guesses) 15.3% vs 26.2% runner-up — started the deep-learning boom |
-| 2014 | **VGG-16/19** (Simonyan & Zisserman) | 16–19 layers, ~138M (VGG-16) | Only 3×3 convs, stacked; very uniform | ILSVRC 2014 runner-up, 7.3% top-5; still a popular feature extractor |
-| 2014 | **GoogLeNet / Inception** (Szegedy et al.) | 22 layers, ~7M | Inception module: parallel 1×1, 3×3, 5×5 convs; 1×1 bottlenecks; GAP instead of big dense layers | ILSVRC 2014 winner, 6.7% top-5 |
-| 2015 | **ResNet** (He et al.) | 18–152 layers (ResNet-50 ≈ 25.6M) | **Residual (skip) connections** + BatchNorm | ILSVRC 2015 winner, 3.57% top-5 (ensemble); made 100+ layer nets trainable |
+| 1998 | **LeNet-5** (LeCun et al.) | 7 layers, ~60k | Conv → pool → conv → pool → dense; backprop | Read handwritten digits on bank cheques in production |
+| 2012 | **AlexNet** (Krizhevsky, Sutskever, Hinton) | 8 layers, ~60M | ReLU, dropout, heavy augmentation, 2 GPUs | Top-5 error 15.3% vs 26.2% runner-up — started the deep-learning boom |
+| 2014 | **VGG-16/19** (Simonyan & Zisserman) | 16–19 layers, ~138M (VGG-16) | Only stacked 3×3 convs; very uniform | ILSVRC 2014 runner-up, 7.3% top-5; still a popular feature extractor |
+| 2014 | **GoogLeNet / Inception** (Szegedy et al.) | 22 layers, ~7M | Parallel 1×1, 3×3, 5×5 branches; 1×1 bottlenecks; GAP instead of big dense layers | ILSVRC 2014 winner, 6.7% top-5 |
+| 2015 | **ResNet** (He et al.) | 18–152 layers (ResNet-50 ≈ 25.6M) | **Residual (skip) connections** + BatchNorm | ILSVRC 2015 winner, 3.57% top-5 (ensemble); 100+ layer nets trainable |
 | 2017 | **MobileNet** (Howard et al.) | small | Depthwise-separable convs for phones | Efficient on-device vision |
-| 2019 | **EfficientNet** (Tan & Le) | B0–B7 (5.3M–66M) | **Compound scaling**: grow depth, width and input resolution together with fixed ratios; SiLU (a smooth ReLU-like activation), MBConv (mobile inverted-bottleneck) blocks | B7: 84.3% top-1 ImageNet, 8.4× smaller than the previous best (GPipe) |
-| 2020 | **Vision Transformer (ViT)** (Dosovitskiy et al.) | 86M+ (ViT-Base) | Split the image into 16×16 patches, treat them as tokens (input units), apply a transformer (attention-based network, Chapter 12) | Beats CNNs when pre-trained on very large datasets |
-| 2022 | **ConvNeXt** (Liu et al.) | ResNet-sized | A ResNet modernised with transformer-era design choices | Matches ViTs, showing CNNs remain competitive |
+| 2019 | **EfficientNet** (Tan & Le) | B0–B7 (5.3M–66M) | **Compound scaling** of depth, width, resolution; SiLU (smooth ReLU-like) activation, MBConv (mobile inverted-bottleneck) blocks | B7: 84.3% top-1, 8.4× smaller than previous best (GPipe) |
+| 2020 | **Vision Transformer (ViT)** (Dosovitskiy et al.) | 86M+ (ViT-Base) | 16×16 patches as tokens into a transformer (Chapter 12) | Beats CNNs when pre-trained on very large datasets |
+| 2022 | **ConvNeXt** (Liu et al.) | ResNet-sized | ResNet modernised with transformer-era design choices | Matches ViTs — CNNs remain competitive |
 
 ### ResNet and skip connections
-**The problem.** Before 2015, making plain CNNs deeper beyond ~20 layers made them *worse* — even on the **training** set. This "degradation" isn't overfitting (that would hurt only the test set, not training accuracy); very deep plain stacks are simply hard to optimise (signals and gradients get distorted through many layers).
+**The problem.** Before 2015, plain CNNs deeper than ~20 layers got *worse* — even on the **training** set. This "degradation" isn't overfitting (that hurts only test accuracy); very deep plain stacks are just hard to optimise.
 
-**The idea.** Instead of asking a block to learn a mapping H(x) directly, let it learn the **residual** F(x) = H(x) − x and add the input back:
+**The idea.** Let a block learn the **residual** F(x) = H(x) − x and add the input back:
 
   **y = ReLU(x + F(x))**,  where F = conv → BN → ReLU → conv → BN
 
-If the best thing a block can do is nothing, it just learns F ≈ 0 — easy. And in backprop, ∂y/∂x (the derivative: how much y changes when x changes slightly) includes an identity term, so gradients have a direct **highway** back to early layers. When the shapes differ (stride 2 or more channels), the skip path uses a 1×1 conv to match them.
+If doing nothing is best, the block learns F ≈ 0 — easy. In backprop ∂y/∂x includes an identity term, so gradients get a direct **highway** to early layers. When shapes differ (stride 2 or more channels) the skip path uses a 1×1 conv.
 
 ```mermaid
 flowchart LR
@@ -345,7 +317,7 @@ class ResidualBlock(nn.Module):
         return torch.relu(x + self.f(x))                 # the skip connection
 ```
 
-Output — gradient norm reaching the first conv, and a 30-conv-layer plain net vs a 30-conv-layer residual net trained on digits for 5 epochs:
+Gradient norm reaching the first conv, and 30-conv-layer plain vs residual nets trained on digits for 5 epochs:
 ```
 conv layers  plain |grad|  residual |grad|
           2      2.58e-02         4.78e-02
@@ -357,61 +329,53 @@ Training 30-conv-layer nets on digits (SGD+momentum lr 0.05, 5 epochs):
   plain    training accuracy 0.575  training loss 1.121
   residual training accuracy 0.957  training loss 0.159
 ```
-With BatchNorm, the plain net's gradients don't **vanish** (shrink toward zero) here — they become erratic and **explode** (grow uncontrollably large) as depth grows (3 × 10² at 60 layers), while the residual net's stay near 1. Trained with identical settings, the plain net reaches only 58% **training** accuracy (the degradation problem) while the residual net reaches 96%. Skip connections are now everywhere: DenseNet, U-Net, and every transformer block.
+With BatchNorm the plain net's gradients don't vanish here — they become erratic and **explode** with depth (3 × 10² at 60 layers), while the residual net's stay near 1. Same settings: plain reaches 58% **training** accuracy (degradation), residual 96%. Skip connections are now everywhere: DenseNet, U-Net, every transformer block.
 
 ### EfficientNet in one paragraph
-If you have more compute, how should you grow a CNN — deeper, wider (more channels), or with higher-resolution inputs? EfficientNet found that scaling all three together with a fixed ratio (depth × α^φ, width × β^φ, resolution × γ^φ) gives far better accuracy per FLOP (floating-point operation — one multiply or add, the usual unit of compute) than scaling any one. The base network B0 was found by **neural architecture search** (an automated search over many candidate network designs); B1–B7 are compound-scaled versions.
+Given more compute, grow deeper, wider, or higher-resolution? EfficientNet scales all three together with fixed ratios (depth × α^φ, width × β^φ, resolution × γ^φ), giving far better accuracy per FLOP than scaling any one. Base B0 came from **neural architecture search** (automated search over candidate designs); B1–B7 are compound-scaled.
 
 ### Vision Transformer (brief)
-ViT cuts an image into fixed-size patches (e.g. 16×16 pixels → a 224×224 image becomes 14 × 14 = 196 patches), flattens and linearly projects each patch (multiplies it by a learned matrix) into a vector (a "token"), adds **position embeddings** (learned vectors telling the model where each patch came from) and a learnable [CLS] token (an extra token whose final vector is used as the summary of the whole image), and runs a standard transformer encoder (self-attention: Chapter 12). With no built-in locality or translation equivariance, ViTs need much more data (the original used 300M-image pre-training) but scale extremely well. Hybrid and hierarchical designs (Swin Transformer) and modern CNNs (ConvNeXt) now compete closely; for small datasets, a pretrained CNN or pretrained ViT fine-tuned is the practical choice.
+ViT cuts an image into patches (16×16 → a 224×224 image gives 14 × 14 = 196), linearly projects each into a token, adds learned **position embeddings** and a learnable [CLS] token (whose final vector summarises the image), and runs a standard transformer encoder (Chapter 12). Lacking locality and translation equivariance, ViTs need much more data (the original used 300M-image pre-training) but scale extremely well. Hierarchical designs (Swin) and modern CNNs (ConvNeXt) compete closely; for small datasets, fine-tune a pretrained CNN or ViT.
 
 ### Trade-offs
 
 | Need | Good choice |
 |---|---|
-| Strong, well-understood baseline | ResNet-50 (or ResNet-18 for speed) |
-| Mobile / edge devices (phones, cameras, small embedded chips) | MobileNetV3, EfficientNet-B0 |
+| Strong, well-understood baseline | ResNet-50 (ResNet-18 for speed) |
+| Mobile / edge devices (phones, cameras, embedded chips) | MobileNetV3, EfficientNet-B0 |
 | Best accuracy with large pretraining | ViT / Swin / ConvNeXt, EfficientNetV2 |
 | Tiny dataset | Any pretrained backbone, fine-tuned |
 
 ### In the interview
-**30-second answer:** "LeNet showed conv-pool stacks work; AlexNet scaled them with ReLU, dropout and GPUs and won ImageNet 2012; VGG showed stacks of 3×3 convs are enough; Inception used parallel branches and 1×1 bottlenecks; ResNet added identity skip connections so 100+ layer networks train — each block learns a residual and gradients flow through the identity path; EfficientNet scales depth, width and resolution together; ViT applies a transformer to image patches and wins with large-scale pretraining."
+**30-second answer:** "LeNet showed conv-pool stacks work; AlexNet scaled them with ReLU, dropout and GPUs and won ImageNet 2012; VGG showed stacked 3×3 convs suffice; Inception used parallel branches and 1×1 bottlenecks; ResNet's identity skips let 100+ layer nets train — each block learns a residual and gradients flow through the identity; EfficientNet scales depth, width and resolution together; ViT applies a transformer to patches and wins with large-scale pretraining."
 
-- *Q: Why do residual connections help?* A: They make the identity easy to represent (F = 0) and give gradients a direct path, fixing the degradation problem of deep plain nets.
+- *Q: Why do residual connections help?* A: Identity is easy to represent (F = 0) and gradients get a direct path — fixing degradation of deep plain nets.
 - *Q: What is a 1×1 convolution for?* A: Mixing channels and changing channel count cheaply (bottlenecks).
-- *Q: Why does ViT need more data than a CNN?* A: It lacks the CNN's built-in inductive biases (assumptions baked into the architecture: locality, weight sharing across positions), so it must learn them from data.
-
-### Self-check
-1. Which architecture introduced skip connections? → ResNet (2015).
-2. What three dimensions does EfficientNet scale? → Depth, width, input resolution.
-3. How many patches does ViT make from a 224×224 image with 16×16 patches? → 196.
-4. Name two ideas AlexNet popularised. → ReLU activations and dropout (also GPU training and heavy augmentation).
+- *Q: Why does ViT need more data than a CNN?* A: It lacks the CNN's **inductive biases** (built-in assumptions: locality, weight sharing), so it must learn them from data.
 
 ### TL;DR
-LeNet → AlexNet (ReLU, dropout, GPUs) → VGG (3×3 stacks) → Inception (1×1, multi-branch) → ResNet (skip connections: y = x + F(x)) → MobileNet/EfficientNet (efficiency, compound scaling) → ViT (patches + transformer).
+LeNet → AlexNet (ReLU, dropout, GPUs) → VGG (3×3 stacks) → Inception (1×1, multi-branch) → ResNet (y = x + F(x)) → MobileNet/EfficientNet (efficiency, compound scaling) → ViT (patches + transformer).
 
 ---
 
 ## 11.5 Transfer learning and fine-tuning
 
 ### What it is
-**Transfer learning** reuses a model trained on a large **source** task (typically ImageNet classification) as the starting point for your **target** task. The early layers of any vision model learn general features — edges, textures, shapes — that are useful for almost every image problem, so you don't have to learn them again from a few hundred images.
-
-Analogy: hiring an experienced photographer to sort your product photos. They already know how to see; you only teach them your categories.
+**Transfer learning** reuses a model trained on a large **source** task (typically ImageNet) as the starting point for your **target** task. Early layers learn general features — edges, textures, shapes — so you needn't relearn them from a few hundred images.
 
 ### Why it matters
-Training a ResNet-50 from scratch on ImageNet takes days of GPU time and 1.28M labelled images. Fine-tuning a pretrained one on 2,000 of your own images takes minutes and usually gives far better accuracy than training from scratch on those 2,000. It's the default for almost every practical vision project.
+Training ResNet-50 from scratch on ImageNet takes days of GPU time and 1.28M labels. Fine-tuning a pretrained one on 2,000 of your images takes minutes and usually beats training from scratch on those 2,000 by far. It's the default for practical vision.
 
 ### How it works — the two strategies
-1. **Feature extraction (frozen backbone).** Load pretrained weights, **freeze** the backbone (stop its weights from changing: `requires_grad = False`), replace the final layer with a new head for your classes, and train only the head. Fast, needs little data, low risk of overfitting.
-2. **Fine-tuning.** Start from the pretrained weights and also update some or all backbone layers with a **small learning rate** (often 10× smaller than for the head, "discriminative learning rates"), so useful features are adjusted rather than destroyed. A common recipe: train the new head first with the backbone frozen, then unfreeze the top blocks (or all) and continue with a low LR.
+1. **Feature extraction (frozen backbone).** Load pretrained weights, **freeze** the backbone (`requires_grad = False`), replace the final layer with a new head, train only the head. Fast, little data, low overfitting risk.
+2. **Fine-tuning.** Also update some or all backbone layers with a **small learning rate** (often 10× smaller than the head's — "discriminative learning rates") so features are adjusted, not destroyed. Common recipe: train the head with the backbone frozen, then unfreeze the top blocks (or all) at a low LR.
 
 | Your data | Similar to ImageNet | Very different (X-rays, satellite, spectrograms) |
 |---|---|---|
-| **Small** | Feature extraction | Feature extraction from earlier layers, or fine-tune gently; augment heavily |
+| **Small** | Feature extraction | Features from earlier layers, or gentle fine-tune; augment heavily |
 | **Large** | Fine-tune all layers | Fine-tune all layers (pretraining still usually helps convergence) |
 
-The real code with torchvision (needs a download of weights — not run here):
+With torchvision (needs a weights download — not run here):
 ```python
 import torch
 from torch import nn
@@ -433,26 +397,8 @@ opt = torch.optim.AdamW([{"params": model.fc.parameters(), "lr": 1e-3},
 ```
 
 ### A runnable demonstration (no downloads)
-`code/transfer_learning.py` mimics the setting on digits: pretrain a CNN on **clean** digits (half the dataset), then adapt it to the other half **"scanned by a different device"** (Gaussian noise — small random bell-curve jitter — added to every pixel), using only k labelled images per class. Results are averaged over 3 **seeds** (different random starting points), since tiny datasets give noisy results.
+`code/transfer_learning.py`: pretrain a CNN on **clean** digits (half the dataset), then adapt to the other half **"scanned by a different device"** (Gaussian noise on every pixel) using only k labels per class; averaged over 3 seeds. The script's `make_model(strategy, pretrained)` loads the backbone only (new head) for "frozen backbone" and freezes it, or loads the whole source model for "fine-tune all" with lr 1e-4.
 
-```python
-def make_model(strategy, pretrained):
-    bb, head = backbone(), nn.Linear(128, 10)
-    model = nn.Sequential(bb, head)
-    if strategy == "frozen backbone":                    # pretrained backbone, NEW head
-        bb.load_state_dict({k[2:]: v for k, v in pretrained.items() if k.startswith("0.")})
-    elif strategy == "fine-tune all":                    # start from the whole source model
-        model.load_state_dict(pretrained)
-    if strategy == "frozen backbone":
-        for p in bb.parameters():
-            p.requires_grad = False                      # freeze: no gradients, no updates
-        return model, head.parameters()
-    if strategy == "fine-tune all":
-        return model, [{"params": model.parameters(), "lr": 1e-4}]   # small lr: nudge, don't overwrite
-    return model, model.parameters()
-```
-
-Output:
 ```
 source model: train acc on clean digits 0.996, acc on noisy target digits with NO adaptation 0.839
 
@@ -465,59 +411,52 @@ labels/class     from scratch  frozen backbone    fine-tune all   (mean test acc
 trainable params: from scratch / fine-tune = 6090 | frozen backbone = 1290
 ```
 
-Reading it:
-- With **2 labels per class**, from-scratch gets 53%; a frozen pretrained backbone with a new head gets 65%; gently fine-tuning the full pretrained model gets 84%.
-- The advantage **shrinks as target data grows** (30 per class: 81% vs 86%) — transfer matters most when labels are scarce.
-- **Always measure the pretrained model before adapting it**: here the source model already scores 83.9% on the target with no training. Fine-tuning with a *large* learning rate or a randomly re-initialised head can easily do *worse* than that baseline — which is why fine-tuning uses small learning rates.
-- Transfer is not magic: in a variant of this experiment (not included in the script) where the target classes were *different digits* (pretrain on 0–4, adapt to 5–9) on these tiny 8×8 images, pretraining did not help — the features weren't general enough. Real ImageNet backbones, trained on 1,000 diverse classes, transfer far more broadly.
+- With **2 labels per class**: scratch 53%, frozen backbone + new head 65%, gentle full fine-tune 84%.
+- The advantage **shrinks as target data grows** (30/class: 81% vs 86%) — transfer matters most when labels are scarce.
+- **Measure the pretrained model before adapting**: it already scores 83.9% with no training. Fine-tuning with a *large* LR or a randomly re-initialised head can do *worse* than that baseline — hence small LRs.
+- Not magic: in a variant (not in the script) pretraining on digits 0–4 and adapting to 5–9, pretraining didn't help on these tiny images. Real ImageNet backbones, trained on 1,000 diverse classes, transfer far more broadly.
 
 ### When not to use it
-- When your inputs are nothing like natural images *and* you have plenty of data (pretraining may still help convergence, but check).
-- When the license of the pretrained weights forbids your use.
+- Inputs nothing like natural images *and* plenty of data (pretraining may still help convergence — check).
+- The weights' license forbids your use.
 
 ### Common mistakes
-- Forgetting to preprocess inputs exactly like the pretraining data (size, normalisation).
-- Fine-tuning everything with a large learning rate on a small dataset — "catastrophic forgetting" (the network overwrites what it learned before) of the useful features.
-- Leaving BatchNorm layers updating their running statistics (the averages BN stores for use at prediction time) on tiny batches during fine-tuning (often better kept in eval mode / frozen).
+- Not preprocessing exactly like the pretraining data (size, normalisation).
+- Fine-tuning everything with a large LR on a small dataset → **catastrophic forgetting** (overwriting learned features).
+- Letting BatchNorm update running statistics on tiny fine-tuning batches (often better frozen / eval mode).
 
 ### Real-world examples
-Most production vision models start from pretrained backbones: medical-imaging classifiers fine-tuned from ImageNet models, retail product recognition, defect detection on factory lines. Detection models (YOLO, Faster R-CNN) use pretrained classification backbones. The same pattern — pretrain big, fine-tune small — is how LLMs (large language models such as GPT or Claude) are adapted (AI Handbook, [Chapter 8](../../../ai/chapters/08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md)).
+Medical-imaging classifiers, retail product recognition, factory defect detection; detectors (YOLO, Faster R-CNN) use pretrained classification backbones. LLMs (GPT, Claude) follow the same pretrain-big, fine-tune-small pattern (AI Handbook, [Chapter 8](../../../ai/chapters/08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md)).
 
 ### In the interview
-**30-second answer:** "Take a model pretrained on a large dataset like ImageNet, replace its head, and either freeze the backbone and train only the head (feature extraction — small data) or fine-tune some or all layers with a small learning rate (more data or a different domain). Preprocess inputs like the pretraining data. It beats training from scratch whenever labelled data is limited."
+**30-second answer:** "Take a model pretrained on something like ImageNet, replace its head, and either freeze the backbone and train only the head (small data) or fine-tune some or all layers with a small learning rate (more data or a different domain). Preprocess like the pretraining data. It beats training from scratch whenever labels are limited."
 
-- *Q: Which layers transfer best?* A: Early layers (generic edges/textures); later layers are more task-specific, so they're the first to unfreeze.
-- *Q: Why a smaller LR for the backbone?* A: To adjust, not overwrite, useful pretrained features.
-
-### Self-check
-1. What does freezing do in PyTorch? → `requires_grad = False` — no gradients, so the optimizer doesn't change those weights.
-2. Small dataset similar to ImageNet — which strategy? → Feature extraction (frozen backbone, new head), maybe light fine-tuning later.
-3. Why did transfer help less with 30 labels per class than with 2? → With more target data, a model trained from scratch catches up; pretraining matters most when data is scarce.
+- *Q: Which layers transfer best?* A: Early layers (generic edges/textures); later layers are task-specific, so unfreeze them first.
+- *Q: Why a smaller LR for the backbone?* A: To adjust, not overwrite, pretrained features.
+- *Q: Why did transfer help less with 30 labels/class than with 2?* A: With more target data, from-scratch catches up.
 
 ### TL;DR
-Start from pretrained weights; new head; freeze then fine-tune with a small LR; preprocess like the pretraining data; biggest gains when labels are scarce.
+Pretrained weights; new head; freeze then fine-tune with a small LR; preprocess like pretraining; biggest gains when labels are scarce.
 
 ---
 
 ## 11.6 Data augmentation for images
 
 ### What it is
-Generating new training images from existing ones by applying transformations that **don't change the label**: a flipped, slightly rotated or recoloured cat is still a cat. The network sees more variety, so it memorises less and becomes robust to the variations it will meet in the real world.
+Creating new training images by **label-preserving** transformations — a flipped, slightly rotated or recoloured cat is still a cat. More variety → less memorisation, more robustness to real-world variation.
 
-### How it works — common transforms (torchvision.transforms.v2)
-`torchvision.transforms.v2` is torchvision's module of ready-made image transformations.
-
+### How it works — common transforms (`torchvision.transforms.v2`)
 
 | Transform | What it does | Watch out |
 |---|---|---|
 | `RandomResizedCrop(224)` | Random crop of random size/aspect, resized | The standard ImageNet training transform |
 | `RandomHorizontalFlip()` | Mirror left-right | Not for text, digits, or where left/right matters |
 | `RandomRotation(15)` | Small rotations | Large rotations turn 6 into 9 |
-| `ColorJitter(0.4, 0.4, 0.4)` | Brightness, contrast, saturation changes | Not if colour is the label (ripe vs unripe fruit) |
-| `RandomErasing()` / Cutout | Blank a random rectangle | Forces use of several parts of the object |
+| `ColorJitter(0.4, 0.4, 0.4)` | Brightness, contrast, saturation | Not if colour is the label (ripe vs unripe fruit) |
+| `RandomErasing()` / Cutout | Blank a random rectangle | Forces use of several object parts |
 | `GaussianBlur`, noise | Blur or noise | Mimic camera quality |
-| **Mixup** / **CutMix** | Blend two images (or paste a patch) and blend their labels | Strong regularizers (anti-overfitting techniques) for large models |
-| **RandAugment / AutoAugment / TrivialAugment** | Automatically chosen policies of transforms | Good defaults in modern training recipes |
+| **Mixup** / **CutMix** | Blend two images (or paste a patch) and blend their one-hot labels in the same ratio | Strong regularizers for large models |
+| **RandAugment / AutoAugment / TrivialAugment** | Automatically chosen transform policies | Good defaults in modern recipes |
 
 ```python
 from torchvision.transforms import v2 as T   # (torchvision not needed for the rest of this chapter)
@@ -527,27 +466,18 @@ train_tf = T.Compose([T.RandomResizedCrop(224), T.RandomHorizontalFlip(), T.Colo
 test_tf = T.Compose([T.Resize(256), T.CenterCrop(224), T.ToImage(), T.ToDtype(torch.float32, scale=True),
                      T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
 ```
-Augmentation happens **on the fly** in the training `Dataset`/`DataLoader` (PyTorch's classes for reading examples and grouping them into batches), differently every epoch — only for training data. Validation/test use a fixed **deterministic** (identical every time) resize/crop. **Test-time augmentation (TTA)** — averaging predictions over a few flipped/cropped versions — can add a little accuracy at **inference** (prediction-time, using the trained model) cost.
-
-In §11.3, shift augmentation raised accuracy on shifted digits from 86% to 98%.
-
-For **detection and segmentation**, geometric transforms must be applied to the boxes/masks too (torchvision v2 transforms and the Albumentations library handle this).
+Augmentation runs **on the fly** in the training `Dataset`/`DataLoader`, differently each epoch — training only. Validation/test use a fixed deterministic resize/crop. **Test-time augmentation (TTA)** — averaging predictions over a few flipped/cropped copies — adds a little accuracy at extra inference cost. In §11.3, shift augmentation lifted shifted-digit accuracy from 86% to 98%. For **detection and segmentation**, geometric transforms must be applied to boxes/masks too (torchvision v2, Albumentations).
 
 ### Common mistakes
-- Augmenting validation/test data randomly.
-- Augmentations that change the label (flipping digits, rotating road signs that mean different things when mirrored).
-- Forgetting that augmentation slows each epoch (CPU-bound: limited by processor speed, not the GPU) — use `num_workers` in `DataLoader` (extra worker processes that prepare batches in parallel).
+- Randomly augmenting validation/test data.
+- Label-changing augmentations (flipping digits — a mirrored 2 isn't a digit; mirroring road signs).
+- Ignoring that augmentation is CPU-bound — use `num_workers` in `DataLoader` (parallel batch-preparing processes).
 
 ### In the interview
-**30-second answer:** "Augmentation applies random, label-preserving transforms — crops, flips, colour jitter, small rotations, Mixup/CutMix — to training images on the fly, so the model sees more variety and overfits less. Validation and test use a fixed resize and crop. For detection and segmentation the same geometric transform must be applied to boxes and masks."
-
-### Self-check
-1. Why not horizontally flip digit images? → Mirrored digits (e.g. a mirrored 2 or 7) aren't valid digits — the label no longer holds.
-2. What does Mixup do to the label? → Blends the two one-hot labels (vectors with 1 for the true class and 0 elsewhere) with the same ratio as the images.
-3. Is test-time augmentation training or inference? → Inference: average predictions over a few transformed copies.
+**30-second answer:** "Random label-preserving transforms — crops, flips, colour jitter, small rotations, Mixup/CutMix — applied on the fly to training images so the model sees more variety and overfits less. Validation and test use a fixed resize and crop. For detection and segmentation the same geometric transform must hit the boxes and masks."
 
 ### TL;DR
-Random label-preserving transforms on training images only; flips, crops, colour jitter, rotations, Mixup/CutMix; the cheapest regularizer in vision.
+Random label-preserving transforms on training images only — the cheapest regularizer in vision.
 
 ---
 
@@ -557,21 +487,18 @@ Random label-preserving transforms on training images only; flips, crops, colour
 
 | Task | Question | Output | Typical models |
 |---|---|---|---|
-| **Image classification** | What is in this image? | One label (or a label per image) | ResNet, EfficientNet, ViT |
-| **Object detection** | What objects are where? | A box (x, y, w, h) + class + confidence per object | YOLO, SSD, Faster R-CNN, DETR |
-| **Semantic segmentation** | Which class is each pixel? | A class per pixel | U-Net, DeepLab, FCN |
-| **Instance segmentation** | Which object does each pixel belong to? | A mask (per-pixel on/off map) per object | Mask R-CNN, YOLO-seg, SAM (promptable) |
+| **Image classification** | What is in this image? | One label per image | ResNet, EfficientNet, ViT |
+| **Object detection** | What objects are where? | Box (x, y, w, h) + class + confidence per object | YOLO, SSD, Faster R-CNN, DETR |
+| **Semantic segmentation** | Which class is each pixel? | A class per pixel (all people = "person") | U-Net, DeepLab, FCN |
+| **Instance segmentation** | Which object does each pixel belong to? | A mask per object (person 1, person 2) | Mask R-CNN, YOLO-seg, SAM (promptable) |
 
 ### Object detection
 
-**IoU (Intersection over Union)** measures box overlap: area of intersection ÷ area of union. It's used to match predictions to **ground truth** (the correct, human-labelled answer) (e.g. a detection counts as correct if IoU ≥ 0.5) and in NMS.
+**IoU (Intersection over Union)** = intersection area ÷ union area. Used to match predictions to ground truth (e.g. correct if IoU ≥ 0.5) and in NMS.
 
-Worked example (`code/iou_nms.py`): ground truth (50, 50)–(150, 150) and prediction (70, 60)–(170, 160), boxes as (x1, y1)–(x2, y2). Each area = 100 × 100 = 10,000. Intersection = (150 − 70) × (150 − 60) = 80 × 90 = 7,200. Union = 10,000 + 10,000 − 7,200 = 12,800. **IoU = 7,200 / 12,800 = 0.5625.**
+Worked example (`code/iou_nms.py`): ground truth (50, 50)–(150, 150), prediction (70, 60)–(170, 160). Each area 10,000. Intersection 80 × 90 = 7,200. Union 20,000 − 7,200 = 12,800. **IoU = 0.5625.**
 
-**NMS (non-maximum suppression)** removes duplicate detections of the same object:
-1. Sort boxes by confidence.
-2. Keep the highest-scoring box; delete every remaining box whose IoU with it exceeds a threshold (e.g. 0.5).
-3. Repeat with the next remaining box.
+**NMS (non-maximum suppression)** removes duplicate detections: sort by confidence; keep the top box; delete remaining boxes with IoU above a threshold (e.g. 0.5) with it; repeat.
 
 ```python
 def my_nms(boxes, scores, thr):
@@ -583,7 +510,6 @@ def my_nms(boxes, scores, thr):
         order = [i for i in order if iou(boxes[best], boxes[i]) < thr]   # drop heavy overlaps
     return keep
 ```
-Output:
 ```
 IoU worked example: 0.562
 pairwise IoU of the 5 boxes:
@@ -594,24 +520,22 @@ pairwise IoU of the 5 boxes:
  [0.   0.   0.   0.74 1.  ]]
 NMS (IoU threshold 0.5) keeps boxes [0, 3] with scores [0.9, 0.8]
 ```
-Five raw boxes around two objects → two final detections.
+Five raw boxes around two objects → two detections.
 
 **Two families of detectors:**
-- **Two-stage** (R-CNN → Fast R-CNN → **Faster R-CNN**, 2015): a Region Proposal Network (a small network that proposes boxes likely to contain an object) suggests candidate boxes, then a second stage classifies and refines each. Accurate, slower.
-- **One-stage** (**YOLO**, SSD, RetinaNet): predict all boxes in a single **forward pass** (one run of the input through the network). Fast enough for real-time video.
+- **Two-stage** (R-CNN → Fast R-CNN → **Faster R-CNN**, 2015): a Region Proposal Network suggests candidate boxes; a second stage classifies and refines each. Accurate, slower.
+- **One-stage** (**YOLO**, SSD, RetinaNet): all boxes in one forward pass. Real-time capable.
 
-**The YOLO idea** ("You Only Look Once", Redmon et al., 2016): divide the image into an S × S grid. Each grid cell predicts a few bounding boxes (x, y, w, h, and an objectness confidence) and class probabilities for an object whose **centre** falls in that cell — all as one tensor from one CNN pass. Then threshold on confidence and run NMS. The original ran at about 45 frames per second. Later versions (YOLOv3 onward, and today's Ultralytics YOLO releases) added multi-scale predictions, **anchor boxes** (preset box shapes that predictions are expressed as adjustments to) (and later anchor-free heads) and better backbones, and remain the go-to for real-time detection. **DETR** (2020) reframed detection with a transformer that predicts a set of boxes directly, removing NMS. For a full system built on a detector — blurring faces and plates in street imagery, where **recall** (the share of real objects that were found) per person matters more than mAP — see case study [18.7](../18-ml-case-studies-2/README.md).
+**The YOLO idea** ("You Only Look Once", Redmon et al., 2016): divide the image into an S × S grid; each cell predicts a few boxes (x, y, w, h, objectness confidence) and class probabilities for an object whose **centre** falls in that cell — one tensor from one CNN pass. Then threshold and NMS. The original ran at ~45 fps. Later versions (YOLOv3 onward, today's Ultralytics releases) added multi-scale predictions, **anchor boxes** (preset shapes that predictions adjust; later anchor-free heads) and better backbones — still the go-to for real-time detection. **DETR** (2020) uses a transformer to predict a set of boxes directly, removing NMS. Full detector-based system (face/plate blurring, where per-person **recall** matters more than mAP): case study [18.7](../18-ml-case-studies-2/README.md).
 
-**Metric:** **mAP** (mean average precision) — area under the precision–recall curve per class, averaged over classes (**precision** is the share of predicted boxes that are correct); PASCAL VOC uses IoU ≥ 0.5, COCO averages over IoU thresholds 0.5 to 0.95 (PASCAL VOC and COCO are the two standard detection benchmark datasets).
+**Metric — mAP** (mean average precision): area under the precision–recall curve per class, averaged over classes. PASCAL VOC uses IoU ≥ 0.5; COCO averages over IoU thresholds 0.5 to 0.95.
 
 ### Segmentation — the U-Net idea
-Segmentation needs a prediction for **every pixel**, so the network must go down to a compact representation (to understand *what*) and back up to full resolution (to say exactly *where*).
-
-**U-Net** (Ronneberger et al., 2015, for biomedical images):
-1. **Encoder (contracting path)**: conv blocks + downsampling — spatial size shrinks, channels grow (like a classifier backbone).
-2. **Decoder (expanding path)**: **upsampling** (increasing the resolution) with transposed convolutions (learned upsampling layers — roughly a convolution run in reverse) back to the input resolution.
-3. **Skip connections**: at each level, the encoder's feature map is **concatenated** onto the decoder's — giving back the fine spatial detail lost during downsampling.
-4. A final 1×1 conv outputs class scores per pixel; train with per-pixel cross-entropy (often plus **Dice loss** — a loss based on how much the predicted and true masks overlap, which copes well when the object covers only a few pixels — for imbalanced masks).
+Per-pixel prediction needs to go down to a compact representation (*what*) and back up to full resolution (*where*). **U-Net** (Ronneberger et al., 2015, biomedical):
+1. **Encoder (contracting path)**: conv blocks + downsampling — space shrinks, channels grow.
+2. **Decoder (expanding path)**: **upsampling** with transposed convolutions (learned upsampling, roughly conv in reverse) back to input resolution.
+3. **Skip connections**: each encoder feature map is **concatenated** onto the decoder's at the same level, restoring fine spatial detail lost in downsampling.
+4. Final 1×1 conv gives per-pixel class scores; train with per-pixel cross-entropy, often plus **Dice loss** (overlap-based; copes with objects covering few pixels).
 
 ```mermaid
 flowchart LR
@@ -628,60 +552,49 @@ flowchart LR
     E1 -.->|"skip (concat)"| D1
 ```
 
-It's shaped like a "U", hence the name. U-Net-style networks also sit at the core of image-generation **diffusion models** (generators that create an image by starting from pure noise and removing it step by step) (e.g. Stable Diffusion v1/v2 use a U-Net denoiser).
+U-Nets also power image-generation **diffusion models** (generate by starting from noise and removing it step by step), e.g. Stable Diffusion v1/v2's denoiser.
 
 ### Real-world examples
-- **Classification**: Google Photos search, product recognition in retail apps, content moderation.
-- **Detection**: self-driving perception (cars, pedestrians, signs), warehouse robots, retail shelf auditing, face detection in phone cameras.
-- **Segmentation**: medical imaging (tumour and organ outlines), background removal in video calls, satellite land-use maps, portrait mode.
+- **Classification**: photo search, retail product recognition, content moderation.
+- **Detection**: self-driving perception, warehouse robots, shelf auditing, phone-camera face detection.
+- **Segmentation**: tumour/organ outlines, video-call background removal, satellite land-use maps, portrait mode.
 
 ### In the interview
-**30-second answer:** "Classification gives one label per image; detection gives boxes plus classes; segmentation gives a label per pixel. Detection uses IoU to match boxes and NMS to remove duplicates; two-stage detectors like Faster R-CNN propose regions then classify them, one-stage detectors like YOLO predict all boxes in one pass over a grid, which makes them real-time. Segmentation uses encoder-decoder networks like U-Net, whose skip connections restore spatial detail. Metrics: accuracy/top-k, mAP at IoU thresholds, and IoU/Dice for masks."
+**30-second answer:** "Classification gives one label per image; detection gives boxes plus classes; segmentation a label per pixel. Detection uses IoU to match boxes and NMS to remove duplicates; two-stage detectors like Faster R-CNN propose regions then classify, one-stage ones like YOLO predict all boxes in one pass over a grid — real-time. Segmentation uses encoder-decoders like U-Net whose skip connections restore spatial detail. Metrics: accuracy/top-k, mAP at IoU thresholds, IoU/Dice for masks."
 
-- *Q: Why is NMS needed?* A: Detectors output many overlapping boxes for the same object; NMS keeps the most confident and removes overlaps above an IoU threshold.
-- *Q: Semantic vs instance segmentation?* A: Semantic labels pixels by class (all people are "person"); instance separates each object (person 1, person 2).
-
-### Self-check
-1. IoU of two identical boxes? Of disjoint boxes? → 1 and 0.
-2. In YOLO, which grid cell is responsible for an object? → The cell containing the object's centre.
-3. What do U-Net's skip connections carry? → High-resolution encoder feature maps, concatenated onto the decoder to recover spatial detail.
+- *Q: Why is NMS needed?* A: Detectors emit many overlapping boxes per object; NMS keeps the most confident and removes overlaps above an IoU threshold.
+- *Q: In YOLO, which cell owns an object?* A: The cell containing its centre.
 
 ### TL;DR
-Classification → label; detection → boxes (IoU, NMS, YOLO = one pass over a grid, Faster R-CNN = propose then classify); segmentation → per-pixel labels (U-Net = encoder-decoder + skip connections).
+Detection → boxes (IoU, NMS; YOLO = one pass over a grid, Faster R-CNN = propose then classify; mAP). Segmentation → per-pixel labels (U-Net = encoder-decoder + skip connections).
 
 ---
 
 ## 11.8 Putting it together — trade-offs, mistakes, interview
 
 ### When not to use a CNN
-- Tabular data — rows and columns like a spreadsheet (use gradient-boosted trees, the decision-tree ensembles of Chapter 7).
+- Tabular data — use gradient-boosted trees (Chapter 7).
 - Very small image datasets **without** a pretrained model — collect more data or use classical features.
-- When a pretrained ViT/CLIP-style **foundation model** (a large model pretrained on broad data and reused for many tasks; CLIP learned to match images with text captions) with **zero-shot** prompts (describing the classes in words, with no task-specific training examples) already solves the problem.
+- When a pretrained **foundation model** (large, broadly pretrained, reused for many tasks — e.g. a ViT or CLIP-style model; CLIP matches images to text) already solves it **zero-shot** (classes described in words, no task-specific training examples).
 
 ### Common mistakes (whole chapter)
-- Training from scratch when a pretrained backbone is available.
-- Wrong tensor layout or normalisation.
-- Label-changing augmentations.
-- Judging a detector by accuracy instead of mAP.
+Training from scratch when a pretrained backbone exists; wrong tensor layout or normalisation; label-changing augmentations; judging a detector by accuracy instead of mAP.
 
 ### In the interview — big picture
-**30-second answer:** "CNNs slide shared small kernels over the image, giving far fewer parameters and translation equivariance. Stacked 3×3 convs with downsampling build a hierarchy of features and a growing receptive field; a head of global pooling plus a dense layer classifies. ResNet's skip connections enable very deep networks. In practice I'd start from a pretrained backbone, fine-tune with augmentation, and choose the head by task — classification, YOLO-style detection or U-Net-style segmentation."
+**30-second answer:** "CNNs slide shared small kernels over the image — far fewer parameters and translation equivariance. Stacked 3×3 convs with downsampling build a feature hierarchy and a growing receptive field; global pooling plus a dense layer classifies. ResNet's skips enable very deep nets. In practice: start from a pretrained backbone, fine-tune with augmentation, and pick the head by task — classification, YOLO-style detection, or U-Net-style segmentation."
 
-### Self-check
-1. Two properties of convolution that make it suit images? → Weight sharing (few parameters) and local connectivity/translation equivariance.
-2. What does global average pooling replace? → The large flattened dense layers at the end of older CNNs.
-3. What's the first thing to try for a new 5,000-image classification problem? → Fine-tune a pretrained backbone (e.g. ResNet-50 or EfficientNet) with augmentation.
+- *Q: First thing to try for a new 5,000-image classification problem?* A: Fine-tune a pretrained backbone (ResNet-50, EfficientNet) with augmentation.
+- *Q: What does global average pooling replace?* A: The large flattened dense layers at the end of older CNNs.
 
 ---
 
 ## Chapter TL;DR
-- **Convolution**: shared k×k kernels over all input channels; out = ⌊(n + 2p − k)/s⌋ + 1; params = k·k·C_in·C_out + C_out. Stride downsamples; padding preserves size.
-- **Pooling**: 2×2 max-pool halves H and W, no parameters; global average pooling before the classifier.
-- **Architecture**: conv-BN-ReLU blocks, shrinking space and growing channels, then GAP + dense. Stacked 3×3 convs grow the receptive field cheaply.
-- **History**: LeNet → AlexNet (ReLU, dropout, GPU) → VGG → Inception → **ResNet (skip connections)** → MobileNet/EfficientNet → ViT.
-- **Our CNN**: 99.1% on 8×8 digits with fewer parameters than an MLP; far more robust to shifts, especially with augmentation.
-- **Transfer learning**: pretrained backbone + new head; freeze, then fine-tune with a small LR; biggest gains with few labels.
+- **Convolution**: shared k×k kernels over all input channels; out = ⌊(n + 2p − k)/s⌋ + 1; params = k·k·C_in·C_out + C_out.
+- **Pooling**: 2×2 max-pool halves H and W, no parameters; GAP before the classifier.
+- **Architecture**: conv-BN-ReLU blocks, shrinking space and growing channels, then GAP + dense; stacked 3×3 convs grow the RF cheaply.
+- **History**: LeNet → AlexNet → VGG → Inception → **ResNet (skip connections)** → MobileNet/EfficientNet → ViT.
+- **Transfer learning**: pretrained backbone + new head; freeze, then fine-tune with a small LR.
 - **Augmentation**: label-preserving random transforms, training only.
-- **Detection**: IoU, NMS, YOLO (one pass, grid), Faster R-CNN (two-stage), mAP. **Segmentation**: U-Net (encoder-decoder + skip connections).
+- **Detection**: IoU, NMS, YOLO, Faster R-CNN, mAP. **Segmentation**: U-Net.
 
-Next: Chapter 12 moves from grids of pixels to sequences — RNNs, LSTMs and attention.
+Next: Chapter 12 — sequences: RNNs, LSTMs and attention.

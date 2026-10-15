@@ -1,36 +1,25 @@
 # Chapter 9 — `this`, Prototypes and Classes
 
-JavaScript's object model surprises people who arrive from Java, C# or Python. There are no "real" classes underneath: objects are linked to other objects through a hidden **prototype** link, and a method finds its object at call time through the keyword **`this`**. The `class` keyword (ES2015) is a cleaner syntax over that same machinery, plus a few genuinely new features (private `#fields`, static blocks). This chapter explains the machinery first, then the syntax, so that nothing about classes feels like magic.
+JavaScript's object model surprises people from Java, C# or Python. There are no "real" classes underneath: objects link to other objects through a hidden **prototype** link, and a method finds its object at call time through **`this`**. `class` (ES2015) is cleaner syntax over that machinery plus a few genuinely new features (private `#fields`, static blocks). This chapter explains the machinery first, then the syntax.
 
-**What you'll learn**
+**What you'll learn:** the four `this` rules (plus arrows) and their precedence; `call`/`apply`/`bind` (choosing `this`, borrowing, partial application); the prototype chain (lookup, shadowing, `Object.create`, `Object.create(null)`); constructor functions and what `new` does (re-implemented); classes (fields, `#private`, static members, getters/setters, static blocks, brand checks); `extends`/`super`, subclassing built-ins, initialization order; `instanceof`/`isPrototypeOf` and how they're fooled; mixins and composition vs inheritance.
 
-1. What `this` is and the four rules (plus arrow functions) that decide its value — and their order of precedence.
-2. `call`, `apply` and `bind`: choosing `this` yourself, borrowing methods, partial application.
-3. The prototype chain: how property lookup, shadowing, `Object.create` and `Object.create(null)` work.
-4. Constructor functions and exactly what `new` does (we re-implement it).
-5. Classes: fields, private `#` members, static members, getters/setters, static initialization blocks, brand checks.
-6. Inheritance with `extends` and `super`, subclassing built-ins like `Array` and `Error`, initialization order.
-7. `instanceof`, `isPrototypeOf` and why they can be fooled.
-8. Mixins, and when to prefer composition over inheritance.
+**Before you start:** functions, arrows, closures ([Chapter 4](../04-functions-scope-and-closures/README.md)); object literals, descriptors, getters/setters ([Chapter 5](../05-objects-math-date-and-json/README.md)); symbols like `Symbol.iterator` ([Chapter 8](../08-maps-sets-iterators-and-generators/README.md)).
 
-**Before you start.** This chapter assumes you know functions, arrow functions and closures ([Chapter 4](../04-functions-scope-and-closures/README.md)) and object literals, property descriptors and getters/setters ([Chapter 5](../05-objects-math-date-and-json/README.md)). Symbols such as `Symbol.iterator` are covered in [Chapter 8](../08-maps-sets-iterators-and-generators/README.md).
-
-All runnable code is in [`code/`](code/). Outputs below are real, produced with Node 24. Every file is an ES module (`.mjs` — a file using `import`/`export`, [Chapter 10](../10-modules-and-tooling/README.md)), and **modules always run in strict mode** — this matters for `this`, as you will see.
+Code is in [`code/`](code/); outputs are real Node 24 output. Every file is an ES module (`.mjs`, [Chapter 10](../10-modules-and-tooling/README.md)), and **modules always run in strict mode** — which matters for `this`.
 
 ---
 
 ## 9.1 `this` — the call-time context
 
 ### What it is
-`this` is a special, automatically defined identifier inside every non-arrow function. Its value is **not** fixed when you write the function; it is decided **each time the function is called**, by *how* it is called. Think of `this` as the word "me" in a sentence: its meaning depends on who is speaking right now, not on who wrote the sentence.
-
-A **call site** is the place in the code where a function is invoked (for example `user.greet()`). To find `this`, you look at the call site — never at where the function was defined.
+`this` is an automatically defined identifier in every non-arrow function whose value is decided **each time the function is called**, by *how* it's called — like the word "me", whose meaning depends on who's speaking. The **call site** is where the function is invoked (`user.greet()`); look there, never at the definition.
 
 ### Why it matters
-One function can serve many objects. `Array.prototype.push` is a single function shared by every array in your program; it works because, on each call, `this` is the particular array you called it on. The cost of that flexibility is the most common JavaScript bug of all: the **lost `this`**, where a method is passed somewhere as a plain function and suddenly `this` is `undefined`.
+One function can serve many objects: `Array.prototype.push` is shared by every array, working because `this` is the array it's called on. The cost: the most common JS bug, the **lost `this`** — a method passed around as a plain function suddenly has `this === undefined`.
 
 ### How it works — the four rules
-For a normal (non-arrow) function, check the call site against these rules. If several apply, the one higher in this list wins:
+For a normal (non-arrow) function, the highest matching rule wins:
 
 | # | Rule | Call-site shape | `this` is… |
 |---|---|---|---|
@@ -40,7 +29,7 @@ For a normal (non-arrow) function, check the call site against these rules. If s
 | 1 | **Default binding** | plain `fn()` | `undefined` in strict mode; the global object (`globalThis`) in sloppy mode |
 | — | **Arrow function** | any | no own `this`; it uses the `this` of the enclosing scope, *where it was written* (lexical `this` — "lexical" means decided by where code sits in the source) |
 
-Precedence, from strongest to weakest: **`new` > explicit > implicit > default**. Arrow functions sit outside the list — nothing (not even `call` or `new`) can change their `this`, and they cannot be used with `new` at all.
+Precedence: **`new` > explicit > implicit > default**. Arrows are outside the list — nothing (not `call`, not `new`) changes their `this`, and they can't be used with `new`.
 
 ```mermaid
 flowchart TD
@@ -55,10 +44,7 @@ flowchart TD
     H -- no --> J["this = undefined (strict) or globalThis (sloppy)"]
 ```
 
-Two terms used above:
-
-- **Strict mode** — an opt-in stricter variant of JavaScript (`'use strict'`, or automatically inside modules and class bodies). Among other things it stops a plain call from silently getting the global object as `this`. See [Chapter 1](../01-introduction-and-setup/README.md).
-- **`globalThis`** — the standard name for the global object in every environment (`window` in browsers, `global` in Node).
+(**Strict mode** — `'use strict'`, automatic in modules and class bodies — stops plain calls from getting the global object; [Chapter 1](../01-introduction-and-setup/README.md). **`globalThis`** — the global object everywhere: `window` in browsers, `global` in Node.)
 
 [`code/01_this_rules.mjs`](code/01_this_rules.mjs):
 
@@ -135,14 +121,12 @@ thisArg   : 3
 sloppy default this is globalThis: true
 ```
 
-What to notice:
-
-- `detached()` prints `undefined` even though the function "came from" `alice`. Functions do not belong to objects; `alice.whoAmI` is just a property holding a reference to a function.
-- Inside `timer.regular`, the inner `function` callback is called plainly by `map`, so rule 1 applies and `this` is `undefined`. The arrow callback in `timer.arrow` has no own `this` and sees `arrow()`'s `this`, which is `timer`. This is *the* reason arrow functions were added.
-- At the top level of an ES module, `this` is `undefined`. At the top level of a classic browser `<script>` it is `window`, and at the top level of a CommonJS file (Node's older module format using `require`) in Node it is `module.exports` (see [Chapter 10](../10-modules-and-tooling/README.md)).
+- `detached()` gives `undefined`: functions don't belong to objects; `alice.whoAmI` is just a property referencing a function.
+- In `timer.regular`, `map` calls the inner `function` plainly (rule 1 → `undefined`); the arrow in `timer.arrow` sees `arrow()`'s `this` (`timer`) — *the* reason arrows were added.
+- Top-level `this`: `undefined` in an ES module, `window` in a classic browser `<script>`, `module.exports` in a Node CommonJS file (older `require` format — [Chapter 10](../10-modules-and-tooling/README.md)).
 
 ### `this` in event listeners
-In the browser, when a regular function is registered with `addEventListener`, the DOM (the browser's object model of the page) calls it with `this` set to the element the listener is attached to (`event.currentTarget`). An arrow listener keeps the outer `this` instead. A class method passed directly as a listener therefore gets the *element* as `this`, not the class instance (the object created from the class with `new`). [`code/08_this_in_dom.mjs`](code/08_this_in_dom.mjs) runs this in jsdom (a browser-like DOM for Node):
+A regular function registered with `addEventListener` is called with `this` = the element the listener is attached to (`event.currentTarget`); an arrow keeps the outer `this`. So a class method passed directly gets the *element*, not the class **instance** (object created with `new`). [`code/08_this_in_dom.mjs`](code/08_this_in_dom.mjs) runs this in jsdom (a browser-like DOM for Node):
 
 ```js
 class Form {
@@ -167,36 +151,36 @@ wrapped in arrow      : SignupForm
 bound                 : SignupForm
 ```
 
-The third line is a nasty silent bug: `this.name` did not throw, it read the button's own (empty) `name` attribute. Events are covered fully in [Chapter 13](../13-dom-and-events/README.md).
+The third line is a silent bug: `this.name` read the button's empty `name` attribute instead of throwing. Events: [Chapter 13](../13-dom-and-events/README.md).
 
 ### Common mistakes
-- **Passing a method as a callback**: `setTimeout(user.greet, 100)`, `promise.then(obj.handle)` (a promise is an object for a result that arrives later), `arr.map(obj.transform)`. Each of these calls the function plainly. Fix with an arrow wrapper (`() => user.greet()`), `bind`, or an arrow-function class field (§9.5).
-- **Arrow functions as object methods**: `const o = { name: 'x', hi: () => this.name }` — the arrow's `this` is the *surrounding* scope's (module: `undefined`), not `o`. Use method shorthand `hi() { … }`.
-- **Assuming `this` is the function itself.** It never is; if you need the function, give it a name.
-- **Nested regular functions inside methods** lose `this` (the `timer.regular` case). Old code wrote `const self = this;` to work around it; today, use an arrow.
+- **Passing a method as a callback** — `setTimeout(user.greet, 100)`, `promise.then(obj.handle)`, `arr.map(obj.transform)` call it plainly. Fix: arrow wrapper (`() => user.greet()`), `bind`, or an arrow-function class field (§9.5).
+- **Arrow functions as object methods** — `{ name: 'x', hi: () => this.name }` uses the surrounding scope's `this` (module: `undefined`). Use `hi() { … }`.
+- **Assuming `this` is the function itself** — never; name the function if you need it.
+- **Nested regular functions in methods** lose `this` (`timer.regular`). Old fix `const self = this;`; today, an arrow.
 
 ### In the interview
-**30-second answer:** "`this` is decided at call time by the call site. In order of precedence: `new` makes it the new object; `call`/`apply`/`bind` set it explicitly; calling as `obj.method()` makes it `obj`; a plain call gives `undefined` in strict mode or the global object in sloppy mode. Arrow functions don't have their own `this` — they capture it lexically from where they're written, and nothing can rebind it."
+**30-second answer:** "`this` is decided at call time by the call site. By precedence: `new` makes it the new object; `call`/`apply`/`bind` set it explicitly; `obj.method()` makes it `obj`; a plain call gives `undefined` in strict mode or the global object in sloppy mode. Arrows have no own `this` — they capture it lexically and nothing can rebind it."
 
-- *Q: What does `const f = obj.m; f()` log for `this`?* A: `undefined` in strict code (global object in sloppy code) — the implicit binding is lost because the call site is plain.
-- *Q: Can you `new` an arrow function?* A: No — it throws `TypeError: … is not a constructor`. Arrows have no `prototype` and no own `this`.
-- *Q: Does `bind` beat `new`?* A: No. `new BoundFn()` still creates a fresh object; the bound `this` is ignored (bound arguments are kept).
+- *Q: `const f = obj.m; f()` — `this`?* A: `undefined` in strict code (global object in sloppy) — implicit binding lost.
+- *Q: `new` an arrow?* A: `TypeError: … is not a constructor`; arrows have no `prototype` and no own `this`.
+- *Q: Does `bind` beat `new`?* A: No — `new BoundFn()` creates a fresh object; the bound `this` is ignored (bound arguments kept).
 
 ### Self-check
-1. `const o = { v: 1, f() { return () => this.v; } }; o.f()()` returns? → `1` — the arrow captures `f`'s `this`, which is `o`.
-2. What is `this` at the top level of an ES module? → `undefined`.
-3. `[1,2].forEach(function(){ console.log(this) }, {a:1})` logs? → `{ a: 1 }` twice — `forEach` accepts a `thisArg`.
-4. Why does `setTimeout(obj.m, 0)` lose `this`? → `setTimeout` receives only the function and calls it plainly.
+1. `const o = { v: 1, f() { return () => this.v; } }; o.f()()`? → `1`.
+2. `this` at the top level of an ES module? → `undefined`.
+3. `[1,2].forEach(function(){ console.log(this) }, {a:1})`? → `{ a: 1 }` twice (`thisArg`).
+4. Why does `setTimeout(obj.m, 0)` lose `this`? → It receives only the function and calls it plainly.
 
 ### TL;DR
-Look at the call site: `new` > `call/apply/bind` > `obj.fn()` > plain call (`undefined` in strict code). Arrows borrow `this` from where they were written.
+Call site decides: `new` > `call/apply/bind` > `obj.fn()` > plain call (`undefined` in strict). Arrows borrow `this` from where they're written.
 
 ---
 
 ## 9.2 `call`, `apply` and `bind`
 
 ### What it is
-Every function inherits three methods from `Function.prototype` that let you set `this` explicitly:
+Every function inherits from `Function.prototype` three methods to set `this` explicitly:
 
 | Method | Signature | Runs now? | Returns |
 |---|---|---|---|
@@ -207,9 +191,9 @@ Every function inherits three methods from `Function.prototype` that let you set
 Memory trick: **a**pply takes an **a**rray, **c**all takes **c**ommas.
 
 ### Why it matters
-- **Method borrowing** — reuse a method on an object that doesn't have it (array methods on array-like objects — objects with numbered keys and a `length` but no array methods — for example `arguments` or a DOM `NodeList`).
-- **Fixing lost `this`** — `bind` produces a function you can safely hand to a callback API.
-- **Partial application** — `bind` can pre-fill leading arguments, producing a more specific function (a form of currying — turning a many-argument function into a chain of one-argument functions; see [Chapter 4](../04-functions-scope-and-closures/README.md)).
+- **Method borrowing** — use a method on an object lacking it, e.g. array methods on **array-likes** (numbered keys + `length`, no array methods: `arguments`, DOM `NodeList`).
+- **Fixing lost `this`** — `bind` makes a function safe to hand to callback APIs.
+- **Partial application** — `bind` pre-fills leading arguments (related to currying — turning a many-argument function into a chain of one-argument functions; [Chapter 4](../04-functions-scope-and-closures/README.md)).
 
 [`code/02_call_apply_bind.mjs`](code/02_call_apply_bind.mjs):
 
@@ -262,11 +246,11 @@ clicked Save
 ```
 
 ### How it works
-1. `call`/`apply` invoke the function immediately with the given `this`.
-2. `bind` returns an **exotic bound function object** ("exotic" is the spec's word for an object with special built-in behaviour) that remembers the target function, the `this` value and any pre-filled arguments. Calling it calls the target with those values.
-3. Binding again has no effect on `this` — the inner binding already won (`Yo, First!`). Extra arguments from later binds are appended, though.
-4. A bound function's `name` is `"bound " + original name`; its `length` drops by the number of pre-filled arguments.
-5. Passing `null` or `undefined` as `thisArg` in strict code gives `this === null/undefined`; in sloppy code it becomes `globalThis`.
+1. `call`/`apply` invoke immediately with the given `this`.
+2. `bind` returns an **exotic bound function object** (spec term for built-in special behaviour) remembering the target, `this` and pre-filled arguments.
+3. Re-binding can't change `this` (`Yo, First!`), though extra arguments are appended.
+4. A bound function's `name` is `"bound " + name`; `length` drops by the pre-filled count.
+5. `null`/`undefined` as `thisArg`: kept as-is in strict code; `globalThis` in sloppy code.
 
 ### Trade-offs
 | Need | Best tool today |
@@ -277,27 +261,23 @@ clicked Save
 | Borrow a method for an array-like | `Array.from(arrayLike)` then use normal methods, or `Array.prototype.x.call` |
 
 ### Common mistakes
-- Calling `bind` inside a render loop (code that redraws the screen repeatedly) or on every event creates a new function each time — a problem when identity matters (for example removing a listener: `removeEventListener('click', fn.bind(this))` removes nothing, because it's a *different* function).
-- Expecting `bind` to change an arrow function's `this` — it can't.
+- `bind` in a render loop (code redrawing the screen repeatedly) or per event creates a new function each time — breaks identity: `removeEventListener('click', fn.bind(this))` removes nothing (a *different* function).
+- Expecting `bind` to change an arrow's `this`.
 
 ### Self-check
-1. Difference between `f.call(o, 1, 2)` and `f.apply(o, [1, 2])`? → None in effect; only how arguments are passed.
-2. What does `f.bind(o)` return? → A new function; it doesn't call `f`.
-3. `f.bind(a).bind(b)()` — what is `this`? → `a`.
+1. `f.call(o, 1, 2)` vs `f.apply(o, [1, 2])`? → Same effect; argument passing differs.
+2. `f.bind(o)` returns? → A new function; doesn't call `f`.
+3. `f.bind(a).bind(b)()` — `this`? → `a`.
 
 ### TL;DR
-`call` and `apply` run now with a chosen `this` (commas vs array). `bind` returns a new function with `this` locked forever. Prefer spread and arrows where they read better.
+`call`/`apply` run now with a chosen `this` (commas vs array); `bind` returns a function with `this` locked forever. Prefer spread and arrows where clearer.
 
 ---
 
 ## 9.3 Prototypes and the prototype chain
 
 ### What it is
-Every JavaScript object has an internal slot called **`[[Prototype]]`** that points either to another object or to `null`. When you read a property that the object doesn't have itself, the engine follows that link and looks in the prototype, then the prototype's prototype, and so on until it finds the property or reaches `null`. This linked list of objects (each one pointing to the next) is the **prototype chain**, and it is JavaScript's inheritance mechanism (the way one object gets behaviour from another): **delegation**, not copying.
-
-Analogy: asking a question at a help desk. If the clerk doesn't know, they ask their supervisor; the supervisor asks the manager; if nobody up the line knows, the answer is "undefined".
-
-Key vocabulary:
+Every object has an internal **`[[Prototype]]`** slot pointing to another object or `null`. Reading a missing property follows that link, then the next, until found or `null` — the **prototype chain**, JavaScript's inheritance mechanism: **delegation**, not copying. (A help desk: the clerk asks the supervisor, who asks the manager; if nobody knows, `undefined`.)
 
 | Term | Meaning |
 |---|---|
@@ -308,10 +288,10 @@ Key vocabulary:
 | **Shadowing** | An own property hides a property of the same name further up the chain. |
 
 ### How it works
-1. **Reading** `obj.x`: look for own property `x`; if absent, repeat on `Object.getPrototypeOf(obj)`; stop at `null` and return `undefined`.
-2. **Writing** `obj.x = v`: normally creates or updates an **own** property on `obj` — the prototype is never modified by assignment. (Two exceptions: if the chain has a *setter* for `x`, the setter runs; if the chain has a *non-writable* `x`, the assignment fails — silently in sloppy mode, `TypeError` in strict mode.)
-3. **Deleting** `delete obj.x` removes only an own property, so an inherited value can "reappear".
-4. **Methods run with `this` = the object you started from**, not the prototype where the method was found. That's why shared methods can work on per-object data.
+1. **Read** `obj.x`: own property, else repeat on the prototype; at `null` return `undefined`.
+2. **Write** `obj.x = v`: creates/updates an **own** property — assignment never modifies the prototype. (Exceptions: a *setter* for `x` up the chain runs; a *non-writable* inherited `x` makes the write fail — silently in sloppy, `TypeError` in strict.)
+3. **Delete** removes only own properties, so an inherited value can "reappear".
+4. **Methods run with `this` = the starting object**, not the prototype where found — so shared methods work on per-object data.
 
 ```mermaid
 flowchart LR
@@ -397,48 +377,47 @@ missing -> undefined
 | `for (k in o)` | ✓ | ✓ (enumerable only) | Why `for…in` is risky for objects with prototypes — see [Chapter 3](../03-control-flow-and-loops/README.md) |
 
 ### Why it matters
-- **Memory**: a thousand arrays share one `push` function.
-- **Built-ins are extendable** (though you shouldn't — see mistakes): every array method lives on `Array.prototype`.
-- **`Object.create(null)`** gives a "pure dictionary" whose keys can't collide with `toString`, `constructor` or `__proto__` — useful when keys come from user input. (Often a `Map` is better still; see [Chapter 8](../08-maps-sets-iterators-and-generators/README.md).)
+- **Memory**: a thousand arrays share one `push`.
+- **Built-ins live on prototypes** (`Array.prototype`) — extendable, though you shouldn't.
+- **`Object.create(null)`** gives a pure dictionary whose keys can't collide with `toString`, `constructor`, `__proto__` — useful for user-supplied keys (a `Map` is often better — [Chapter 8](../08-maps-sets-iterators-and-generators/README.md)).
 
 ### Common mistakes
-- **Modifying built-in prototypes** (`Array.prototype.last = …`) — "monkey-patching". It can clash with future standard methods; this really happened: the planned `Array.prototype.contains` became `includes`, and `flatten` became `flat`, because the old MooTools library (a popular JavaScript library of the late 2000s) had already patched incompatible versions onto millions of websites.
-- **Calling `Object.setPrototypeOf` on hot objects** (objects used very frequently) — engines optimize objects by their shape (an internal record of which properties an object has); changing the prototype after creation de-optimizes property access. MDN explicitly warns about this.
-- **Confusing `Fn.prototype` with `Object.getPrototypeOf(Fn)`** — the first is the prototype *for instances*; the second is `Function.prototype`.
-- **Prototype pollution** — merging untrusted JSON like `{"__proto__": {"isAdmin": true}}` into objects with a naive deep-merge (copying nested properties recursively) can modify `Object.prototype` for the whole program. Use null-prototype objects, `Map`, or libraries that skip `__proto__`/`constructor` keys. (Security is covered in [Chapter 14](../14-browser-apis-and-security/README.md).)
+- **Modifying built-in prototypes** ("monkey-patching", `Array.prototype.last = …`) can clash with future standards — it really happened: planned `Array.prototype.contains` became `includes` and `flatten` became `flat` because the MooTools library (popular in the late 2000s) had patched incompatible versions onto millions of sites.
+- **`Object.setPrototypeOf` on hot objects** (used very frequently) — engines optimise by object **shape** (internal record of an object's properties); changing the prototype later de-optimises access (MDN warns about this).
+- **Confusing `Fn.prototype` with `Object.getPrototypeOf(Fn)`** — the former is for instances; the latter is `Function.prototype`.
+- **Prototype pollution** — naively deep-merging (recursively copying) untrusted JSON like `{"__proto__": {"isAdmin": true}}` can modify `Object.prototype` program-wide. Use null-prototype objects, `Map`, or libraries skipping `__proto__`/`constructor` keys ([Chapter 14](../14-browser-apis-and-security/README.md)).
 
 ### In the interview
-**30-second answer:** "Every object has a hidden `[[Prototype]]` link. When a property isn't found on the object, the engine walks that chain until it finds it or hits `null`. Writing a property creates an own property, shadowing the inherited one. `Object.create(proto)` makes an object with a given prototype, and constructors and classes set it up via `Fn.prototype`. Methods are shared through the chain and run with `this` bound to the original receiver (the object the method was called on)."
+**30-second answer:** "Every object has a hidden `[[Prototype]]` link; a missing property is looked up along that chain until found or `null`. Writing creates an own property, shadowing the inherited one. `Object.create(proto)` sets the prototype; constructors and classes do it via `Fn.prototype`. Methods are shared through the chain and run with `this` bound to the original **receiver** (the object the method was called on)."
 
-- *Q: What's the difference between `__proto__` and `prototype`?* A: `__proto__` (legacy accessor) is an object's own prototype link; `prototype` is a property of functions naming the object that `new` will link instances to.
-- *Q: What's at the end of every chain?* A: `null` (usually right after `Object.prototype`).
-- *Q: How do you make an object with no prototype?* A: `Object.create(null)` or `{ __proto__: null }`.
+- *Q: `__proto__` vs `prototype`?* A: `__proto__` (legacy accessor) is an object's own prototype link; `prototype` is a function property naming what `new` links instances to.
+- *Q: End of every chain?* A: `null` (usually after `Object.prototype`).
+- *Q: Object with no prototype?* A: `Object.create(null)` or `{ __proto__: null }`.
 
 ### Self-check
-1. `const p = { x: 1 }; const c = Object.create(p); c.x = 2; p.x` → `1` — assignment made an own property on `c`.
+1. `const p = { x: 1 }; const c = Object.create(p); c.x = 2; p.x` → `1`.
 2. Does `Object.keys` include inherited properties? → No.
 3. Where does `[].map` live? → `Array.prototype.map`.
-4. What does `Object.getPrototypeOf(Object.prototype)` return? → `null`.
+4. `Object.getPrototypeOf(Object.prototype)`? → `null`.
 
 ### TL;DR
-Objects delegate missing property reads up a chain of `[[Prototype]]` links ending in `null`. Writes stay on the object. Use `Object.create`, `Object.getPrototypeOf`, `Object.hasOwn`; don't patch built-ins.
+Missing reads delegate up `[[Prototype]]` links to `null`; writes stay on the object. Use `Object.create`, `Object.getPrototypeOf`, `Object.hasOwn`; don't patch built-ins.
 
 ---
 
 ## 9.4 Constructor functions and `new`
 
 ### What it is
-Before ES2015, the way to make many similar objects was a **constructor function**: an ordinary function, by convention Capitalized, called with `new`. Per-instance data is assigned to `this`; shared methods are put on `Constructor.prototype`. Classes (§9.5) are built on exactly this pattern, so understanding it explains classes.
+Before ES2015, many similar objects came from a **constructor function**: an ordinary, conventionally Capitalized function called with `new`, assigning per-instance data to `this`, with shared methods on `Constructor.prototype`. Classes (§9.5) are built on exactly this.
 
 ### How `new` works
-When you write `new Fn(args)`, the engine:
-
-1. Creates a new empty object.
+`new Fn(args)`:
+1. Creates an empty object.
 2. Sets its `[[Prototype]]` to `Fn.prototype`.
-3. Calls `Fn` with `this` bound to that object and the given arguments.
-4. If `Fn` explicitly returns an **object**, that object is the result; otherwise (no return, or a primitive return) the new object from step 1 is the result.
+3. Calls `Fn` with `this` = that object.
+4. If `Fn` returns an **object**, that's the result; otherwise (no return or a primitive) the new object is.
 
-Every `Fn.prototype` starts with one property, `constructor`, pointing back to `Fn` — which is how `instance.constructor` finds its maker.
+Every `Fn.prototype` starts with `constructor` pointing back to `Fn` — how `instance.constructor` finds its maker.
 
 [`code/04_constructor_functions.mjs`](code/04_constructor_functions.mjs):
 
@@ -509,27 +488,27 @@ new.target  : guarded
 old-style   : Lena: $1050 true true
 ```
 
-**`new.target`** is a meta-property: inside a function called with `new`, it refers to the constructor that `new` was applied to; in a plain call it is `undefined`.
+**`new.target`** is a meta-property: the constructor `new` was applied to, or `undefined` in a plain call.
 
 ### Common mistakes
-- **Defining methods inside the constructor** (`this.deposit = function …`) — every instance gets its own copy. Works, but wastes memory and defeats sharing. Put methods on the prototype (classes do this automatically).
-- **Forgetting `new`** — in sloppy code, `this` becomes the global object and you silently create global variables. In strict code you get a `TypeError`. Classes refuse to be called without `new`.
-- **Replacing `Fn.prototype` and forgetting `constructor`** — after `Savings.prototype = Object.create(...)`, `s.constructor` would report `Account` until repaired.
+- **Methods defined inside the constructor** (`this.deposit = function …`) — a copy per instance, wasting memory. Use the prototype (classes do automatically).
+- **Forgetting `new`** — sloppy code silently creates globals; strict code throws `TypeError`. Classes refuse plain calls.
+- **Replacing `Fn.prototype` without restoring `constructor`** — `s.constructor` would report `Account`.
 
 ### Self-check
-1. Which object becomes `[[Prototype]]` of `new Fn()`? → `Fn.prototype`.
-2. A constructor ends with `return 42;` — what does `new` give you? → The new object (primitives are ignored).
-3. A constructor ends with `return { a: 1 };` → `{ a: 1 }`, and it is **not** linked to `Fn.prototype`.
+1. `[[Prototype]]` of `new Fn()`? → `Fn.prototype`.
+2. Constructor ends `return 42;`? → The new object (primitives ignored).
+3. Ends `return { a: 1 };`? → `{ a: 1 }`, **not** linked to `Fn.prototype`.
 
 ### TL;DR
-`new` = create object → link to `Fn.prototype` → run `Fn` with that `this` → return it (unless `Fn` returns another object). Shared methods go on `Fn.prototype`.
+`new` = create → link to `Fn.prototype` → run `Fn` with that `this` → return it (unless `Fn` returns another object). Shared methods on `Fn.prototype`.
 
 ---
 
 ## 9.5 Classes
 
 ### What it is
-A **class** is a template for creating objects. In JavaScript, `class` declares a special kind of function (the constructor) and fills its `prototype` with methods — the same arrangement as §9.4 — but with shorter syntax, safer defaults, and features that are impossible with plain functions: truly private members, static blocks and `super`. People often call classes "syntactic sugar" (nicer syntax for something you could already write another way), and for methods and inheritance that is mostly right; for private fields it isn't.
+A **class** is a template for objects. `class` declares a special constructor function and fills its `prototype` with methods — §9.4's arrangement — with shorter syntax, safer defaults, and features impossible with plain functions: truly private members, static blocks, `super`. "Syntactic sugar" (nicer syntax for something already possible) is mostly right for methods and inheritance, not for private fields.
 
 ### Class features at a glance
 
@@ -547,11 +526,10 @@ A **class** is a template for creating objects. In JavaScript, `class` declares 
 | Static initialization block | `static { … }` | runs once at definition time | ES2022 |
 | Private "brand check" | `#x in obj` | — | ES2022 |
 
-Terms:
-- **Field** — a property declared in the class body and created automatically on every instance (or on the class, if `static`). Its initializer runs once per instance, with `this` = the instance.
-- **Private member** — a name starting with `#`. It can be used only by code *lexically inside* the class body. It's not a property: it doesn't appear in `Object.keys`, `JSON.stringify`, `for…in`, or proxies (`Proxy` objects that intercept property access), and accessing it from outside is a **syntax error** at parse time (when the engine first reads the code, before running it).
-- **Accessor** — a getter/setter pair that looks like a property from the outside but runs code (defined in [Chapter 5](../05-objects-math-date-and-json/README.md)).
-- **Static member** — belongs to the class itself, not instances: factory methods (methods that build and return new instances, e.g. `Temperature.fromFahrenheit`), counters, constants, caches.
+- **Field** — declared in the body, created on every instance (or the class, if `static`); its initializer runs per instance with `this` = the instance.
+- **Private member** — `#name`, usable only by code *lexically inside* the class body. Not a property: absent from `Object.keys`, `JSON.stringify`, `for…in`, proxies (`Proxy` objects intercepting property access); outside access is a **syntax error** at parse time (before the code runs).
+- **Accessor** — getter/setter pair that looks like a property but runs code ([Chapter 5](../05-objects-math-date-and-json/README.md)).
+- **Static member** — belongs to the class: factory methods (build and return instances, e.g. `Temperature.fromFahrenheit`), counters, constants, caches.
 
 [`code/05_classes.mjs`](code/05_classes.mjs):
 
@@ -612,40 +590,26 @@ own keys   : [ 'unit' ] (private fields are invisible)
 validation : RangeError below absolute zero: -300
 ```
 
-Why does `static` print `1`? The static block created `freezing` (counter 1) and then reset the counter to 0; `new Temperature(25)` made it 1. JavaScript evaluates arguments left to right, so `Temperature.instances` was read (1) *before* `fromFahrenheit(-40)` ran and bumped it to 2. Order of evaluation matters whenever expressions have side effects (changes beyond producing a value, like bumping a counter).
+Why `static` prints `1`: the static block created `freezing` then reset the counter; `new Temperature(25)` made it 1; arguments evaluate left to right, so `instances` was read (1) *before* `fromFahrenheit(-40)` bumped it to 2 — evaluation order matters with **side effects** (changes beyond producing a value).
 
 ### Facts about classes that trip people up
 The same file continues:
 
 ```js
-console.log('typeof class        :', typeof Temperature);
-console.log('methods on prototype:', Object.getOwnPropertyNames(Temperature.prototype));
-console.log('methods enumerable? :', Object.keys(Temperature.prototype).length > 0);
-try { Temperature(1); } catch (e) { console.log('call without new    :', e.message); }
-
-try { new Later(); } catch (e) { console.log('TDZ                 :', e.name, '-', e.message); }
-class Later {}
-
+// 05_classes.mjs, second part (abridged — each output line labels its check)
 class Clicker {
   count = 0;
   method() { return ++this.count; }
   arrow = () => ++this.count;   // one function per instance, this captured forever
 }
-const c = new Clicker();
-const { method, arrow } = c;
+const { method, arrow } = new Clicker();
 try { method(); } catch (e) { console.log('detached method     :', e.message); }
 console.log('detached arrow      :', arrow(), arrow());
-console.log('arrow on prototype? :', 'arrow' in Clicker.prototype, '| own?', Object.hasOwn(c, 'arrow'));
-
-const key = 'shout';
-const Loud = class { [key]() { return 'HEY'; } static [Symbol.hasInstance](x) { return x === 42; } };
-console.log('computed name       :', new Loud().shout(), '| 42 instanceof Loud:', 42 instanceof Loud);
-
-const desc = Object.getOwnPropertyDescriptor(Temperature.prototype, 'fahrenheit');
-console.log('accessor descriptor :', typeof desc.get, typeof desc.set, 'enumerable:', desc.enumerable);
+// ... also: typeof, prototype method names, calling without new, use before the class line (TDZ),
+//     a computed method name + static [Symbol.hasInstance], and the getter's descriptor
 ```
 
-Output:
+Output (full run):
 ```
 typeof class        : function
 methods on prototype: [ 'constructor', 'fahrenheit', 'celsius', 'toString' ]
@@ -671,52 +635,49 @@ accessor descriptor : function function enumerable: false
 | `static [Symbol.hasInstance]` customizes `instanceof` | Rarely needed; shown only so you recognize it |
 
 ### Getters, setters and private fields together
-The `Temperature` class shows the standard pattern for **encapsulation** (hiding internal state and exposing a controlled interface): store the real value in a private field, expose a getter, and validate in the setter or the constructor. `celsius` has a getter but no setter, so it's read-only from outside — assigning `t.celsius = 5` is silently ignored in sloppy code and throws `TypeError` in strict code.
-
-Before ES2022, "private" meant a naming convention (`this._celsius`) or a closure/`WeakMap` trick. The convention is still common in older code — but `_x` is fully public.
+`Temperature` shows **encapsulation** (hide internal state, expose a controlled interface): real value in a private field, a getter to expose it, validation in setter/constructor. `celsius` has no setter, so it's read-only — `t.celsius = 5` is silently ignored in sloppy code, `TypeError` in strict. Pre-ES2022 "private" meant `this._celsius` (convention, fully public) or closure/`WeakMap` tricks.
 
 ### Static initialization blocks
-`static { … }` runs once, when the class definition is evaluated, with `this` = the class. Use it for setup that needs statements (loops, `try/catch`, several related statics) or access to private statics — things a single `static x = expr` can't express. A class may have several; they run in order with static field initializers.
+`static { … }` runs once when the class is evaluated, with `this` = the class — for setup needing statements (loops, `try/catch`, several related statics) or private statics. Several blocks run in order with static field initializers.
 
 ### When not to use a class
-- For a single object (configuration, a namespace of functions), an object literal or a module ([Chapter 10](../10-modules-and-tooling/README.md)) is simpler.
-- For a function that just transforms data, a plain function is simpler and easier to test.
-- React function components (UI pieces written as plain functions in the React library) replaced class components for new code (see the React handbook).
+- A single object (config, a namespace of functions) → object literal or module ([Chapter 10](../10-modules-and-tooling/README.md)).
+- A data-transforming function → a plain function.
+- React function components replaced class components for new code (see the React handbook).
 
 ### Common mistakes
-- Using `this.x` in a field initializer that depends on a *later* field — fields initialize top to bottom.
-- Expecting `#private` fields to survive `structuredClone`, `JSON.stringify`, or `{...spread}` — none of them copy private fields.
-- Using `Object.keys(instance)` to "see" private data in debugging — use the DevTools/Node inspector (the built-in debuggers that let you pause code and look at values), which can display private fields.
-- Writing `class A { method = function () {} }` thinking it's a method — it's a per-instance field.
+- A field initializer using a *later* field — fields initialize top to bottom.
+- Expecting `#private` fields to survive `structuredClone`, `JSON.stringify` or `{...spread}` — none copy them.
+- `Object.keys(instance)` to inspect private data — use the DevTools/Node inspector (debuggers that pause code and show values), which displays private fields.
+- `class A { method = function () {} }` is a per-instance field, not a method.
 
 ### In the interview
-**30-second answer:** "A JavaScript class is a constructor function plus a prototype with its methods, created with nicer syntax. It's strict, must be called with `new`, its methods are non-enumerable, and it's in the TDZ until defined. ES2022 added public and private fields, private methods with `#`, static blocks and `#x in obj` checks. Private fields are enforced by the language, unlike the old `_underscore` convention."
+**30-second answer:** "A class is a constructor function plus a prototype with its methods, with nicer syntax. It's strict, `new`-only, has non-enumerable methods, and is in the TDZ until defined. ES2022 added public and private fields, `#` private methods, static blocks and `#x in obj` checks. Private fields are enforced by the language, unlike the `_underscore` convention."
 
-- *Q: Are classes hoisted?* A: The binding is hoisted but uninitialized (TDZ), so using it early throws `ReferenceError`.
-- *Q: Method vs arrow field — which for event handlers?* A: An arrow field keeps `this` bound without `bind`, at the cost of one function per instance and no `super` access; a method is shared on the prototype.
-- *Q: How private is `#x` really?* A: Truly inaccessible from outside the class body; not reflected by any object API. Only code in the class body (including static methods handling other instances) can read it.
+- *Q: Are classes hoisted?* A: Hoisted but uninitialized (TDZ) → `ReferenceError` if used early.
+- *Q: Method vs arrow field for event handlers?* A: Arrow field keeps `this` without `bind` but costs one function per instance and no `super`; a method is shared on the prototype.
+- *Q: How private is `#x`?* A: Inaccessible outside the class body, invisible to every object API; class-body code (incl. static methods handling other instances) can read it.
 
 ### Self-check
-1. Where does a class method live? → On `Class.prototype`.
-2. Where does a public field live? → On each instance, as an own enumerable property.
+1. Where does a class method live? → `Class.prototype`.
+2. A public field? → Each instance, own enumerable property.
 3. `class A { #x = 1; static has(o) { return #x in o; } } A.has({})` → `false`.
-4. What does `typeof class {}` return? → `'function'`.
+4. `typeof class {}`? → `'function'`.
 
 ### TL;DR
-`class` = constructor + prototype methods with safer defaults (strict, `new`-only, non-enumerable methods). ES2022 adds fields, `#private`, `static {}` and brand checks. Use getters/setters with private fields for encapsulation.
+`class` = constructor + prototype methods with safer defaults (strict, `new`-only, non-enumerable methods). ES2022: fields, `#private`, `static {}`, brand checks. Getters/setters over private fields for encapsulation.
 
 ---
 
 ## 9.6 Inheritance with `extends` and `super`
 
 ### What it is
-`class Child extends Parent` makes `Child` a specialized version of `Parent`: instances of `Child` get `Parent`'s methods through the prototype chain, and `Child` can add or **override** (replace) methods. `super` is how the child reaches the parent: `super(...)` calls the parent's constructor, and `super.method()` calls the parent's version of a method.
+`class Child extends Parent` makes a specialized `Parent`: instances inherit `Parent`'s methods via the prototype chain, and `Child` can add or **override** (replace) them. `super(...)` calls the parent constructor; `super.method()` the parent's version of a method.
 
 ### How it works
-`extends` links **two** prototype chains:
-
-1. `Child.prototype.[[Prototype]] = Parent.prototype` — instances inherit instance methods.
-2. `Child.[[Prototype]] = Parent` — the class itself inherits static methods.
+`extends` links **two** chains:
+1. `Child.prototype.[[Prototype]] = Parent.prototype` — instance methods.
+2. `Child.[[Prototype]] = Parent` — static methods.
 
 ```mermaid
 classDiagram
@@ -739,10 +700,10 @@ classDiagram
     Shape <|-- Square
 ```
 
-Rules for a derived constructor:
-- It **must call `super(...)` before using `this`** — until then, the object doesn't exist (in a derived class, the *parent* constructor creates the object). Using `this` first throws `ReferenceError`.
-- If you don't write a constructor, the default one is `constructor(...args) { super(...args); }`.
-- **Initialization order**: `super()` runs the parent's field initializers and constructor; only then are the child's fields initialized; then the rest of the child's constructor body runs.
+Derived-constructor rules:
+- **Call `super(...)` before using `this`** — in a derived class the *parent* constructor creates the object; using `this` first throws `ReferenceError`.
+- No constructor written → default `constructor(...args) { super(...args); }`.
+- **Initialization order**: `super()` runs parent field initializers and constructor; then child fields; then the rest of the child constructor.
 
 [`code/06_inheritance.mjs`](code/06_inheritance.mjs):
 
@@ -796,11 +757,10 @@ instance chain: true
 static chain  : true -> Circle.create exists: function
 ```
 
-What to notice:
-- **Polymorphism** — `describe()` is written once in `Shape` but calls `this.area()`, which runs the *subclass's* `area`. That's dynamic dispatch (choosing which method to run at call time, based on the actual object) through the prototype chain.
-- **Abstract classes** — JavaScript has no `abstract` keyword. The `new.target === Shape` check and a throwing `area()` imitate one. (TypeScript adds real `abstract` checks at compile time — [Chapter 16](../16-testing-and-typescript/README.md).)
-- `static create` uses `new this(...)`, so `Square.create(3)` builds a `Square` — static methods are inherited and `this` is the class they're called on.
-- A private field (`#side`) is **not** inherited in the sense of being accessible: `Circle` code could not read `Square`'s `#side`, and even a subclass of `Square` couldn't. Private means "this class body only". Use a normal property or a protected-by-convention name ("protected" in other languages means visible to subclasses but not outsiders) if subclasses need it.
+- **Polymorphism** — `Shape.describe()` calls `this.area()`, which runs the *subclass's* `area`: **dynamic dispatch** (method chosen at call time by the actual object) via the prototype chain.
+- **Abstract classes** — no `abstract` keyword; `new.target === Shape` plus a throwing `area()` imitate one (TypeScript adds real compile-time `abstract` — [Chapter 16](../16-testing-and-typescript/README.md)).
+- `static create` uses `new this(...)`, so `Square.create(3)` builds a `Square` — statics are inherited with `this` = the calling class.
+- **Private fields aren't accessible to subclasses** — not `Circle`, not even a `Square` subclass; private = "this class body only". Use a normal or "protected"-by-convention property (protected, in other languages, means subclass-visible only) if subclasses need it.
 
 ### Subclassing built-ins and initialization order
 ```js
@@ -825,11 +785,8 @@ class B extends A { b = console.log('  B field') ?? 2; constructor() { console.l
 console.log('init order:'); new B();
 ```
 
-Output:
+Output (the file prints the three §9.7 `instanceof` lines first):
 ```
-instanceof    : true true true false
-isPrototypeOf : true
-fooled?       : true (instanceof only checks the chain)
 Stack         : 4 4 true true
 Error subclass: true HttpError 404 Not Found
 toStringTag   : [object Queue]
@@ -841,42 +798,40 @@ init order:
   B after super
 ```
 
-(The first three lines come from the `instanceof` section, explained in §9.7.)
-
-- `class … extends Array` gives real arrays: `length` updates automatically, `Array.isArray` is `true`, and methods like `map` return a `Stack` (through the `Symbol.species` mechanism). With old constructor functions, subclassing `Array` properly was impossible.
-- Subclassing `Error` is the standard way to make custom error types — [Chapter 11](../11-errors-and-debugging/README.md) builds a full hierarchy.
-- The init-order output shows why a parent constructor must not call an overridable method that relies on child fields: when `A`'s constructor runs, `B`'s fields don't exist yet.
+- `extends Array` gives real arrays: auto-updating `length`, `Array.isArray` true, `map` returning a `Stack` (via `Symbol.species`) — impossible with old constructor functions.
+- Subclassing `Error` is the standard way to make custom errors ([Chapter 11](../11-errors-and-debugging/README.md)).
+- The init order shows why a parent constructor mustn't call an overridable method relying on child fields — they don't exist yet.
 
 ### `super` in object literals
-`super` also works inside **concise methods** of object literals, referring to the object's prototype: `const child = { __proto__: parent, hi() { return super.hi() + '!'; } }`. It is bound to the object the method was *defined* in (its "home object"), not to `this` — so copying such a method to another object doesn't change what `super` means.
+`super` works in **concise methods** of object literals, referring to the object's prototype: `const child = { __proto__: parent, hi() { return super.hi() + '!'; } }`. It's bound to the **home object** (where the method was *defined*), not `this` — copying the method elsewhere doesn't change `super`.
 
 ### Common mistakes
-- Forgetting `super()` in a derived constructor, or calling it after using `this`.
-- Deep hierarchies (`Animal → Mammal → Dog → ServiceDog → …`) — each level couples you to (makes your code depend on the details of) every level above. See §9.9.
-- Overriding a method and forgetting to call `super.method()` when the parent's behaviour is still needed (cleanup, validation).
-- Calling overridable methods from a parent constructor (child fields aren't initialized yet).
+- Forgetting `super()` or calling it after `this`.
+- Deep hierarchies (`Animal → Mammal → Dog → ServiceDog → …`) couple you to (make you depend on) every level above (§9.9).
+- Overriding without calling `super.method()` when the parent's behaviour (cleanup, validation) is still needed.
+- Calling overridable methods from a parent constructor.
 
 ### In the interview
-**30-second answer:** "`extends` links `Child.prototype` to `Parent.prototype` for instance methods and `Child` to `Parent` for statics. A derived constructor must call `super()` before using `this`, because the parent constructs the object. `super.method()` calls the parent's implementation. Built-ins like `Array`, `Error` and `Map` can be subclassed properly with class syntax."
+**30-second answer:** "`extends` links `Child.prototype` to `Parent.prototype` for instance methods and `Child` to `Parent` for statics. A derived constructor must call `super()` before `this`, because the parent constructs the object. `super.method()` calls the parent's implementation. `Array`, `Error`, `Map` subclass properly with class syntax."
 
-- *Q: What happens if a derived class has no constructor?* A: A default one forwards all arguments to `super(...)`.
-- *Q: Can you extend `null` or an expression?* A: `extends` accepts any expression that evaluates to a constructor (or `null`) — that's what makes mixin factories possible (§9.8).
-- *Q: Order of initialization?* A: Parent fields → parent constructor body → child fields → rest of the child constructor.
+- *Q: Derived class without a constructor?* A: A default one forwards all arguments to `super(...)`.
+- *Q: Extend `null` or an expression?* A: `extends` accepts any expression evaluating to a constructor (or `null`) — enabling mixin factories (§9.8).
+- *Q: Initialization order?* A: Parent fields → parent constructor → child fields → rest of child constructor.
 
 ### Self-check
-1. Why must `super()` come before `this` in a derived class? → The parent constructor creates and initializes the object.
-2. How does a static method get inherited? → `Child.[[Prototype]]` is `Parent`.
+1. Why `super()` before `this`? → The parent constructor creates the object.
+2. How are statics inherited? → `Child.[[Prototype]]` is `Parent`.
 3. Can a subclass read the parent's `#secret`? → No.
 
 ### TL;DR
-`extends` links both instance and static chains; `super()` first, then `this`; `super.m()` reaches the parent. Built-ins subclass cleanly. Keep hierarchies shallow.
+`extends` links instance and static chains; `super()` first, then `this`; `super.m()` reaches the parent. Built-ins subclass cleanly. Keep hierarchies shallow.
 
 ---
 
 ## 9.7 `instanceof` and type checks
 
 ### What it is
-`obj instanceof C` asks: **"does `C.prototype` appear anywhere in `obj`'s prototype chain?"** It says nothing about how the object was actually created. `C.prototype.isPrototypeOf(obj)` asks the same question the other way around.
+`obj instanceof C` asks **"is `C.prototype` anywhere in `obj`'s prototype chain?"** — nothing about how the object was created. `C.prototype.isPrototypeOf(obj)` asks the same the other way round.
 
 ```js
 const c = shapes[0];
@@ -886,9 +841,14 @@ const fake = Object.create(Circle.prototype);
 console.log('fooled?       :', fake instanceof Circle, '(instanceof only checks the chain)');
 ```
 
-Output (shown above): `true true true false`, `true`, `true`.
+Output:
+```
+instanceof    : true true true false
+isPrototypeOf : true
+fooled?       : true (instanceof only checks the chain)
+```
 
-`fake` never ran the `Circle` constructor (it has no `r`), yet `instanceof` says it is a `Circle`.
+`fake` never ran `Circle`'s constructor (no `r`), yet is "a `Circle`".
 
 ### Choosing a type check
 | Question | Use | Pitfall |
@@ -900,14 +860,14 @@ Output (shown above): `true true true false`, `true`, `true`.
 | Is it "like" a type (has the methods I need)? | **duck typing**: `typeof x?.then === 'function'` | Can't distinguish unrelated objects with the same method names |
 | Built-in tag | `Object.prototype.toString.call(x)` → `"[object Date]"` | Can be customized via `Symbol.toStringTag` |
 
-A **realm** is one global environment — each browser tab, iframe or Node `vm` context has its own `Array`, `Object`, `Error` constructors. An array from an iframe has the *iframe's* `Array.prototype` in its chain, so `instanceof Array` in the parent page returns `false`. That's why `Array.isArray` exists.
+A **realm** is one global environment — each tab, iframe or Node `vm` context has its own `Array`, `Object`, `Error`. An iframe's array has the *iframe's* `Array.prototype`, so `instanceof Array` in the parent is `false` — why `Array.isArray` exists.
 
-**Duck typing** ("if it walks like a duck and quacks like a duck…") means checking for capabilities rather than ancestry. It's how promises interoperate: anything with a `then` method (a *thenable*) is treated like a promise by `await` ([Chapter 12](../12-asynchronous-javascript/README.md)).
+**Duck typing** ("walks like a duck…") checks capabilities, not ancestry — how promises interoperate: anything with `then` (a *thenable*) is treated as a promise by `await` ([Chapter 12](../12-asynchronous-javascript/README.md)).
 
 ### Self-check
-1. Can `instanceof` be `true` for an object the constructor never ran on? → Yes (`Object.create(C.prototype)`, or `Object.setPrototypeOf`).
+1. `instanceof` true without the constructor running? → Yes (`Object.create(C.prototype)`, `Object.setPrototypeOf`).
 2. Most robust array check? → `Array.isArray`.
-3. `Object.create(null) instanceof Object`? → `false` — `Object.prototype` isn't in its chain.
+3. `Object.create(null) instanceof Object`? → `false`.
 
 ### TL;DR
 `instanceof` = "is `C.prototype` in the chain?". Prefer `Array.isArray`, `Error.isError`, `#brand in obj` or duck typing when correctness matters.
@@ -917,12 +877,10 @@ A **realm** is one global environment — each browser tab, iframe or Node `vm` 
 ## 9.8 Mixins
 
 ### What it is
-JavaScript classes have **single inheritance**: one `extends`. A **mixin** is a reusable bundle of methods that you "mix into" a class that already has a parent, so unrelated classes can share a capability (serializable — can be turned into text such as JSON; observable — others can subscribe to its changes; timestamped) without a common ancestor.
+Classes have **single inheritance** (one `extends`). A **mixin** is a reusable bundle of methods mixed into a class that already has a parent, so unrelated classes share a capability (serializable — convertible to text like JSON; observable — others can subscribe to its changes; timestamped) without a common ancestor.
 
-There are two common styles:
-
-1. **Object mixins** — copy methods onto a prototype with `Object.assign(Target.prototype, mixinA, mixinB)`.
-2. **Subclass-factory mixins** — a function that takes a base class and returns `class extends Base { … }`. Because `extends` accepts any expression, you can stack them: `class Duck extends CanSwim(CanFly(Animal)) {}`.
+1. **Object mixins** — `Object.assign(Target.prototype, mixinA, mixinB)`.
+2. **Subclass-factory mixins** — a function taking a base class and returning `class extends Base { … }`; stackable since `extends` takes any expression: `class Duck extends CanSwim(CanFly(Animal)) {}`.
 
 [`code/07_mixins_composition.mjs`](code/07_mixins_composition.mjs) (first part):
 
@@ -960,27 +918,27 @@ factory mixin: Donald flies | Donald swims | instanceof Animal: true
 | Copies getters correctly | ✗ — `Object.assign` *invokes* getters and copies the value | ✓ |
 
 ### Common mistakes
-- Two mixins defining the same method name — the last one wins silently.
-- Mixing state-heavy behaviour: mixins that assume fields exist on the target (`this.items`) create hidden coupling. Document the "requires" contract (the written promise of what each side must provide).
+- Two mixins with the same method name — last wins silently.
+- State-heavy mixins assuming target fields (`this.items`) create hidden coupling — document the "requires" contract (what each side must provide).
 
 ### Real-world examples
-Libraries such as Lit (web components — custom HTML tags you define yourself) use subclass-factory mixins; Node's `EventEmitter` (a built-in class that lets objects emit named events and register listeners) is often inherited or mixed in for "observable" objects ([Chapter 15](../15-nodejs-basics/README.md)).
+Lit (web components — custom HTML tags you define) uses subclass-factory mixins; Node's `EventEmitter` (lets objects emit named events to registered listeners) is often inherited or mixed in for "observable" objects ([Chapter 15](../15-nodejs-basics/README.md)).
 
 ### TL;DR
-Mixins add capabilities across unrelated classes. Prefer subclass factories (support `super` and private fields); watch for name clashes.
+Mixins add capabilities across unrelated classes; prefer subclass factories (support `super` and private fields); watch name clashes.
 
 ---
 
 ## 9.9 Composition vs inheritance
 
 ### What it is
-- **Inheritance** models an **is-a** relationship: a `Circle` *is a* `Shape`. Behaviour is received from a parent.
-- **Composition** models a **has-a** relationship: a `Car` *has an* `Engine`. Behaviour is obtained by holding other objects (or functions) and **delegating** calls to them.
+- **Inheritance** = **is-a** (`Circle` *is a* `Shape`): behaviour received from a parent.
+- **Composition** = **has-a** (`Car` *has an* `Engine`): behaviour from held objects/functions, with calls **delegated** to them.
 
-The classic design advice "favour composition over inheritance" (from the *Design Patterns* book, 1994) applies strongly in JavaScript, where functions and object literals make composition cheap. For the general design principle, see the LLD (low-level design: designing classes and their relationships) handbook's [design principles chapter](../../../lld/chapters/05-design-principles/README.md).
+"Favour composition over inheritance" (*Design Patterns*, 1994) applies strongly in JavaScript, where functions and literals make composition cheap. General principle: the LLD (low-level design — designing classes and their relationships) handbook's [design principles chapter](../../../lld/chapters/05-design-principles/README.md).
 
 ### The problem it solves
-Hierarchies break when real categories overlap. Say `Duck extends Bird` gives every duck `fly()`. Now add a `RoboDuck` that flies and quacks but can't swim, and a `RubberDuck` that only floats. With inheritance you override methods to throw "not supported", which violates the promise the parent made (the Liskov substitution principle, [LLD chapter 4](../../../lld/chapters/04-solid-principles/README.md)). With composition, each object simply gets the capabilities it has. This is often called the **gorilla/banana problem**: you wanted a banana, but inheritance gave you the gorilla holding it and the whole jungle.
+Hierarchies break when categories overlap. If `Duck extends Bird` gives every duck `fly()`, a `RoboDuck` (flies, quacks, can't swim) and a `RubberDuck` (only floats) force overrides that throw "not supported", violating the parent's promise (Liskov substitution, [LLD chapter 4](../../../lld/chapters/04-solid-principles/README.md)). With composition each object gets just its capabilities — the **gorilla/banana problem**: you wanted a banana but got the gorilla holding it and the whole jungle.
 
 [`code/07_mixins_composition.mjs`](code/07_mixins_composition.mjs) (second part):
 
@@ -1020,9 +978,9 @@ delegation   : car: engine started | car: motor humming
 OLOO         : widget 120px [OK]
 ```
 
-- The **factory function** style (`makeRobotDuck`) builds objects from small capability functions that close over shared `state` — private by closure, no `this` at all, so nothing can be "lost".
-- The `Car` style injects a collaborator through the constructor (**dependency injection**) — swapping `Engine` for `ElectricMotor` needed no subclass, and tests can pass a fake engine.
-- **OLOO** ("objects linked to other objects", a term from *You Don't Know JS*) uses `Object.create` directly: objects delegate to other objects with no constructors or classes at all. It shows that "inheritance" in JavaScript is really delegation along the prototype chain.
+- **Factory functions** (`makeRobotDuck`) build objects from capability functions closing over shared `state` — private by closure, no `this`, nothing to lose.
+- `Car` receives its collaborator via the constructor (**dependency injection**) — swap in `ElectricMotor` without subclassing; tests pass a fake.
+- **OLOO** ("objects linked to other objects", from *You Don't Know JS*) uses `Object.create` directly — showing JS "inheritance" is really delegation along the chain.
 
 ### Trade-offs
 | | Inheritance (`extends`) | Composition |
@@ -1035,33 +993,33 @@ OLOO         : widget 120px [OK]
 | Best when | a true, stable taxonomy (a classification tree of kinds and sub-kinds: `HttpError extends Error`, UI base classes a framework requires) | most application code |
 
 ### When not to use composition
-When a framework or platform expects a subclass (custom `Error`s, web components `extends HTMLElement`, `extends EventEmitter`), use inheritance — one shallow level.
+When the platform expects a subclass (custom `Error`s, web components `extends HTMLElement`, `extends EventEmitter`) — one shallow level of inheritance.
 
 ### In the interview
-**30-second answer:** "Inheritance is is-a and couples you to the parent's implementation; composition is has-a and assembles behaviour from small parts, so it adapts better when requirements cut across a hierarchy. In JavaScript I use `extends` for shallow, framework-mandated or genuinely taxonomic cases like custom errors, and composition — factory functions, injected collaborators, or mixins — for most app code."
+**30-second answer:** "Inheritance is is-a and couples you to the parent's implementation; composition is has-a and assembles behaviour from small parts, adapting better when requirements cut across a hierarchy. I use `extends` for shallow, framework-mandated or truly taxonomic cases like custom errors, and composition — factories, injected collaborators, mixins — for most app code."
 
-- *Q: What's the fragile base class problem?* A: A change in a parent class (a new method, a changed call order) silently breaks subclasses that depended on its internals.
-- *Q: How would you share "logging" across unrelated classes?* A: Inject a logger object (composition) or use a mixin; don't create a `Loggable` base class they all must extend.
+- *Q: Fragile base class problem?* A: A parent change (new method, changed call order) silently breaks subclasses depending on its internals.
+- *Q: Share "logging" across unrelated classes?* A: Inject a logger (composition) or a mixin — not a `Loggable` base class.
 
 ### Self-check
-1. "A `Car` has an `Engine`" — which approach? → Composition.
-2. Why is a factory function immune to lost-`this` bugs? → Its methods use closed-over variables, not `this`.
-3. When is inheritance the right call in JS? → Shallow, stable is-a relationships or when a platform requires it (errors, custom elements).
+1. "A `Car` has an `Engine`"? → Composition.
+2. Why are factory functions immune to lost-`this`? → Methods use closed-over variables, not `this`.
+3. When is inheritance right in JS? → Shallow, stable is-a, or platform-required (errors, custom elements).
 
 ### TL;DR
-Default to composition (factories, delegation, injection); use one shallow level of `extends` where the platform or a real taxonomy demands it.
+Default to composition (factories, delegation, injection); one shallow `extends` where the platform or a real taxonomy demands it.
 
 ---
 
 ## Chapter 9 TL;DR
 
-- **`this`** is set by the call site: `new` > `call/apply/bind` > `obj.m()` > plain call (`undefined` in strict mode). **Arrows** take `this` from where they're written and can't be rebound.
-- **`call`/`apply`** invoke now with a chosen `this`; **`bind`** returns a permanently bound function (also good for partial application).
-- Every object has a **`[[Prototype]]`**; missing reads walk the **prototype chain** to `null`. Writes create own properties (shadowing). Use `Object.create`, `Object.getPrototypeOf`, `Object.hasOwn`.
+- **`this`** is set by the call site: `new` > `call/apply/bind` > `obj.m()` > plain call (`undefined` in strict). **Arrows** take `this` from where they're written; can't be rebound.
+- **`call`/`apply`** invoke now with a chosen `this`; **`bind`** returns a permanently bound function (also partial application).
+- Every object has **`[[Prototype]]`**; missing reads walk the **chain** to `null`; writes create own properties (shadowing). `Object.create`, `Object.getPrototypeOf`, `Object.hasOwn`.
 - **`new Fn()`** creates an object linked to `Fn.prototype`, runs `Fn` with it as `this`, returns it.
-- **Classes** wrap that pattern: strict, `new`-only, non-enumerable methods, TDZ. ES2022 adds **fields**, **`#private`** members, **static blocks** and **`#x in obj`**.
-- **`extends`/`super`**: `super()` before `this`; both instance and static methods are inherited; built-ins (`Array`, `Error`) subclass properly.
+- **Classes** wrap that: strict, `new`-only, non-enumerable methods, TDZ. ES2022: **fields**, **`#private`**, **static blocks**, **`#x in obj`**.
+- **`extends`/`super`**: `super()` before `this`; instance and static methods inherited; `Array`, `Error` subclass properly.
 - **`instanceof`** only checks the chain — prefer `Array.isArray`, `Error.isError`, brand checks or duck typing when it matters.
 - **Mixins** share capabilities across unrelated classes; **composition** (has-a) usually beats deep inheritance (is-a).
 
-Next: organize all this code into files and packages — [Chapter 10: Modules and Tooling](../10-modules-and-tooling/README.md).
+Next: organize code into files and packages — [Chapter 10: Modules and Tooling](../10-modules-and-tooling/README.md).

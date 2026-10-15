@@ -48,7 +48,7 @@ flowchart LR
 ## What's in here
 | Path | Purpose |
 |---|---|
-| `ML-Handbook.pdf` | The whole book as one PDF, with a cover and a table of contents (built by `tools/regen_pdfs.sh`). |
+| `ML-Handbook-Vol1.pdf`, `ML-Handbook-Vol2.pdf` | The whole book in two PDFs (each under 350 pages), with cover and clickable contents. Vol 1: foundations and core algorithms — ML basics, maths, Python stack, data and features, regression, evaluation, trees and ensembles, kNN/SVM/Naive Bayes, unsupervised learning, neural networks (Ch 1–10). Vol 2: deep learning, recommenders, reinforcement learning, ML system design, production, case studies, responsible ML, cheat sheet, question bank (Ch 11–21). |
 | `interview/INTERVIEW.md` + `interview/ML-Interview-Edition.pdf` | **Interview Edition** — a ~48-page fast-revision digest: every chapter's must-know terms, formula tables (losses, metrics, bias–variance, regularisation, gradient descent, attention), top questions, gotchas, the 7-step design framework with napkin math and all thirteen case studies in five lines each. |
 | `capstones/CAPSTONES.md` + `capstones/ML-Capstone-Projects.pdf` | **Capstone Projects**: 40 build-it-yourself design briefs, beginner to advanced (house prices, Titanic CV, spam filter, churn + SHAP, transfer learning, recommenders, forecasting, A/B tests, two-tower retrieval, feed and search ranking, streaming fraud, CTR, feature store + drift monitoring, RL, fairness audit, RAG), each with requirements, a pipeline diagram, data model, milestones, hard parts and interview Q&A. |
 | `chapters/NN-name/README.md` + `ChapterNN-Notes.pdf` | One chapter (Markdown source and its PDF). |
@@ -124,7 +124,7 @@ Library versions change small numbers (the last digits of a score, a timing); th
 Requires Node 18+ and Google Chrome (the path is set in `tools/md2pdf.mjs`).
 
 ```bash
-bash tools/regen_pdfs.sh      # every ChapterNN-Notes.pdf + ML-Handbook.pdf (cover title "Machine Learning Handbook")
+bash tools/regen_pdfs.sh      # every ChapterNN-Notes.pdf + ML-Handbook-Vol1.pdf + ML-Handbook-Vol2.pdf (cover title "Machine Learning Handbook")
 
 # one chapter only
 node tools/md2pdf.mjs chapters/06-evaluation-and-tuning/Chapter06-Notes.pdf chapters/06-evaluation-and-tuning/README.md

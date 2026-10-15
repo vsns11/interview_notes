@@ -1,39 +1,26 @@
 # Chapter 8 — Maps, Sets, Iterators and Generators
 
-Plain objects and arrays can do a lot, but two jobs come up so often that JavaScript has dedicated collections for them: **looking things up by key** (`Map`) and **keeping values unique** (`Set`). This chapter covers both, their "weak" cousins that don't cause memory leaks (memory that is never freed because something still points at data nobody needs), and then the machinery that makes `for…of`, spread and destructuring work on all of them — the **iteration protocols** — and **generators**, the easiest way to produce your own lazy sequences (sequences whose values are computed only when asked for). We finish with the newest additions: **iterator helpers** (ES2025) and **`Object.groupBy` / `Map.groupBy`** (ES2024).
+Two jobs are so common JavaScript has dedicated collections for them: **looking things up by key** (`Map`) and **keeping values unique** (`Set`). This chapter covers both, their "weak" cousins that avoid memory leaks (memory never freed because something still points at data nobody needs), the **iteration protocols** that make `for…of`, spread and destructuring work, **generators** (the easiest way to make **lazy** sequences — values computed only when asked), **iterator helpers** (ES2025) and **`Object.groupBy` / `Map.groupBy`** (ES2024).
 
-**What you'll learn**
+**What you'll learn:** `Map` (methods, iteration, conversion, vs objects); `Set` (methods, ES2025 set algebra); `WeakMap`, `WeakSet`, `WeakRef`, `FinalizationRegistry`; the **iterable**/**iterator** protocols and `Symbol.iterator`; **generators** (`function*`, `yield`, `yield*`, two-way communication, async generators); **iterator helpers** and `Iterator.from`; **grouping**.
 
-1. `Map`: creating, `set`/`get`/`has`/`delete`/`clear`/`size`, iterating, converting, and when to prefer it over an object.
-2. `Set`: uniqueness, methods, iteration, and the ES2025 set-algebra methods (`union`, `intersection`, …).
-3. `WeakMap`, `WeakSet`, `WeakRef` and `FinalizationRegistry`: holding objects without keeping them alive.
-4. The **iterable** and **iterator** protocols, `Symbol.iterator`, and everything that consumes iterables.
-5. **Generators** (`function*`, `yield`, `yield*`), lazy and infinite sequences, two-way communication, async generators.
-6. **Iterator helpers** (`map`, `filter`, `take`, `drop`, `flatMap`, `reduce`, `toArray`, …) and `Iterator.from`.
-7. **Grouping** with `Object.groupBy` and `Map.groupBy`.
+**Before you start:** objects ([Chapter 5](../05-objects-math-date-and-json/README.md)), arrays ([Chapter 7](../07-arrays/README.md)), closures ([Chapter 4](../04-functions-scope-and-closures/README.md)). One example uses `#private` class fields ([Chapter 9](../09-this-prototypes-and-classes/README.md)); async generators use promises ([Chapter 12](../12-asynchronous-javascript/README.md)).
 
-**Before you start.** You should know objects ([Chapter 5](../05-objects-math-date-and-json/README.md)), arrays and their callback methods ([Chapter 7](../07-arrays/README.md)), and closures ([Chapter 4](../04-functions-scope-and-closures/README.md)). One example uses a class with `#private` fields, explained in [Chapter 9](../09-this-prototypes-and-classes/README.md); async generators use promises (objects that stand for a value arriving later), explained in [Chapter 12](../12-asynchronous-javascript/README.md).
-
-All code is in [`code/`](code/); outputs are real, from Node 24.
+Code is in [`code/`](code/); outputs are real Node 24 output.
 
 ---
 
 ## 8.1 `Map`
 
 ### What it is
-A **`Map`** (ES2015) is a collection of **key → value** pairs, like an object used as a dictionary (a lookup table from keys to values), but designed for that job:
-
-- **Keys can be any value** — objects, functions, numbers, `NaN` — not only strings and symbols.
-- It **remembers insertion order**, always.
-- It knows its own **`size`**.
-- It is **directly iterable** with `for…of`.
-
-Think of a coat-check counter: you hand over *anything* as a ticket (the key) and get back exactly the coat stored under it.
+A **`Map`** (ES2015) is a collection of **key → value** pairs, like an object used as a dictionary (lookup table) but built for it:
+- **Keys can be any value** — objects, functions, numbers, `NaN`.
+- **Always remembers insertion order.**
+- Knows its **`size`**.
+- **Directly iterable** with `for…of`.
 
 ### How it works — creating a Map
-`new Map()` creates an empty map. Optionally pass an **iterable of `[key, value]` pairs** (for example an array of two-element arrays) to fill it.
-
-From [`code/01_map.mjs`](code/01_map.mjs):
+`new Map()` is empty; pass an **iterable of `[key, value]` pairs** to fill it. From [`code/01_map.mjs`](code/01_map.mjs):
 
 ```js
 const stock = new Map([
@@ -63,7 +50,7 @@ Map(3) { 'apples' => 500, 'bananas' => 300, 'oranges' => 200 } 3
 | `keys()` / `values()` / `entries()` | Iterators over keys / values / `[key, value]` pairs, in insertion order | iterator |
 | `forEach((value, key, map) => …, thisArg?)` | Calls a function per entry, in insertion order | `undefined` |
 | `[Symbol.iterator]()` | Same as `entries()` — why `for (const [k, v] of map)` works | iterator |
-| `Map.groupBy(items, fn)` (static, ES2024) | Builds a Map of groups (section 8.7) | Map |
+| `Map.groupBy(items, fn)` (static, ES2024) | Builds a Map of groups (§8.7) | Map |
 
 ```js
 const books = new Map();
@@ -81,7 +68,7 @@ George Orwell undefined true
 ```
 
 ### Keys of any type
-Map compares keys with **SameValueZero**: like `===`, except `NaN` equals `NaN` (and `+0` equals `-0`). Object keys are matched **by reference** — a different object with the same contents is a different key.
+Keys compare by **SameValueZero**: `===` except `NaN` equals `NaN` (and `+0` equals `-0`). Object keys match **by reference**.
 
 ```js
 const m = new Map();
@@ -102,12 +89,12 @@ object as key function as key number 1 string 1 NaN works undefined
 [ '1', '[object Object]' ] { '1': 'string overwrites', '[object Object]': 'x' }
 ```
 
-With a plain object, every key is converted to a string: the object key becomes the useless `'[object Object]'` (so *all* objects would share one slot), and `1` and `'1'` collide. The Map keeps them distinct.
+A plain object stringifies keys: every object key becomes `'[object Object]'` (one shared slot) and `1`/`'1'` collide. The Map keeps them distinct.
 
 ### Iterating and converting
 
 ```js
-for (const [fruit, qty] of stock) console.log(fruit, qty);
+for (const [fruit, qty] of stock) console.log(fruit, qty);           // apples 500 / bananas 300 / oranges 200
 console.log([...stock.keys()], [...stock.values()], [...stock.entries()][0]);
 stock.forEach((value, key) => process.stdout.write(`${key}=${value} `));
 
@@ -116,20 +103,17 @@ const backToMap = new Map(Object.entries(asObject));
 console.log(asObject, backToMap.get('apples'), JSON.stringify(stock), JSON.stringify([...stock]));
 ```
 
-Output:
+Output (after the three `for…of` lines):
 
 ```text
-apples 500
-bananas 300
-oranges 200
 [ 'apples', 'bananas', 'oranges' ] [ 500, 300, 200 ] [ 'apples', 500 ]
 apples=500 bananas=300 oranges=200 
 { apples: 500, bananas: 300, oranges: 200 } 500 {} [["apples",500],["bananas",300],["oranges",200]]
 ```
 
-- Note the callback order in `forEach`: **value first, then key** (matching arrays' `(element, index)`).
-- `Object.fromEntries(map)` and `new Map(Object.entries(obj))` convert back and forth (only sensible when keys are strings).
-- **`JSON.stringify(map)` gives `{}`** — maps are not JSON. Serialize (turn into text for saving or sending) `[...map]` (an array of pairs) or `Object.fromEntries(map)`.
+- `forEach` callback order: **value, then key** (like arrays' `(element, index)`).
+- `Object.fromEntries(map)` / `new Map(Object.entries(obj))` convert (sensible for string keys).
+- **`JSON.stringify(map)` gives `{}`** — **serialize** (turn into text for saving/sending) `[...map]` or `Object.fromEntries(map)`.
 
 ### Map vs Object
 
@@ -143,7 +127,7 @@ apples=500 bananas=300 oranges=200
 | Frequent add/delete | Optimised for it | `delete` can make objects slower in engines |
 | JSON | Not directly | Native |
 | Syntax | `map.get(k)` / `map.set(k, v)` | `obj.k` / `obj[k] = v`, literals, destructuring |
-| Best for | Dynamic dictionaries, caches (stores of already-computed results kept for quick reuse), counting, non-string keys | Fixed-shape records (`{ id, name }`), config, JSON data |
+| Best for | Dynamic dictionaries, caches (stores of computed results for reuse), counting, non-string keys | Fixed-shape records (`{ id, name }`), config, JSON data |
 
 ### Real tasks
 
@@ -165,9 +149,9 @@ Map(5) { 'the' => 3, 'cat' => 1, 'and' => 2, 'hat' => 1, 'bat' => 1 } [ 'the', 3
 Ben
 ```
 
-The **count pattern** `map.set(k, (map.get(k) ?? 0) + 1)` and the **index-by-id pattern** `new Map(list.map((x) => [x.id, x]))` turn O(n) searches into O(1) lookups. They appear constantly in interview problems ([Chapter 17](../17-javascript-for-interviews/README.md)).
+The **count pattern** `map.set(k, (map.get(k) ?? 0) + 1)` and **index-by-id pattern** `new Map(list.map((x) => [x.id, x]))` turn O(n) searches into O(1) lookups — interview staples ([Chapter 17](../17-javascript-for-interviews/README.md)).
 
-Because a Map remembers insertion order and supports cheap delete/re-insert, it makes a compact **LRU cache** (least-recently-used: when full, evict the entry unused the longest — how browser caches, CDNs (content delivery networks: servers around the world that keep copies of files close to users — see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)) and database buffer pools (the database's in-memory copy of recently used disk pages) decide what to throw away):
+Insertion order plus cheap delete/re-insert make a compact **LRU cache** (least-recently-used: when full, evict the entry unused longest — how browser caches, CDNs (servers worldwide keeping copies near users — [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)) and database buffer pools (in-memory copies of recent disk pages) decide what to drop):
 
 ```js
 class LRU {
@@ -188,36 +172,34 @@ cache.set('a', 1); cache.set('b', 2); cache.get('a'); cache.set('c', 3);
 console.log(cache.keys());   // [ 'a', 'c' ]  — 'b' was least recently used
 ```
 
-(The LLD (low-level design) handbook designs a full LRU cache with a doubly linked list — a chain of items where each points to both its neighbours: [`../../../lld/`](../../../lld/).)
+(The LLD (low-level design) handbook builds a full LRU with a doubly linked list — each item points to both neighbours: [`../../../lld/`](../../../lld/).)
 
-**Coming next — upsert (ES2026).** `map.getOrInsert(key, default)` and `map.getOrInsertComputed(key, fn)` return the existing value or insert one in a single call (replacing the `has`/`get`/`set` dance). They are in the ES2026 spec but **not in Node 24**, so the demo feature-detects them and prints `false`.
+**Coming next — upsert (ES2026).** `map.getOrInsert(key, default)` / `map.getOrInsertComputed(key, fn)` return the existing value or insert one in a single call (replacing `has`/`get`/`set`). In the ES2026 spec but **not in Node 24** — the demo feature-detects them and prints `false`.
 
 ### Common mistakes
-- Using bracket syntax on a Map: `map['k'] = 1` sets an ordinary *property* on the Map object; `map.get('k')` won't see it and `size` stays 0.
-- Expecting `map.get({ id: 1 })` to find an entry stored with a *different* object that looks the same.
+- `map['k'] = 1` sets an ordinary *property*; `get('k')` won't see it, `size` stays 0.
+- Expecting `map.get({ id: 1 })` to find an entry stored under a different look-alike object.
 - `JSON.stringify(map)` → `{}`.
-- Choosing a Map for a small fixed-shape record — an object is simpler and works with JSON and destructuring.
+- A Map for a small fixed record — an object is simpler and JSON/destructuring-friendly.
 
 ### In the interview
-**30-second answer:** "Use a Map for dynamic key–value data: keys can be any type, it keeps insertion order, has `size`, iterates directly, and is optimised for frequent adds and deletes. Use objects for fixed-shape records and JSON. Map keys compare by SameValueZero, so objects are matched by reference."
+**30-second answer:** "Map for dynamic key–value data: any key type, insertion order, `size`, direct iteration, optimised for frequent adds/deletes. Objects for fixed-shape records and JSON. Keys compare by SameValueZero, so objects match by reference."
 
-- *How would you implement an LRU cache in JS?* A Map: on `get`, delete and re-insert; on overflow, delete `map.keys().next().value`.
-- *Why not use an object as a hash map* (a key-value table that finds entries by hashing the key)? String-only keys, inherited properties, `__proto__` pitfalls, no `size`, slower churn (frequent adding and removing).
+- *LRU cache in JS?* A Map: on `get` delete and re-insert; on overflow delete `map.keys().next().value`.
+- *Why not an object as a hash map* (table finding entries by hashing the key)? String-only keys, inherited properties, `__proto__` pitfalls, no `size`, slower churn (frequent add/remove).
 
 ### Self-check
-1. `new Map([[1, 'a']]).get('1')`? → `undefined` — `1` and `'1'` are different keys.
-2. What does `map.set` return? → The map (chainable).
-3. Which comes first in `map.forEach`'s callback: key or value? → Value.
-4. How do you send a Map as JSON? → `JSON.stringify([...map])` or `Object.fromEntries(map)`.
+1. `new Map([[1, 'a']]).get('1')`? → `undefined`.
+2. `map.set` returns? → The map.
+3. `map.forEach` callback: key or value first? → Value.
+4. Map as JSON? → `JSON.stringify([...map])` or `Object.fromEntries(map)`.
 
 ---
 
 ## 8.2 `Set`
 
 ### What it is
-A **`Set`** (ES2015) holds values — primitives or object references — where each value appears **at most once**. Adding a value that is already present does nothing. Like Map, it keeps insertion order, has `size`, and uses **SameValueZero** equality.
-
-Think of a guest list at a door: a name is either on it or not, and writing it twice doesn't add a second guest.
+A **`Set`** (ES2015) holds values (primitives or object references), each **at most once**; re-adding does nothing. Like Map: insertion order, `size`, **SameValueZero** equality.
 
 ### How it works
 
@@ -240,7 +222,7 @@ true false 2 true false Set(1) { 2 }
 0
 ```
 
-`new Set(iterable)` takes any iterable (array, string, another Set, a Map's keys…) and keeps the first occurrence of each value.
+`new Set(iterable)` keeps the first occurrence of each value from any iterable.
 
 | Member | What it does | Returns |
 |---|---|---|
@@ -258,43 +240,35 @@ true false 2 true false Set(1) { 2 }
 
 ```js
 const s = new Set([1, 2, 3]);
-s.forEach((value) => process.stdout.write(value + ' '));
+s.forEach((value) => process.stdout.write(value + ' '));   // 1 2 3
 console.log([...s.values()], [...s.keys()], [...s.entries()]);
 
 const mixed = new Set([NaN, NaN, 0, -0, '1', 1, { a: 1 }, { a: 1 }]);
 console.log(mixed.size, mixed);
 ```
 
-Output:
+Output (after the `forEach` line):
 
 ```text
-1 2 3 
 [ 1, 2, 3 ] [ 1, 2, 3 ] [ [ 1, 1 ], [ 2, 2 ], [ 3, 3 ] ]
 6 Set(6) { NaN, 0, '1', 1, { a: 1 }, { a: 1 } }
 ```
 
-`NaN` is stored once and `0`/`-0` count as one value, but `'1'` and `1` are different, and two separate `{ a: 1 }` objects are **both** kept — objects are compared by reference. To deduplicate objects by content, key them by an id in a Map.
+`NaN` stored once, `0`/`-0` one value, `'1'` ≠ `1`, and two separate `{ a: 1 }` objects are **both** kept (by reference). Dedupe objects by content by keying an id in a Map.
 
 ### Classic uses
 
 ```js
-console.log([...new Set([3, 1, 3, 2, 1])]);            // dedupe an array, keeping first-seen order
+console.log([...new Set([3, 1, 3, 2, 1])]);            // [ 3, 1, 2 ] — dedupe, keeping first-seen order
 const visited = new Set();
 for (const url of ['/a', '/b', '/a', '/c', '/b']) {
   if (visited.has(url)) continue;
   visited.add(url);
 }
-console.log([...visited]);
+console.log([...visited]);                             // [ '/a', '/b', '/c' ]
 ```
 
-Output:
-
-```text
-[ 3, 1, 2 ]
-[ '/a', '/b', '/c' ]
-```
-
-The "visited" set is the heart of web crawlers (programs that follow links to download many pages), graph searches (BFS/DFS — breadth-first and depth-first search, two ways to explore a network of connected nodes) and "don't process this twice" logic.
+The "visited" set drives web crawlers (follow links to fetch pages), graph searches (BFS/DFS — breadth-first and depth-first exploration of connected nodes) and "don't process twice" logic.
 
 ### Set algebra (ES2025)
 
@@ -318,17 +292,6 @@ symmetricDifference Set(3) { 1, 2, 5 }
 isSubsetOf          true true true
 ```
 
-```mermaid
-flowchart LR
-    A["A = 1 2 3 4"] --> U["union: 1 2 3 4 5"]
-    B["B = 3 4 5"] --> U
-    A --> I["intersection: 3 4"]
-    B --> I
-    A --> D["difference A minus B: 1 2"]
-    A --> S["symmetricDifference: 1 2 5"]
-    B --> S
-```
-
 | Method | Meaning | Returns |
 |---|---|---|
 | `a.union(b)` | In A **or** B | new Set |
@@ -339,51 +302,42 @@ flowchart LR
 | `a.isSupersetOf(b)` | Every element of B is in A | boolean |
 | `a.isDisjointFrom(b)` | No shared elements | boolean |
 
-These methods were standardized in **ES2025** and are available in all current browsers and in **Node 22+**. None of them mutates `a` or `b`. The argument doesn't have to be a Set — any **set-like** object (one with `size`, `has()` and `keys()`) works, such as a Map (its keys are used):
+Standardized in **ES2025**; in all current browsers and **Node 22+**. None mutates `a` or `b`. The argument may be any **set-like** (has `size`, `has()`, `keys()`), e.g. a Map (its keys):
 
 ```js
 const allowed = new Map([['read', true], ['write', false]]);
 console.log(new Set(['read', 'delete']).intersection(allowed));   // Set(1) { 'read' }
 ```
 
-On older runtimes, the classic pattern converts to an array and filters:
-
-```js
-const setA = new Set([1, 2, 3]);
-const setB = new Set([2, 3, 4]);
-const intersection = new Set([...setA].filter((x) => setB.has(x)));
-console.log(intersection);   // Set(2) { 2, 3 }
-```
-
-Similarly, union is `new Set([...a, ...b])` and difference is `new Set([...a].filter((x) => !b.has(x)))`.
+Older runtimes: `new Set([...a].filter((x) => b.has(x)))` (intersection), `new Set([...a, ...b])` (union), `new Set([...a].filter((x) => !b.has(x)))` (difference).
 
 ### Performance: `Set.has` vs `Array.includes`
-`array.includes(x)` scans elements one by one — **O(n)**. `set.has(x)` uses hashing (turning the value into a number that points straight at its storage slot) — **O(1)** on average. The demo checks 2,000 lookups against 200,000 numbers and confirms `Set.has` is faster (the exact timing varies by machine, so the script prints only the comparison). Rule of thumb: if you test membership repeatedly, build a Set once.
+`includes` scans — **O(n)**; `has` uses **hashing** (value → number pointing straight at its slot) — **O(1)** average. The demo (2,000 lookups in 200,000 numbers) confirms `Set.has` is faster (it prints only the comparison; timings vary). Repeated membership tests → build a Set once.
 
 ### Common mistakes
-- Expecting a Set to deduplicate objects with equal contents.
-- Using `set[0]` — Sets have no indexes; convert with `[...set]` or iterate.
-- Forgetting that `new Set('hello')` iterates the string: `Set { 'h', 'e', 'l', 'o' }`.
-- Calling `JSON.stringify(set)` → `{}`; send `[...set]`.
+- Expecting a Set to dedupe equal-content objects.
+- `set[0]` — no indexes; spread or iterate.
+- `new Set('hello')` iterates the string: `Set { 'h', 'e', 'l', 'o' }`.
+- `JSON.stringify(set)` → `{}`; send `[...set]`.
 
 ### In the interview
 **30-second answer:** "A Set stores unique values by SameValueZero, keeps insertion order and gives O(1) average `has`. I use it to dedupe (`[...new Set(arr)]`), track visited nodes, and — since ES2025 — for set algebra with `union`, `intersection`, `difference` and friends."
 
-- *Remove duplicates from an array of objects by id?* `[...new Map(arr.map((o) => [o.id, o])).values()]` (keeps the last of each id).
+- *Dedupe objects by id?* `[...new Map(arr.map((o) => [o.id, o])).values()]` (keeps the last per id).
 - *Intersection of two arrays in O(n + m)?* `const s = new Set(b); a.filter((x) => s.has(x))`.
 
 ### Self-check
 1. `new Set([1, '1', 1]).size`? → 2.
-2. What does `set.add(x)` return? → The set.
+2. `set.add(x)` returns? → The set.
 3. `new Set([1,2]).union(new Set([2,3]))`? → `Set {1, 2, 3}`.
-4. Why is `set.has` better than `arr.includes` in a loop? → O(1) vs O(n) per check.
+4. `set.has` vs `arr.includes` in a loop? → O(1) vs O(n) per check.
 
 ---
 
 ## 8.3 `WeakMap`, `WeakSet`, `WeakRef` and `FinalizationRegistry`
 
 ### What it is
-JavaScript frees memory automatically with a **garbage collector** (GC): an object is removed once nothing **reachable** refers to it. A normal Map or Set holds a **strong** reference to its keys/values, so storing an object in a Map keeps it alive forever — a classic memory leak. The **weak** collections hold their keys **weakly**: the entry does not stop the object from being collected, and when it is collected, the entry quietly disappears.
+The **garbage collector** (GC) frees an object once nothing **reachable** refers to it. A Map/Set holds **strong** references, keeping stored objects alive forever — a classic leak. **Weak** collections hold keys **weakly**: the entry doesn't prevent collection, and disappears when the object is collected.
 
 ### How they work
 
@@ -394,44 +348,31 @@ JavaScript frees memory automatically with a **garbage collector** (GC): an obje
 | Methods | `set`, `get`, `has`, `delete` | `add`, `has`, `delete` | `deref()` → target or `undefined` | `register`, `unregister` |
 | `size`, iteration, `clear` | **No** | **No** | — | — |
 
-Why no `size` or iteration? Because the contents change whenever the GC runs, which is unpredictable; exposing them would make programs behave differently from run to run.
+No `size`/iteration because contents change whenever the (unpredictable) GC runs — exposing them would make runs differ.
 
 From [`code/03_weak_collections.mjs`](code/03_weak_collections.mjs):
 
 ```js
-const metadata = new WeakMap();
-function track(el) { metadata.set(el, { clicks: 0, firstSeen: 'now' }); }
+// 03_weak_collections.mjs (abridged — each output line matches one use)
+const metadata = new WeakMap();                 // 1) side table keyed by an object
 const button = { tag: 'button' };               // imagine a DOM element
-track(button);
+metadata.set(button, { clicks: 0, firstSeen: 'now' });
 metadata.get(button).clicks++;
-console.log(metadata.get(button), metadata.has(button), metadata.has({ tag: 'button' }));
 
-const areaCache = new WeakMap();
-let computed = 0;
+const areaCache = new WeakMap();                // 2) per-object memo cache
 function area(shape) {
-  if (!areaCache.has(shape)) { computed++; areaCache.set(shape, shape.w * shape.h); }
+  if (!areaCache.has(shape)) areaCache.set(shape, shape.w * shape.h);
   return areaCache.get(shape);
 }
-const box = { w: 3, h: 4 };
-console.log(area(box), area(box), 'computed', computed, 'time(s)');
 
-const processed = new WeakSet();
-function processOnce(job) {
-  if (processed.has(job)) return 'skipped';
-  processed.add(job); return 'processed';
-}
-const job = { id: 7 };
-console.log(processOnce(job), processOnce(job));
-
+const processed = new WeakSet();                // 3) "seen" tagging
 try { new WeakMap().set('str', 1); } catch (e) { console.log('primitive key ->', e.constructor.name); }
-const wm = new WeakMap();
-console.log('size' in wm, typeof wm[Symbol.iterator], typeof wm.keys);
 const sym = Symbol('local');
 console.log(new WeakMap([[sym, 'symbol key ok (ES2023)']]).get(sym));
 try { new WeakSet().add(Symbol.for('registered')); } catch (e) { console.log('registered symbol ->', e.constructor.name); }
 ```
 
-Output:
+Output (full run):
 
 ```text
 { clicks: 1, firstSeen: 'now' } true false
@@ -444,12 +385,11 @@ registered symbol -> TypeError
 ```
 
 Three standard uses:
+1. **Side tables** — attach data to objects you don't own (DOM elements, library objects) without adding properties; it goes away with the object.
+2. **Per-object memoization caches** (remembering computed results) — no manual **eviction** (removing old entries).
+3. **Tagging/branding** with a WeakSet — "have I already processed/validated/created this object?" (how some libraries did private state before `#private`).
 
-1. **Side tables** — attach extra data to objects you don't own (DOM elements, objects from a library) without adding properties to them. When the element is removed from the page and dropped, its data goes too.
-2. **Memoization caches keyed by object** (memoization = remembering the result of a computation so it isn't repeated) — cache a computed result per object; no manual eviction (removing old entries) needed.
-3. **Tagging/branding** (marking objects as "seen" or "genuine") with a WeakSet — "have I already processed / validated / created this object?" (This is how some libraries implemented private state before class `#private` fields existed.)
-
-Primitive keys are rejected because primitives are never garbage collected; symbols created with `Symbol.for` (the global registry) are rejected for the same reason.
+Primitives are rejected because they're never collected; `Symbol.for` (global registry) symbols likewise.
 
 ### `WeakRef` and `FinalizationRegistry`
 
@@ -463,34 +403,31 @@ const registry = new FinalizationRegistry((heldValue) => console.log('cleaned up
 registry.register({ temp: true }, 'temp-object');
 ```
 
-A **`WeakRef`** lets you point at an object *without* keeping it alive; `deref()` returns the object or `undefined` once collected. A **`FinalizationRegistry`** asks to be called back some time after a registered object is collected. Both are advanced tools for caches of large objects and for releasing external resources. Their timing is **unspecified** — the callback may run late or never (for example when the program exits first) — so never put essential logic (saving data, closing files) in them. The TC39 (the committee that designs JavaScript) proposal itself advises avoiding them where possible.
+A **`WeakRef`** points at an object *without* keeping it alive (`deref()` → object or `undefined`). A **`FinalizationRegistry`** asks for a callback some time after a registered object is collected. Both serve caches of large objects and releasing external resources, but timing is **unspecified** (late or never, e.g. on exit) — never put essential logic (saving data, closing files) there; the TC39 proposal itself advises avoiding them where possible.
 
 ### When not to use it
-- You need to list, count or iterate the entries → use `Map`/`Set` and remove entries yourself.
-- Your keys are strings or numbers → weak collections can't hold them.
+- You need to list, count or iterate → `Map`/`Set` with manual removal.
+- String/number keys → weak collections can't hold them.
 
 ### In the interview
-- *Difference between Map and WeakMap?* WeakMap keys must be objects (or non-registered symbols) and are held weakly, so entries vanish when the key is garbage-collected; as a result it has no `size`, no iteration and no `clear`.
-- *Give a real use.* Caching computed data per DOM node or per request object; private per-instance data.
+- *Map vs WeakMap?* WeakMap keys must be objects (or non-registered symbols), held weakly — entries vanish on GC — so no `size`, iteration or `clear`.
+- *Real use?* Per-DOM-node or per-request caches; private per-instance data.
 
 ### Self-check
-1. Can a WeakMap have a string key? → No — `TypeError`.
-2. Why can't you iterate a WeakSet? → Its contents depend on unpredictable GC timing.
-3. What does `weakRef.deref()` return after the target is collected? → `undefined`.
+1. String key in a WeakMap? → `TypeError`.
+2. Why can't you iterate a WeakSet? → Contents depend on GC timing.
+3. `weakRef.deref()` after collection? → `undefined`.
 
 ---
 
 ## 8.4 Iterators and the iterable protocol
 
 ### What it is
-Two small **protocols** (agreed-upon shapes of objects, ES2015) make `for…of`, spread, destructuring, `Array.from`, `new Map(…)`, `new Set(…)`, `Promise.all` and more work on *any* collection:
+Two **protocols** (agreed object shapes, ES2015) make `for…of`, spread, destructuring, `Array.from`, `new Map(…)`, `new Set(…)`, `Promise.all` etc. work on *any* collection:
+- An **iterator** has `next()` returning `{ value, done }`; `done: true` ends the sequence.
+- An **iterable** has a method under **`Symbol.iterator`** returning a fresh iterator.
 
-- An **iterator** is an object with a `next()` method that hands back a `{ value, done }` result on every call; a result with `done: true` signals the end of the sequence.
-- An **iterable** is an object with a method under the key **`Symbol.iterator`** that returns a fresh iterator.
-
-`Symbol.iterator` is a **well-known symbol**: a built-in unique key the language itself looks for. Using a symbol (instead of a string like `"iterator"`) guarantees it can't clash with ordinary property names.
-
-Think of an iterable as a book and an iterator as a bookmark: you can open the same book many times, each time with a new bookmark that only moves forward.
+`Symbol.iterator` is a **well-known symbol** — a built-in unique key the language looks for, which can't clash with ordinary property names. (Iterable = a book; iterator = a forward-only bookmark — open the book many times, each with a new bookmark.)
 
 ```mermaid
 sequenceDiagram
@@ -525,7 +462,7 @@ Output:
 array:true string:true Map:true Set:true object:false number:false
 ```
 
-Built-in iterables: **arrays, strings, Maps, Sets, typed arrays, `arguments`, DOM `NodeList`s, generator objects**, and the iterators returned by `keys()`/`values()`/`entries()`. Plain objects are **not** iterable — that's why you write `for (const [k, v] of Object.entries(obj))`.
+Built-in iterables: **arrays, strings, Maps, Sets, typed arrays, `arguments`, DOM `NodeList`s, generator objects**, and the `keys()`/`values()`/`entries()` iterators. Plain objects are **not** — hence `for (const [k, v] of Object.entries(obj))`.
 
 ### Making your own iterable
 
@@ -555,14 +492,10 @@ Output:
 3 [ 2, 1 ] 3 1
 ```
 
-1. `[Symbol.iterator]()` is a **computed method name** (Chapter 5): the key is the symbol.
-2. Each call creates a new iterator with its own `current` (a closure), so the object can be iterated many times.
-3. Every consumer — spread, `Array.from`, `Math.max(...)`, `for…of`, destructuring, `new Set` — now works automatically.
-
-Writing `next()` by hand is verbose; a **generator** does the same in two lines (the `Range` class in the demo uses `*[Symbol.iterator]() { … yield v; }` and prints `[ 0, 3, 6, 9 ]` — section 8.5).
+`[Symbol.iterator]()` is a **computed method name** (Chapter 5); each call creates a new iterator with its own `current` (closure), so the object is re-iterable; every consumer now works. A **generator** does the same in two lines (the demo's `Range` class uses `*[Symbol.iterator]() { … yield v; }` and prints `[ 0, 3, 6, 9 ]` — §8.5).
 
 ### Early exit and `return()`
-If a consumer stops before `done` (a `break`, a `return`, an exception, or destructuring that takes only the first few values), it calls the iterator's optional **`return()`** method, which is where cleanup (closing a file, releasing a lock — a flag that gives one piece of code exclusive use of a resource) belongs:
+A consumer stopping before `done` (`break`, `return`, exception, partial destructuring) calls the iterator's optional **`return()`** — the place for cleanup (closing a file, releasing a **lock**, i.e. an exclusive-use flag):
 
 ```js
 function resource() {
@@ -591,16 +524,10 @@ first item was 1
 ```js
 const arr = [1, 2];
 const once = arr.values();
-console.log([...once], [...once], [...arr], [...arr]);
+console.log([...once], [...once], [...arr], [...arr]);   // [ 1, 2 ] [] [ 1, 2 ] [ 1, 2 ]
 ```
 
-Output:
-
-```text
-[ 1, 2 ] [] [ 1, 2 ] [ 1, 2 ]
-```
-
-An **iterator** is exhausted after one pass; an **iterable** (the array) hands out a fresh iterator each time. Passing an iterator where code expects to loop twice is a subtle bug.
+An **iterator** is exhausted after one pass; an **iterable** hands out a fresh one each time. Passing an iterator to code that loops twice is a subtle bug.
 
 ### Everything that consumes iterables
 
@@ -617,24 +544,22 @@ An **iterator** is exhausted after one pass; an **iterable** (the array) hands o
 | Grouping | `Object.groupBy(iterable, fn)` |
 
 ### In the interview
-**30-second answer:** "An iterable has a `[Symbol.iterator]()` method returning an iterator; an iterator has `next()` returning `{ value, done }`. `for…of`, spread, destructuring, `Array.from` and the Map/Set constructors all speak this protocol, so implementing it makes any object work with them. Iterators can also define `return()` for cleanup on early exit."
+**30-second answer:** "An iterable has `[Symbol.iterator]()` returning an iterator; an iterator has `next()` returning `{ value, done }`. `for…of`, spread, destructuring, `Array.from` and Map/Set constructors all use this protocol, so implementing it makes any object work with them. Iterators may define `return()` for cleanup on early exit."
 
-- *Why isn't a plain object iterable?* Its keys, values and entries are all reasonable things to iterate, so the language makes you choose with `Object.keys/values/entries`.
-- *`for…in` vs `for…of`?* `for…in` walks enumerable property **keys** (including inherited ones); `for…of` walks the **values** an iterable produces ([Chapter 3](../03-control-flow-and-loops/README.md)).
+- *Why isn't a plain object iterable?* Keys, values and entries are all plausible, so you choose via `Object.keys/values/entries`.
+- *`for…in` vs `for…of`?* `for…in` walks enumerable **keys** (incl. inherited); `for…of` walks **values** of an iterable ([Chapter 3](../03-control-flow-and-loops/README.md)).
 
 ### Self-check
-1. What must `next()` return? → An object `{ value, done }`.
-2. Why does `[...{a: 1}]` throw? → Plain objects are not iterable.
-3. When is `return()` called? → When a consumer stops early (break, throw, partial destructuring).
+1. `next()` returns? → `{ value, done }`.
+2. Why does `[...{a: 1}]` throw? → Plain objects aren't iterable.
+3. When is `return()` called? → On early stop (break, throw, partial destructuring).
 
 ---
 
 ## 8.5 Generators
 
 ### What it is
-A **generator function** (`function*`, ES2015) is a function that can **pause** in the middle and **resume** later. Calling it doesn't run its body; it returns a **generator object**, which is both an iterator and an iterable. Each `next()` call runs the body until the next **`yield`**, which hands out a value and pauses right there.
-
-Think of a generator as a TV series rather than a film: calling it gives you the box set, and each `next()` plays one more episode, remembering where you stopped.
+A **generator function** (`function*`, ES2015) can **pause** and **resume**. Calling it runs nothing; it returns a **generator object** — both iterator and iterable. Each `next()` runs the body to the next **`yield`**, which emits a value and pauses there.
 
 ### How it works
 From [`code/05_generators.mjs`](code/05_generators.mjs):
@@ -674,18 +599,15 @@ created
 [ 1, 2 ]
 ```
 
-Step by step:
+1. `threeSteps()` returns a generator; **no body code runs** (`created` prints first).
+2. First `next()` runs to `yield 1` → `{ value: 1, done: false }`; each further `next()` resumes after the last `yield`.
+3. `return 3` → `{ value: 3, done: true }`; afterwards always `{ value: undefined, done: true }`.
+4. `for…of`/spread stop at `done: true`, **ignoring the return value** — `[1, 2]`.
 
-1. `threeSteps()` returns a generator object; **no code in the body runs** (`created` prints first).
-2. The first `next()` runs until `yield 1` and pauses → `{ value: 1, done: false }`.
-3. Each further `next()` resumes right after the last `yield`.
-4. `return 3` finishes the generator → `{ value: 3, done: true }`. After that, `next()` always gives `{ value: undefined, done: true }`.
-5. `for…of` and spread stop as soon as `done` is `true`, so they **ignore the return value** — `[1, 2]`, not `[1, 2, 3]`.
-
-Syntax variants: `function* name() {}`, `const g = function* () {}`, methods `*name() {}` in objects/classes, and `*[Symbol.iterator]() {}`. There are **no arrow generators**.
+Forms: `function* name() {}`, `const g = function* () {}`, methods `*name() {}`, `*[Symbol.iterator]() {}`. **No arrow generators.**
 
 ### Lazy and infinite sequences
-Because values are produced only when requested, a generator can describe an **infinite** sequence safely — as long as the consumer stops.
+Values are produced on request, so **infinite** sequences are safe if the consumer stops.
 
 ```js
 function* naturals() { let n = 1; while (true) yield n++; }
@@ -715,7 +637,7 @@ Output:
 [ 1, 9, 25, 49 ]
 ```
 
-The pipeline processes **one value at a time** through `filter → map → take` and never builds an intermediate array — the same "lazy evaluation" idea as Python generators, Java streams or Unix pipes. It's how you'd process a huge log file line by line without loading it all into memory. Section 8.6 shows the built-in version.
+The pipeline moves **one value at a time** through `filter → map → take` with no intermediate arrays — "lazy evaluation", like Python generators, Java streams or Unix pipes; how you'd process a huge log file line by line. §8.6 shows the built-in version.
 
 ### Delegation with `yield*` and recursion
 
@@ -736,7 +658,7 @@ Output:
 [ 1, 2, 4, 3 ]
 ```
 
-`yield* iterable` yields every value of another iterable (a generator, an array, a string…) as if they were yielded here, and evaluates to that generator's **return value**. Combined with recursion, it makes tree and graph (a network of nodes joined by links) traversal (visiting every node) read almost like the definition: "yield this node, then everything from each child".
+`yield* iterable` yields every value of another iterable as if yielded here, and evaluates to that generator's **return value**. With recursion, tree/graph **traversal** (visiting every node) reads like its definition.
 
 ### Two-way communication: `next(value)`, `return()`, `throw()`
 
@@ -771,11 +693,11 @@ Output:
 caught outside: boom
 ```
 
-- **`gen.next(x)`** resumes the generator and makes the paused `yield` expression evaluate to `x`. The first `next()` only runs up to the first `yield` (any argument to it is ignored), so it "primes" the generator.
-- **`gen.return(v)`** finishes the generator as if a `return v` happened at the paused `yield` — `finally` blocks still run.
-- **`gen.throw(err)`** throws `err` at the paused `yield`; if the generator doesn't catch it, it propagates to the caller.
+- **`gen.next(x)`** resumes and makes the paused `yield` evaluate to `x`. The first `next()` only runs to the first `yield` (its argument is ignored) — it "primes".
+- **`gen.return(v)`** finishes as if `return v` happened at the paused `yield`; `finally` still runs.
+- **`gen.throw(err)`** throws at the paused `yield`; uncaught, it propagates to the caller.
 
-This two-way channel is how libraries like **redux-saga** (a Redux add-on for managing side effects such as network calls) drive effects, and how `async`/`await` was emulated before ES2017 (the `co` library ran generators that yielded promises — see [Chapter 12](../12-asynchronous-javascript/README.md)).
+This channel drives **redux-saga** (a Redux add-on for side effects like network calls) and emulated `async`/`await` before ES2017 (the `co` library ran generators yielding promises — [Chapter 12](../12-asynchronous-javascript/README.md)).
 
 ### More uses: ID makers, state machines, async paging
 
@@ -809,7 +731,7 @@ page 3 [ 'item5', 'item6' ]
 [ 1, 2 ]
 ```
 
-The traffic light is a tiny **state machine** (something that is always in one of a fixed set of states and moves between them by fixed rules). An **async generator** (`async function*`, ES2018) can `await` inside and is consumed with **`for await…of`**. It's the natural shape for paginated APIs (APIs that return results one page at a time), reading streams (data that arrives in pieces over time) chunk by chunk (Node's readable streams are async iterables — [Chapter 15](../15-nodejs-basics/README.md)), or polling. `Array.fromAsync` (ES2026, already in Node 24) collects an async iterable into an array.
+The traffic light is a tiny **state machine** (always in one of a fixed set of states, moving by fixed rules). An **async generator** (`async function*`, ES2018) can `await` and is consumed with **`for await…of`** — the natural shape for paginated APIs (results one page at a time), streams read chunk by chunk (Node readable streams are async iterables — [Chapter 15](../15-nodejs-basics/README.md)), or polling. `Array.fromAsync` (ES2026, in Node 24) collects an async iterable.
 
 ### Trade-offs
 
@@ -822,34 +744,34 @@ The traffic light is a tiny **state machine** (something that is always in one o
 | Speed for small data | Slightly slower (pause/resume overhead) | Faster |
 
 ### When not to use it
-For small, finite data that you'll index, sort or iterate several times, just build an array. Generators shine for large, lazy, infinite or step-by-step data, and for implementing `[Symbol.iterator]`.
+Small, finite data you'll index, sort or reuse → an array. Generators shine for large, lazy, infinite or step-by-step data and for `[Symbol.iterator]`.
 
 ### Common mistakes
-- Calling a generator and expecting its body to run (`gen()` alone does nothing).
-- Expecting the `return` value to appear in `for…of` or spread results.
-- Reusing an exhausted generator object.
-- Spreading an infinite generator without `take` → the program never ends (and runs out of memory).
-- Forgetting to prime a generator before sending values with `next(x)`.
+- Expecting `gen()` alone to run the body.
+- Expecting the `return` value in `for…of`/spread.
+- Reusing an exhausted generator.
+- Spreading an infinite generator without `take` → never ends (out of memory).
+- Not priming before `next(x)`.
 
 ### In the interview
-**30-second answer:** "A `function*` returns a generator object that's both an iterator and an iterable. `yield` pauses and emits a value; `next()` resumes. That makes lazy and infinite sequences easy, lets you implement `Symbol.iterator` in two lines, and supports two-way communication via `next(x)`, `return` and `throw`. Async generators with `for await` handle paginated or streamed data."
+**30-second answer:** "A `function*` returns a generator object — iterator and iterable. `yield` pauses and emits; `next()` resumes. That gives lazy/infinite sequences, two-line `Symbol.iterator` implementations, and two-way communication via `next(x)`, `return`, `throw`. Async generators with `for await` handle paged or streamed data."
 
-- *Write a `range(start, end)` generator.* `function* range(s, e) { for (let i = s; i < e; i++) yield i; }`
-- *What's `yield*`?* Delegation: yields all values from another iterable and evaluates to its return value.
-- *How do generators relate to async/await?* Async functions behave like generators that yield promises and are resumed when each settles (finishes, either successfully or with an error).
+- *`range(start, end)` generator:* `function* range(s, e) { for (let i = s; i < e; i++) yield i; }`
+- *`yield*`?* Delegation: yields all values of another iterable, evaluates to its return value.
+- *Generators vs async/await?* Async functions behave like generators yielding promises, resumed when each **settles** (finishes, success or error).
 
 ### Self-check
-1. What does `[...(function* () { yield 1; return 2; })()]` produce? → `[1]`.
-2. What does the first `next()` call do? → Runs to the first `yield` (or the end).
-3. Can arrow functions be generators? → No.
-4. How do you consume an async generator? → `for await (const x of gen())` or `Array.fromAsync`.
+1. `[...(function* () { yield 1; return 2; })()]`? → `[1]`.
+2. First `next()`? → Runs to the first `yield` (or end).
+3. Arrow generators? → No.
+4. Consume an async generator? → `for await (const x of gen())` or `Array.fromAsync`.
 
 ---
 
 ## 8.6 Iterator helpers (ES2025)
 
 ### What it is
-**Iterator helpers** add array-like methods — `map`, `filter`, `take`, `drop`, `flatMap`, `reduce`, `toArray`, `forEach`, `some`, `every`, `find` — directly to **iterators** (via a new global `Iterator` class whose prototype every built-in iterator inherits from). Unlike the array methods, the ones that return iterators are **lazy**: nothing is computed until you pull values. Standardized in **ES2025**; available in Node 22+ and all current browsers.
+**Iterator helpers** add array-like methods — `map`, `filter`, `take`, `drop`, `flatMap`, `reduce`, `toArray`, `forEach`, `some`, `every`, `find` — to **iterators** (via a new global `Iterator` class all built-in iterators inherit from). Those returning iterators are **lazy**. **ES2025**; Node 22+ and all current browsers.
 
 From [`code/06_iterator_helpers.mjs`](code/06_iterator_helpers.mjs):
 
@@ -907,22 +829,19 @@ undefined [ 1, 2 ]
 | `some(fn)`, `every(fn)`, `find(fn)` | No — consumes, **short-circuits** | boolean / value |
 | `Iterator.from(obj)` (static) | — | wraps any iterator or iterable so helpers are available |
 
-Key points:
-
-- It works on an **infinite** generator because `take(4)` stops pulling once it has four results; `pulled` proves `map` ran only 3 times.
-- Map and Set iterators (`entries()`, `values()`) get the helpers too — no need to spread into an array first.
-- **Arrays are iterables, not iterators**: `arr.take` is `undefined`. Call `arr.values()` to get the lazy helpers. For ordinary array work, the array methods (Chapter 7) are simpler; use iterator helpers for large, lazy or infinite data.
-- **Iterator.concat** (joining several iterators, ES2026) is not in Node 24 — the demo feature-detects it. **Async** iterator helpers are still a separate proposal.
+- Works on **infinite** generators because `take(4)` stops pulling; `pulled` shows `map` ran only 3 times.
+- Map/Set iterators get the helpers too — no spreading first.
+- **Arrays are iterables, not iterators**: `arr.take` is `undefined` — use `arr.values()`. For ordinary arrays, array methods (Chapter 7) are simpler; helpers suit large, lazy or infinite data.
+- **`Iterator.concat`** (ES2026) isn't in Node 24 (the demo feature-detects it); **async** iterator helpers are still a separate proposal.
 
 ---
 
 ## 8.7 Grouping: `Object.groupBy` and `Map.groupBy` (ES2024)
 
 ### What it is
-Two static methods that take an iterable and a **key function**, and put each item into the bucket named by the key it returns. Standardized in **ES2024**; in Node 21+ and all current browsers. (They were first proposed as `Array.prototype.group`, but that name broke existing websites, so they became static methods.)
-
-- **`Object.groupBy(items, fn)`** → a **null-prototype object** whose keys are strings (the key function's results converted to strings).
-- **`Map.groupBy(items, fn)`** → a **Map**, so keys keep their type — objects, numbers, anything.
+Static methods taking an iterable and a **key function**, putting each item in the bucket named by its key. **ES2024**; Node 21+ and all current browsers. (First proposed as `Array.prototype.group`, which broke existing websites, so they became static.)
+- **`Object.groupBy(items, fn)`** → a **null-prototype object** with string keys.
+- **`Map.groupBy(items, fn)`** → a **Map**, keys keep their type.
 
 From [`code/07_groupby.mjs`](code/07_groupby.mjs):
 
@@ -973,16 +892,9 @@ Map(3) { 1 => [ 'a' ], 2 => [ 'bb', 'cc' ], 3 => [ 'ddd' ] } [ 'bb', 'cc' ]
 }
 ```
 
-How it works:
+How it works: walk the iterable in order, call `fn(item, index)` for a key, append the item to that key's array (created on first sight). Group order = first appearance of each key; items keep their order. The **null prototype** makes keys like `toString` safe but removes inherited methods — use `Object.keys(result)`, not `result.hasOwnProperty(...)`. Groups hold the **original items**, not copies.
 
-1. Walk the iterable in order.
-2. Call `fn(item, index)` to get a key.
-3. Append the item to that key's array (creating it the first time).
-4. Group order follows the first time each key appears; items inside a group keep their original order.
-
-The result's **null prototype** means there are no inherited keys (a group named `toString` or `constructor` is safe), but also no inherited methods — use `Object.keys(result)`, not `result.hasOwnProperty(...)`. The grouped arrays contain the **original items** (not copies).
-
-Before ES2024 everyone wrote the `reduce` version with `??=` (logical nullish assignment: assign only if the left side is `null`/`undefined`); lodash's `_.groupBy` is the library equivalent (lodash is a widely used utility library).
+Pre-ES2024: the `reduce` version with `??=` (assign only if `null`/`undefined`), or lodash's `_.groupBy` (a widely used utility library).
 
 ### Trade-offs
 
@@ -995,19 +907,17 @@ Before ES2024 everyone wrote the `reduce` version with `??=` (logical nullish as
 | Use when | Grouping by a label/category | Grouping by object, number, or you need Map features |
 
 ### Real-world examples
-- Dashboards: group orders by status or by day before rendering sections.
-- Chat apps: group messages by date ("Today", "Yesterday").
-- Data cleanup: group records by email to find duplicates.
+- Dashboards: orders by status or day; chat apps: messages by date ("Today", "Yesterday"); cleanup: records by email to find duplicates.
 - Counting per group: `Object.fromEntries(Object.entries(byType).map(([k, v]) => [k, v.length]))` → `{ electronics: 2, furniture: 2, office: 1 }`.
 
 ### In the interview
-- *How do you group an array by a property?* `Object.groupBy(arr, (x) => x.prop)` in modern runtimes; `reduce` with `(acc[k] ??= []).push(x)` otherwise.
-- *When `Map.groupBy` over `Object.groupBy`?* Non-string keys, or when you need Map semantics (order, `size`, object keys).
+- *Group an array by a property?* `Object.groupBy(arr, (x) => x.prop)`; otherwise `reduce` with `(acc[k] ??= []).push(x)`.
+- *`Map.groupBy` over `Object.groupBy`?* Non-string keys or Map semantics (order, `size`, object keys).
 
 ### Self-check
-1. Is `groupBy` a method on arrays? → No — static: `Object.groupBy(items, fn)` / `Map.groupBy(items, fn)`.
-2. What prototype does `Object.groupBy`'s result have? → `null`.
-3. Group numbers into even/odd with a Map. → `Map.groupBy(nums, (n) => n % 2 === 0)` (keys `true`/`false`).
+1. Is `groupBy` an array method? → No — static `Object.groupBy`/`Map.groupBy`.
+2. `Object.groupBy` result's prototype? → `null`.
+3. Even/odd with a Map? → `Map.groupBy(nums, (n) => n % 2 === 0)` (keys `true`/`false`).
 
 ---
 
@@ -1030,10 +940,10 @@ Before ES2024 everyone wrote the `reduce` version with `??=` (logical nullish as
 
 ## Chapter TL;DR
 
-- **Map**: key → value with keys of any type (SameValueZero), insertion order, `size`, direct iteration; `set` (chainable, updates), `get`, `has`, `delete`, `clear`, `keys/values/entries`, `forEach(value, key)`. Prefer it for dynamic dictionaries, counting, caches (LRU), non-string keys; prefer objects for fixed records and JSON. `JSON.stringify(map)` is `{}`.
-- **Set**: unique values, insertion order, O(1) `has`; `add` (chainable), `delete`, `clear`, `values`, `entries` (`[v, v]`), `forEach`. Dedupe with `[...new Set(arr)]`. ES2025 adds `union`, `intersection`, `difference`, `symmetricDifference`, `isSubsetOf`, `isSupersetOf`, `isDisjointFrom`.
-- **WeakMap/WeakSet** hold object (or non-registered symbol) keys weakly: no leaks, but no `size`/iteration. Use for side tables, per-object caches, tagging. **WeakRef/FinalizationRegistry** are advanced; never rely on their timing.
-- **Iterable** = has `[Symbol.iterator]()` returning an **iterator** with `next() → { value, done }` (optional `return()` for cleanup). Arrays, strings, Maps, Sets, typed arrays, NodeLists and generators are iterable; plain objects aren't. Consumers: `for…of`, spread, destructuring, `Array.from`, Map/Set constructors, `Promise.all`.
-- **Generators** (`function*`) pause at `yield`; calling one returns an iterator without running the body. Great for lazy/infinite sequences, `Symbol.iterator`, tree traversal (`yield*`), two-way coroutines (functions that can pause and exchange values with their caller: `next(x)`, `return`, `throw`). **Async generators** + `for await…of` for paged or streamed data.
-- **Iterator helpers** (ES2025): lazy `map/filter/take/drop/flatMap` and consuming `toArray/reduce/forEach/some/every/find` on any iterator; `Iterator.from` wraps custom ones; arrays need `.values()` first.
-- **`Object.groupBy` / `Map.groupBy`** (ES2024) bucket items by a key function — null-prototype object with string keys, or a Map with any keys.
+- **Map**: any-type keys (SameValueZero), insertion order, `size`, direct iteration; `set` (chainable), `get`, `has`, `delete`, `clear`, `keys/values/entries`, `forEach(value, key)`. For dynamic dictionaries, counting, LRU caches, non-string keys; objects for fixed records and JSON. `JSON.stringify(map)` is `{}`.
+- **Set**: unique values, insertion order, O(1) `has`; `add` (chainable), `delete`, `clear`, `values`, `entries` (`[v, v]`), `forEach`. Dedupe with `[...new Set(arr)]`. ES2025: `union`, `intersection`, `difference`, `symmetricDifference`, `isSubsetOf`, `isSupersetOf`, `isDisjointFrom`.
+- **WeakMap/WeakSet**: object (or non-registered symbol) keys held weakly — no leaks, no `size`/iteration; side tables, per-object caches, tagging. **WeakRef/FinalizationRegistry**: advanced; never rely on timing.
+- **Iterable** = `[Symbol.iterator]()` returning an **iterator** with `next() → { value, done }` (optional `return()`). Arrays, strings, Maps, Sets, typed arrays, NodeLists, generators are iterable; plain objects aren't. Consumers: `for…of`, spread, destructuring, `Array.from`, Map/Set constructors, `Promise.all`.
+- **Generators** (`function*`) pause at `yield`; calling returns an iterator without running. Lazy/infinite sequences, `Symbol.iterator`, traversal (`yield*`), two-way **coroutines** (functions that pause and exchange values with the caller: `next(x)`, `return`, `throw`). **Async generators** + `for await…of` for paged/streamed data.
+- **Iterator helpers** (ES2025): lazy `map/filter/take/drop/flatMap`, consuming `toArray/reduce/forEach/some/every/find`; `Iterator.from`; arrays need `.values()`.
+- **`Object.groupBy` / `Map.groupBy`** (ES2024): bucket by a key function — null-prototype object (string keys) or Map (any keys).

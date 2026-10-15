@@ -1,51 +1,38 @@
 # Chapter 13 — Recommender Systems and Embeddings
 
-When Netflix fills a row with shows, YouTube picks the next video or Amazon shows "customers who bought this also bought", a **recommender system** is at work: it predicts which items (movies, songs, products, posts) a particular user is most likely to want, from a catalogue far too large to browse. This chapter builds recommenders from a ratings matrix and a similarity formula, through matrix factorisation and learned **embeddings**, up to the **two-tower + ranking funnel** used in production — and shows how to evaluate them honestly.
+When Netflix fills a row with shows, YouTube picks the next video or Amazon shows "customers who bought this also bought", a **recommender system** predicts which items a user most likely wants from a catalogue too large to browse. This chapter goes from a ratings matrix and a similarity formula, through matrix factorisation and learned **embeddings**, to the production **two-tower + ranking funnel** — and how to evaluate it honestly.
 
-**What you'll learn**
+**What you'll learn:** framing and feedback types; similarity measures; content-based vs collaborative filtering; matrix factorisation (SGD, ALS, implicit ALS — implemented); embeddings and item2vec (implemented); two-tower retrieval and its serving/versioning; the funnel with MMR re-ranking; ANN search (IVF implemented, HNSW, PQ); cold start, popularity bias, feedback loops; offline metrics and A/B tests — and how Netflix, YouTube, Spotify and Amazon do it.
 
-1. Framing (rating prediction vs top-K ranking), the user–item matrix, explicit vs implicit feedback.
-2. Similarity measures; content-based vs collaborative filtering (user- and item-based) vs hybrids.
-3. Matrix factorisation with SGD (stochastic gradient descent) and ALS (alternating least squares) (implemented), plus its implicit-feedback version.
-4. Embeddings, word2vec and item2vec (implemented).
-5. Two-tower retrieval: in-batch negatives, serving from a nearest-neighbour index, freshness, versioning.
-6. The funnel (retrieval → ranking → re-ranking with MMR) and approximate nearest neighbour search (IVF implemented, HNSW, PQ).
-7. Cold start, popularity bias and feedback loops.
-8. Evaluation: precision/recall@k, MAP, NDCG, hit rate, coverage, diversity, novelty, A/B tests (live experiments that show two versions to random groups of users and compare the results) — and how Netflix, YouTube, Spotify and Amazon do it.
-
-All code is in `code/` (numpy — Python's array-maths library; scikit-learn — classic ML library; PyTorch — deep-learning library; no downloads — `code/data.py` generates a small dataset shaped like **MovieLens**, the classic public movie-ratings set from GroupLens). Outputs below are real.
+All code is in `code/` (numpy, scikit-learn, PyTorch; no downloads — `code/data.py` generates a small dataset shaped like **MovieLens**, the classic GroupLens movie-ratings set). Outputs are real.
 
 ---
 
 ## 13.1 The recommendation problem
 
 ### What it is
-We have a set of **users** U, a set of **items** I, and a log of **interactions** (ratings, clicks, plays, purchases). The job: for a user u, produce a short **ranked list** of items u has not yet seen and is likely to value.
-
-Analogy: a good bookshop clerk. They remember what you bought before (your history), know which books are alike (item similarity), and notice that people with your taste loved a particular new novel (collaborative signal). A recommender automates that clerk for millions of customers at once.
+Users U, items I, and a log of **interactions** (ratings, clicks, plays, purchases). For a user u, produce a short **ranked list** of unseen items u is likely to value.
 
 ### Why it matters
-- **Choice overload**: millions of items, about ten fit on a phone screen.
-- **Business value**: Gomez-Uribe & Hunt (2015) wrote that Netflix's recommender influences the choice behind about 80% of hours streamed, with most of the rest coming from search. Recommendations drive discovery, engagement and sales.
-- **Two-sided value**: they help creators and sellers in the "long tail" (the many niche items) find an audience.
+- **Choice overload**: millions of items, ~ten fit on a phone screen.
+- **Business value**: Gomez-Uribe & Hunt (2015) wrote that Netflix's recommender influences the choice behind about 80% of hours streamed, most of the rest coming from search.
+- **Two-sided value**: helps creators and sellers in the **long tail** (the many niche items) find an audience.
 
 ### How to frame it
-There are two classic formulations:
 
-| Framing | Question the model answers | Typical loss / metric | Example |
+| Framing | Question | Typical loss / metric | Example |
 |---|---|---|---|
-| **Rating prediction** (regression: predicting a number) | "How many stars would u give i?" | Squared error / RMSE (root mean squared error) | The Netflix Prize (2006–2009) |
-| **Top-K ranking** (the real product) | "Which K items should u see, in what order?" | Ranking losses / precision@K, recall@K, NDCG (all defined in §13.11) | Home feeds, "Up next", playlists |
+| **Rating prediction** (regression) | "How many stars would u give i?" | Squared error / RMSE | The Netflix Prize (2006–2009) |
+| **Top-K ranking** (the real product) | "Which K items should u see, in what order?" | Ranking losses / precision@K, recall@K, NDCG (§13.11) | Home feeds, "Up next", playlists |
 
-Modern systems almost always optimise the **ranking** framing: users only see the top of the list, and most feedback is implicit (clicks, watch time), not stars. Before modelling, answer the framing questions an interviewer expects:
-
-1. **What is a "good" outcome?** A click is cheap; watch time, a purchase or a "save" is closer to real value. Clicks alone reward clickbait.
-2. **What signals exist?** Ratings, views, **dwell time** (how long someone stays on an item), skips, purchases, searches, item **metadata** (descriptive facts about an item: genre, author, price…), user profile, context (device, time, location).
-3. **Scale and latency.** (**Latency** is the time to answer one request — a home page must be ready in well under a second; see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md).) 1,000 items can be scored exhaustively; 100 million cannot — hence the funnel of §13.8.
-4. **Freshness** (news goes stale in hours, movies last years) and **constraints** (diversity, creator fairness, safety filters, "don't show what they already bought").
+Modern systems optimise **ranking**: users see only the top, and most feedback is implicit. Framing questions an interviewer expects:
+1. **What is a good outcome?** Clicks are cheap and reward clickbait; watch time, purchase or "save" is closer to value.
+2. **What signals exist?** Ratings, views, **dwell time**, skips, purchases, searches, item **metadata** (genre, author, price), user profile, context (device, time, location).
+3. **Scale and latency** (a home page must be ready well under a second — [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)). 1,000 items can be scored exhaustively; 100 million cannot — hence the funnel (§13.8).
+4. **Freshness** (news stales in hours, movies last years) and **constraints** (diversity, creator fairness, safety, "don't show what they already bought").
 
 ### The user–item matrix
-Users are rows, items are columns; cell (u, i) holds the interaction (stars, or 1 for "watched") or is empty.
+Rows = users, columns = items; cell (u, i) holds the interaction or is empty.
 
 ```
             Movie1  Movie2  Movie3  Movie4
@@ -54,13 +41,9 @@ Users are rows, items are columns; cell (u, i) holds the interaction (stars, or 
    Cy         1       .       5       4
 ```
 
-Two facts define the whole field:
-- The matrix is **huge**: users × items can be 10⁹ × 10⁸.
-- It is **extremely sparse**: a typical user touches a vanishing fraction of items. Even our small synthetic dataset has only ~9% of cells filled; real ones are often below 0.1%.
+It is **huge** (10⁹ users × 10⁸ items) and **extremely sparse** (ours is ~9% filled; real ones often < 0.1%). Recommendation = **filling in missing cells** well enough that each row's top-scoring empty cells are items the user would enjoy.
 
-Recommendation = **filling in the missing cells** well enough that the highest-scoring empty cells in each row are items the user would actually enjoy.
-
-`code/data.py` builds the dataset used throughout the chapter: 600 users, 400 movies, 6 genres. Each user has hidden genre tastes; each movie has 1–2 genres and a hidden quality; popular movies are seen much more often (a long tail), like real catalogues.
+`code/data.py`: 600 users, 400 movies, 6 genres. Users have hidden genre tastes; movies have 1–2 genres and hidden quality; popular movies are seen far more (a long tail).
 
 ```python
 affinity = taste @ item_genres.T / item_genres.sum(1) + quality     # hidden "true" liking
@@ -69,7 +52,6 @@ p_seen = popularity[None, :] * exp(1.5 * affinity)                   # people wa
 observed = rng.random(p_seen.shape) < p_seen                          # only these cells are known
 ```
 
-Output:
 ```
 users=600 items=400 ratings=21216
 density = 8.840%
@@ -77,93 +59,84 @@ top 10% of items receive 38% of all ratings
 star histogram: {1: 47, 2: 624, 3: 3054, 4: 6335, 5: 11156}
 ```
 
-The star histogram is skewed high because people mostly watch (and rate) what they expect to like. This **selection bias** (data "missing not at random") holds in real data too: observed ratings are not a random sample of opinions.
+Stars skew high because people mostly watch what they expect to like — **selection bias** (data **missing not at random**): observed ratings aren't a random sample of opinions, in real data too.
 
 ### TL;DR
-Recommenders fill in a huge, sparse user–item matrix and show each user the top-scoring empty cells. Frame it as **top-K ranking** on a well-chosen outcome (not just clicks), and state scale, latency, freshness and constraints before choosing a model.
+Fill in a huge, sparse user–item matrix; show each user the top-scoring empty cells. Frame as **top-K ranking** on a well-chosen outcome; state scale, latency, freshness and constraints first.
 
 ---
 
 ## 13.2 Explicit vs implicit feedback
 
 ### What it is
-- **Explicit feedback**: the user tells you directly — 1–5 stars, thumbs up/down, a review.
-- **Implicit feedback**: you infer preference from behaviour — clicks, plays, watch time, purchases, add-to-cart, skips, dwell time.
+- **Explicit**: the user says so — stars, thumbs, reviews.
+- **Implicit**: inferred from behaviour — clicks, plays, watch time, purchases, add-to-cart, skips, dwell.
 
 ### Why it matters
-Implicit data is **plentiful** (every session produces it) while explicit data is **scarce** (few people rate anything). Netflix itself replaced 5-star ratings with thumbs up/down in 2017, saying far more members were willing to give a thumb than a star rating. So most production recommenders learn mainly from implicit signals — which changes the maths.
+Implicit data is **plentiful**, explicit **scarce**. Netflix replaced stars with thumbs in 2017, saying far more members would give a thumb. Most production recommenders learn mainly from implicit signals — which changes the maths.
 
 | | Explicit | Implicit |
 |---|---|---|
 | Volume | Low | Very high |
 | Negative signal | Yes (1 star = dislike) | Mostly **no**: "not watched" may mean "never saw it" |
-| Noise | Rating scale differs by person | A click may be accidental; a play may be background noise |
-| Strength | Clear preference | Can be graded: watch 90% vs 5%, played 30 times |
-| Modelling | Regress on the observed cells only | Treat all cells: observed = positive, unobserved = weak negative, with **confidence** weights |
+| Noise | Rating scale differs by person | Accidental clicks, background plays |
+| Strength | Clear preference | Graded: watched 90% vs 5%, played 30 times |
+| Modelling | Regress on observed cells only | All cells: observed = positive, unobserved = weak negative, with **confidence** weights |
 
-### How it works — turning behaviour into training data
-1. Define the **positive event** (watched > 50%, purchased, saved a track).
-2. Optionally turn intensity into **confidence**: c = 1 + α·(play count), α a tuning constant.
-3. **Sample negatives**: random unobserved items, or — much stronger — items shown but not clicked ("impressions without clicks").
-4. Correct **position bias** (top slots get clicks just for being on top): log the position, or randomise a small slice of **traffic** (the stream of real user requests).
+### How it works — behaviour → training data
+1. Define the **positive event** (watched > 50%, purchased, saved).
+2. Optionally map intensity to **confidence** c = 1 + α·(play count).
+3. **Sample negatives**: random unobserved items, or — much stronger — **impressions without clicks**.
+4. Correct **position bias** (top slots get clicks for being on top): log position, or randomise a small traffic slice.
 
 ### Common mistakes
-- Treating every unobserved cell as a full-weight "dislike".
-- Optimising clicks when the real goal is satisfaction (clickbait wins).
-- Ignoring the **negative implicit signals** you do have: early skips, "not interested", short dwell.
+- Treating every unobserved cell as a full-weight dislike.
+- Optimising clicks when the goal is satisfaction.
+- Ignoring the negative implicit signals you have: early skips, "not interested", short dwell.
 
 ### TL;DR
-Explicit = stars (scarce, has real negatives). Implicit = behaviour (abundant, positives only, unobserved ≠ negative). Use confidence weights and sampled negatives for implicit data.
+Explicit = scarce, real negatives. Implicit = abundant, positives only, unobserved ≠ negative — use confidence weights and sampled negatives.
 
 ---
 
 ## 13.3 Similarity measures
 
-### What it is
-A **similarity** function gives a number saying how alike two vectors (two users' rating rows, two items' columns, two embeddings) or two sets are.
-
 | Measure | Formula | Range | Use when |
 |---|---|---|---|
-| **Dot product** | a·b = Σ aₖbₖ | (−∞, ∞) | Embeddings where vector length carries meaning (e.g. popularity) |
-| **Cosine** | a·b / (‖a‖‖b‖), ‖a‖ = length of a | [−1, 1] | Direction matters, length does not (text, rating vectors) |
-| **Adjusted cosine / Pearson** (correlation) | cosine after subtracting each user's mean rating | [−1, 1] | Ratings, where some users rate everything high |
-| **Jaccard** | \|A ∩ B\| / \|A ∪ B\| (shared ÷ combined) | [0, 1] | Sets / binary data: "users who bought both" |
-| **Euclidean distance** | ‖a − b‖ (smaller = more similar) | [0, ∞) | Dense embeddings; for unit vectors (length 1) ‖a−b‖² = 2 − 2·cos |
+| **Dot product** | a·b = Σ aₖbₖ | (−∞, ∞) | Vector length carries meaning (e.g. popularity) |
+| **Cosine** | a·b / (‖a‖‖b‖) | [−1, 1] | Direction matters, length doesn't (text, rating vectors) |
+| **Adjusted cosine / Pearson** | cosine after subtracting each user's mean | [−1, 1] | Ratings, where some users rate everything high |
+| **Jaccard** | \|A ∩ B\| / \|A ∪ B\| | [0, 1] | Sets / binary data ("bought", "followed") |
+| **Euclidean distance** | ‖a − b‖ (smaller = closer) | [0, ∞) | Dense embeddings; for unit vectors ‖a−b‖² = 2 − 2·cos, so rankings match cosine |
 
-### How it works — worked numbers
-Using the tiny matrix from §13.1 (0 = not rated):
+### Worked numbers
+From the §13.1 matrix (0 = not rated):
+- cos(Ana, Ben) = (5·4 + 4·5 + 0·1 + 1·0) / (√42 · √42) = 40/42 = **0.952** — similar.
+- cos(Ana, Cy) = (5·1 + 1·4) / 42 = **0.214** — different.
+- Jaccard on movies *liked* (≥ 4): Ana {1, 2} vs Ben {1, 2} → **1.0**; Ana vs Cy {3, 4} → **0**.
 
-- cos(Ana, Ben) = (5·4 + 4·5 + 0·1 + 1·0) / (√42 · √42) = 40 / 42 = **0.952** → very similar taste.
-- cos(Ana, Cy) = (5·1 + 0 + 0 + 1·4) / 42 = 9 / 42 = **0.214** → different taste.
-- Jaccard on the sets of movies each *liked* (≥ 4 stars): Ana {1, 2}, Ben {1, 2} → 2/2 = **1.0**; Ana vs Cy {3, 4} → 0/4 = **0**.
+**Why subtract the mean?** A generous rater gives 4–5 to everything, a harsh one 2–3; raw cosine sees them as different even if they order movies identically. E.g. [5, 4, 3] vs [3, 2, 1]: raw cosine ≈ 0.98; mean-centred both become [1, 0, −1] → **1.0**.
 
-**Why subtract the mean?** A generous rater gives 4–5 to everything, a harsh one 2–3; raw cosine sees them as different even when they order movies identically. Mean-centring first (adjusted cosine ≈ Pearson correlation) compares *relative* preferences.
-
-**Dot product vs cosine.** A dot product keeps vector length, so an item whose vector grew long because it is broadly popular scores higher for everyone — a real signal or a bias, depending on your goal.
+**Dot product vs cosine:** dot product keeps length, so a broadly popular item with a long vector scores higher for everyone — a signal or a bias, depending on the goal.
 
 ### Common mistakes
-- Raw cosine where 0 means "missing" — zeros drag similarities down. Mean-centre on observed entries only.
-- Trusting similarities built on 2 co-rated items — **shrink** them (pull toward 0 when overlap is small) or require a minimum overlap.
-- Training with dot product but serving with cosine (or vice versa) — rankings differ.
-
-### Self-check
-1. Two users rated the same 3 movies [5, 4, 3] and [3, 2, 1]. Raw cosine? Adjusted cosine? → Raw ≈ 0.98 (both positive vectors). After subtracting means (4 and 2): [1, 0, −1] and [1, 0, −1] → **1.0**, same relative taste.
-2. When is Jaccard the right choice? → Binary/set data such as "bought" or "followed", with no graded strength.
-3. For unit-length vectors, how do cosine and Euclidean rankings relate? → Identical: ‖a−b‖² = 2 − 2cos(a,b).
+- Raw cosine where 0 means "missing" — zeros drag similarity down; mean-centre on observed entries only.
+- Trusting similarities from 2 co-rated items — **shrink** toward 0 when overlap is small, or require minimum overlap.
+- Training with dot product but serving with cosine (or vice versa).
 
 ### TL;DR
-Cosine for direction, dot product when magnitude matters, adjusted cosine for ratings, Jaccard for sets. Mean-centre ratings and shrink similarities built on small overlaps.
+Cosine for direction, dot for magnitude, adjusted cosine for ratings, Jaccard for sets. Mean-centre and shrink small-overlap similarities.
 
 ---
 
 ## 13.4 Content-based vs collaborative filtering
 
 ### What it is
-- **Content-based filtering** recommends items **similar in their attributes** to what the user liked: genres, actors, text description, audio features, image. "You watched three sci-fi films → here is another sci-fi film."
-- **Collaborative filtering (CF)** ignores item attributes and uses **other users' behaviour**: "people who liked what you liked also liked X." The word *collaborative* means users implicitly help each other.
-  - **User-based CF**: find users similar to u, recommend what they liked.
-  - **Item-based CF**: for each item u liked, find items that *the same users* tended to like, recommend the nearest ones. Amazon made this famous.
-- **Hybrid**: combine both (weighted blend, or feed both signals into one model).
+- **Content-based filtering**: recommend items with **similar attributes** to what the user liked (genre, actors, text, audio, image).
+- **Collaborative filtering (CF)**: ignore attributes, use **other users' behaviour** — "people who liked what you liked also liked X".
+  - **User-based CF**: find similar users, recommend what they liked.
+  - **Item-based CF**: for each item u liked, find items the same users liked. Made famous by Amazon.
+- **Hybrid**: blend both, or feed both signals into one model.
 
 ```mermaid
 flowchart LR
@@ -176,14 +149,11 @@ flowchart LR
 ```
 
 ### How item-based CF predicts a rating
-To predict how user u would rate item i:
-1. Compute item–item similarity S(i, j) for all pairs (adjusted cosine over the users who rated both).
-2. Take the k items most similar to i **that u has rated**.
-3. Predict a similarity-weighted average of u's (mean-centred) ratings on them:
-   r̂(u, i) = mean(u) + Σⱼ S(i, j)·(r(u, j) − mean(u)) / Σⱼ |S(i, j)|
-   (the absolute value keeps the denominator positive if some similarities are negative; our code simply keeps only positive neighbours.)
+1. Item–item similarity S(i, j) (adjusted cosine over users who rated both).
+2. Take the k items most similar to i **that u rated**.
+3. r̂(u, i) = mean(u) + Σⱼ S(i, j)·(r(u, j) − mean(u)) / Σⱼ |S(i, j)| (absolute value keeps the denominator positive; our code keeps only positive neighbours).
 
-Item-based usually beats user-based in practice: items have many more ratings each than users do, item–item similarities are more stable over time, and they can be precomputed **offline** (ahead of time in a batch job, rather than **online** while a user waits).
+Item-based usually beats user-based: items have more ratings each, item similarities are more stable, and they can be precomputed **offline** (batch job) rather than **online** (while the user waits). User–user similarity over 100M users is O(U²).
 
 ### Code — `code/similarity_cf.py`
 ```python
@@ -197,7 +167,6 @@ S_cb = Gn @ Gn.T
 # ... predict each held-out rating with the k=20 most similar items the user rated
 ```
 
-Output:
 ```
 == Rating prediction on held-out ratings (RMSE, lower is better) ==
 predict global mean      : 0.833
@@ -211,65 +180,59 @@ Movie 51 (Drama) - 5 nearest neighbours
   content-based: ['109:Drama', '40:Drama', '52:Drama', '56:Drama', '341:Drama']
 ```
 
-What this shows:
-- Both beat the naive **baselines** (simple reference models that anything fancier must beat) clearly ("item-kNN" = predict from the k nearest-neighbour items), and the **hybrid** beats both — they capture partly different information.
-- **CF discovered "Drama" by itself** from who-rated-what alone, never seeing a genre label.
-- Here genre drives taste, so content does well. On real data CF usually wins for items with plenty of history (behaviour captures quality and mood that metadata misses); content wins for new items.
+- Both beat the baselines clearly ("item-kNN" = predict from the k nearest items); the **hybrid** beats both — they capture partly different information.
+- **CF discovered "Drama" by itself** from who-rated-what, never seeing a genre label.
+- Here genre drives taste, so content does well. On real data CF usually wins for items with history (behaviour captures quality and mood metadata misses); content wins for new items.
 
 ### Trade-offs
 
 | | Content-based | Collaborative filtering |
 |---|---|---|
-| Needs | Item attributes / content | Many user interactions |
+| Needs | Item attributes | Many user interactions |
 | New item (no history) | ✅ Works immediately | ❌ Cold start |
 | New user | ⚠️ Needs a few likes | ❌ Cold start |
-| Serendipity (pleasant surprise) | Low — "more of the same" (filter bubble: only ever seeing what you already like) | High — surprising cross-genre finds |
+| Serendipity (pleasant surprise) | Low — "more of the same" (**filter bubble**) | High — cross-genre finds |
 | Captures quality/taste beyond metadata | ❌ | ✅ |
 | Explainability | "Because it's sci-fi like X" | "People like you also liked X" |
-| Popularity bias | Low | High (popular items have more co-occurrences) |
+| Popularity bias | Low | High (popular items co-occur with everything) |
 
 ### When not to use it
 - Pure CF when the catalogue turns over daily (news, listings) — most items are always cold.
-- Pure content-based when metadata is poor or quality varies wildly within a genre.
+- Pure content when metadata is poor or quality varies wildly within a genre.
 
 ### Common mistakes
-- Re-recommending items the user already consumed.
-- User–user similarity over 100 M users (O(U²) — cost grows with the square of the number of users) — go item-based, or embeddings + approximate nearest neighbours.
+- Re-recommending already-consumed items.
+- User–user similarity at huge scale — go item-based, or embeddings + ANN.
 - A random split for a "predict what they do next" product — use a **time-based** split (§13.11).
 
 ### Real-world examples
-- **Amazon** "Customers who bought this item also bought": item-to-item CF (Linden, Smith & York, *IEEE Internet Computing*, 2003). Its key idea was precomputing item–item similarities offline so the online step was a cheap lookup.
-- **Pandora**'s Music Genome Project: content-based, with trained analysts tagging songs on hundreds of musical attributes.
+- **Amazon** "Customers who bought this also bought": item-to-item CF (Linden, Smith & York, *IEEE Internet Computing*, 2003) — item–item similarities precomputed offline so the online step is a cheap lookup.
+- **Pandora**'s Music Genome Project: content-based, analysts tagging songs on hundreds of attributes.
 - Most modern systems are **hybrids**.
 
 ### In the interview
-**30-second answer:** "Content-based matches item attributes to what the user liked — it handles new items but over-specialises. Collaborative filtering uses co-behaviour across users — item-based CF is the scalable classic — and finds surprising, quality-aware matches but has cold start and popularity bias. Production systems combine both, often in an embedding model whose item side uses ID and content features."
+**30-second answer:** "Content-based matches item attributes to what the user liked — handles new items but over-specialises. Collaborative filtering uses co-behaviour — item-based CF is the scalable classic — and finds surprising, quality-aware matches but has cold start and popularity bias. Production combines both, often in an embedding model whose item side uses ID and content features."
 
-- *Why item-based over user-based?* More interactions per item, more stable similarities, precomputable offline.
-- *How do you make CF scale?* Precompute top-N neighbours per item, or learn embeddings and use an ANN (approximate-nearest-neighbour, §13.9) index.
+- *Why item-based over user-based?* More interactions per item, more stable, precomputable offline.
+- *Scaling CF?* Precompute top-N neighbours per item, or embeddings + ANN index (§13.9).
 - *Rich metadata, sparse interactions?* Start content-heavy; blend in CF as data grows.
 
-### Self-check
-1. What does CF need that content-based does not? → Interaction data from many users.
-2. Which handles a movie released today? → Content-based (it only needs attributes).
-3. Why is CF prone to popularity bias? → Popular items co-occur with everything, so they look similar to everything.
-
 ### TL;DR
-Content-based = "similar attributes"; collaborative = "similar people's behaviour". CF finds structure (even genres) from behaviour alone but needs history; content covers cold items. Hybrids win.
+Content = similar attributes; collaborative = similar people's behaviour. CF finds structure (even genres) from behaviour but needs history; content covers cold items. Hybrids win.
 
 ---
 
 ## 13.5 Matrix factorisation
 
 ### What it is
-**Matrix factorisation (MF)** assumes each user and each item can be described by a short vector of k hidden **latent factors** (k ≈ 10–200). A user's affinity for an item is the dot product of their vectors:
+**Matrix factorisation (MF)** describes each user and item by a short vector of k hidden **latent factors** (k ≈ 10–200):
 
 r̂(u, i) = μ + bᵤ + bᵢ + pᵤ · qᵢ
 
-- μ = global average rating; bᵤ = user bias (a generous rater); bᵢ = item bias (a universally loved film).
-- pᵤ ∈ ℝᵏ = user factor vector (ℝᵏ: a list of k real numbers); qᵢ ∈ ℝᵏ = item factor vector.
+- μ = global mean; bᵤ = user bias (a generous rater); bᵢ = item bias (a universally loved film).
+- pᵤ, qᵢ ∈ ℝᵏ = user and item factor vectors.
 
-So the giant R (users × items) ≈ **P (users × k) · Qᵀ (k × items)** — two thin matrices (Qᵀ is Q **transposed**: rows and columns swapped). Analogy: instead of storing everyone's opinion of every song, store each person's "taste coordinates" and each song's "style coordinates" on a few hidden axes (say acoustic ↔ electronic); training discovers the axes, nobody names them.
+So R (users × items) ≈ **P (users × k) · Qᵀ (k × items)**. Each person gets "taste coordinates" and each item "style coordinates" on a few hidden axes that training discovers.
 
 ```mermaid
 flowchart LR
@@ -278,37 +241,37 @@ flowchart LR
 ```
 
 ### Why it matters
-- It was the star of the **Netflix Prize** (Simon Funk's 2006 SGD "SVD" blog post — SVD, singular value decomposition, is the classic way to factor a complete matrix; Koren, Bell & Volinsky, 2009).
-- It **generalises** CF: two users with no co-rated movie can still be similar if their vectors point the same way.
-- Its vectors pᵤ, qᵢ are **embeddings** — the bridge to two-tower models (§13.7) — and storage drops from U·I to (U + I)·k.
+- Star of the **Netflix Prize** (Simon Funk's 2006 SGD "SVD" post; Koren, Bell & Volinsky, 2009).
+- **Generalises** CF: two users with no co-rated movie can still be similar if their vectors align.
+- pᵤ, qᵢ are **embeddings** — the bridge to two-towers (§13.7); storage drops from U·I to (U + I)·k.
 
 ### How it works — the objective
-Minimise the squared error on the **observed** ratings only, plus L2 **regularisation** (a penalty on the squared size of the vectors) so the vectors don't **overfit** (memorise the training ratings, noise included, instead of generalising):
+Squared error on **observed** ratings only, plus L2 regularisation:
 
 L = Σ₍ᵤ,ᵢ₎ observed [ (r − r̂)² + λ(‖pᵤ‖² + ‖qᵢ‖² + bᵤ² + bᵢ²) ]
 
-(λ = regularisation strength; the penalty sits inside the sum, as in Koren, Bell & Volinsky 2009, which is what the per-rating SGD updates below minimise. The constant factor 2 from differentiating the square is absorbed into the **learning rate** η — the size of each update step.)
+(Penalty inside the sum as in Koren et al. 2009 — what the per-rating SGD updates minimise; the factor 2 from differentiating is absorbed into the learning rate η.)
 
-This is not classical SVD: SVD needs a full matrix, and filling missing cells with zeros would tell the model "everyone hates everything unseen". We optimise only over known cells. Two ways to minimise it:
+This is **not classical SVD**: SVD needs a full matrix, and zero-filling tells the model "everyone hates everything unseen". Two optimisers:
 
-**1. Stochastic gradient descent (SGD)** — loop over ratings one at a time:
+**1. SGD** — one rating at a time:
 1. err = r − r̂(u, i)
 2. bᵤ ← bᵤ + η(err − λbᵤ); bᵢ ← bᵢ + η(err − λbᵢ)
-3. pᵤ ← pᵤ + η(err·qᵢ − λpᵤ); qᵢ ← qᵢ + η(err·pᵤ − λqᵢ) (use the old pᵤ in the second update)
+3. pᵤ ← pᵤ + η(err·qᵢ − λpᵤ); qᵢ ← qᵢ + η(err·pᵤ − λqᵢ) (use the old pᵤ)
 
-**2. Alternating least squares (ALS)** — the objective is not **convex** (bowl-shaped with a single lowest point) in P and Q together, but it **is** a plain **ridge regression** (linear regression with an L2 penalty, which has an exact closed-form solution) if you freeze one of them:
-1. Freeze Q. For each user, solve pᵤ = (QᵤᵀQᵤ + λI)⁻¹ Qᵤᵀ rᵤ exactly (Qᵤ = rows of Q for the items u rated; rᵤ = u's ratings on them, minus μ in our bias-free version). This is the ridge-regression formula with Qᵤ as the inputs and rᵤ as the targets (I is the identity matrix and ⁻¹ means matrix inverse).
-2. Freeze P. Solve each qᵢ the same way.
-3. Repeat until the error stops falling (usually 10–20 rounds).
+**2. Alternating least squares (ALS)** — the objective isn't **convex** in P and Q jointly, but with one frozen it's a **ridge regression** with a closed-form solution:
+1. Freeze Q. For each user: pᵤ = (QᵤᵀQᵤ + λI)⁻¹ Qᵤᵀ rᵤ (Qᵤ = rows of Q for items u rated; rᵤ = u's ratings on them, minus μ in our bias-free version).
+2. Freeze P; solve each qᵢ the same way.
+3. Repeat until error stops falling (10–20 rounds).
 
-Each user's solve is independent, so ALS **parallelises** easily (Spark MLlib — the ML library of Apache Spark, a framework for computing across a cluster of machines — ships it).
+Each solve is independent, so ALS **parallelises** trivially (Spark MLlib ships it).
 
 | | SGD | ALS |
 |---|---|---|
 | Update | One rating at a time | Whole vector solved exactly |
-| Parallelism | Harder (conflicting updates) | Embarrassingly parallel (fully independent pieces) |
-| Tuning | Learning rate, epochs (passes over the data) | Few knobs, few iterations |
-| Implicit data (all cells) | Needs negative sampling (drawing random non-interactions as negatives) | Efficient (Hu et al. 2008) |
+| Parallelism | Harder (conflicting updates) | Embarrassingly parallel |
+| Tuning | Learning rate, epochs | Few knobs, few iterations |
+| Implicit data (all cells) | Needs negative sampling | Efficient (Hu et al. 2008) |
 | Extra features, custom losses | Flexible | Less flexible |
 
 ### Code — `code/matrix_factorization.py`
@@ -333,7 +296,6 @@ def mf_als(train, test, n_users, n_items, k=16, reg=5.0, iters=10, seed=0):
         # ... then the same loop over items with P fixed
 ```
 
-Output:
 ```
 baseline (global mean) test RMSE: 0.833
 SGD epoch  1: train RMSE 0.746  test RMSE 0.759
@@ -353,79 +315,65 @@ true (hidden) stars of those movies: [5. 5. 5. 5. 4.]
 
 ![Matrix factorisation learning curves](img/mf_learning_curves.png)
 
-Reading the results:
-- Regularised SGD reaches **0.623** test RMSE — better than item-kNN (0.682) and the mean (0.833).
-- ALS converges in ~5 iterations (each step is an exact solve); it ends a little worse here because this simple version has no bias terms.
-- The dashed lines show **overfitting**: 64 factors with no regularisation push training error to 0.05 while test error climbs back up to 0.73. With many parameters and sparse data, λ is not optional.
-- User 0's top-5 are movies the generator says they would truly rate 5, 5, 5, 5, 4.
+- Regularised SGD reaches **0.623** — better than item-kNN (0.682) and the mean (0.833).
+- ALS converges in ~5 iterations (exact solves); ends slightly worse because this version has no biases.
+- **Overfitting** (dashed lines): 64 factors without regularisation drive train error to 0.05 while test climbs to 0.73. With many parameters and sparse data, λ isn't optional.
+- User 0's top-5 truly rate 5, 5, 5, 5, 4.
 
 ### Implicit-feedback MF (weighted ALS)
-For clicks/plays, Hu, Koren & Volinsky (2008) changed the objective to cover **every** cell:
+Hu, Koren & Volinsky (2008) cover **every** cell:
 - preference pᵤᵢ = 1 if u interacted with i, else 0;
-- confidence cᵤᵢ = 1 + α·(count), so observed cells matter a lot and unobserved ones a little;
+- confidence cᵤᵢ = 1 + α·(count) — observed cells matter a lot, unobserved a little;
 - minimise Σ over **all** (u, i) of cᵤᵢ(pᵤᵢ − xᵤ·yᵢ)² + λ(…).
 
-It is solved with ALS. The speed trick: the user solve needs YᵀCᵤY (Y = item-factor matrix, Cᵤ = diagonal matrix of u's confidences), rewritten as YᵀY + Yᵀ(Cᵤ − I)Y — YᵀY is shared by all users, and the second term only involves the few items u actually touched. `code/implicit_eval.py` uses the plain dense form (fine for small data); libraries: `implicit` (Python), Spark MLlib `ALS(implicitPrefs=True)`.
+Solved with ALS. Speed trick: YᵀCᵤY = YᵀY + Yᵀ(Cᵤ − I)Y — YᵀY is shared by all users and the second term touches only u's few items. `code/implicit_eval.py` uses the dense form; libraries: `implicit`, Spark MLlib `ALS(implicitPrefs=True)`.
 
 ### Trade-offs / when not to use it
-- MF sees only IDs: cold-start items have no vector, and context (time, device) is hard to add — use feature-based models (factorisation machines — models that learn pairwise interactions between any features — and two-towers).
-- A dot product is a limited interaction function, yet well-tuned MF stays a strong baseline: Rendle et al. (2020) found a tuned dot product beat an MLP-based (multi-layer perceptron, a plain neural network) "neural collaborative filtering" model.
+- MF sees only IDs: cold items have no vector, and context (time, device) is hard to add — use feature-based models (**factorisation machines**, which learn pairwise interactions between any features, and two-towers).
+- A dot product is a limited interaction function, yet tuned MF stays a strong baseline: Rendle et al. (2020) found a tuned dot product beat MLP-based "neural collaborative filtering".
 
 ### Common mistakes
-- Zero-filling missing cells and running `np.linalg.svd` — teaches "unseen = hated".
-- No regularisation, or tuning k on the test set.
-- Dropping bias terms — much of the signal is just "this user rates high" and "this movie is loved".
+- Zero-filling and running `np.linalg.svd` — teaches "unseen = hated".
+- No regularisation, or tuning k on the test set (sweep k on validation; larger k needs more λ).
+- Dropping biases — much of the signal is "this user rates high" and "this movie is loved".
 
 ### Real-world examples
-- **Netflix Prize**: *BellKor's Pragmatic Chaos* won in 2009 with the required 10% RMSE improvement over Cinematch, using a large blend of factor and neighbourhood models. Netflix wrote in 2012 that it productionised two components from an earlier progress prize (an SVD-style factorisation and restricted Boltzmann machines, an early type of neural network) but not the final blend — the extra accuracy did not justify the engineering cost.
-- **Spotify** used implicit-feedback MF on listening data as one of the pillars behind Discover Weekly.
+- **Netflix Prize**: *BellKor's Pragmatic Chaos* won in 2009 with the required 10% RMSE improvement over Cinematch, using a large blend of factor and neighbourhood models. Netflix wrote in 2012 that it productionised two components from an earlier progress prize (SVD-style factorisation and restricted Boltzmann machines) but not the final blend — the extra accuracy didn't justify the engineering cost.
+- **Spotify** used implicit-feedback MF on listening data as one pillar of Discover Weekly.
 
 ### In the interview
-**30-second answer:** "MF gives every user and item a k-dimensional vector and predicts affinity as a dot product plus biases, trained on observed entries with L2 — by SGD, or by ALS, which becomes many small parallel ridge regressions. For implicit data I'd use weighted ALS with confidence weights. Weak spots: cold start and no context, which feature-based two-tower models fix."
+**30-second answer:** "MF gives every user and item a k-dimensional vector and predicts affinity as a dot product plus biases, trained on observed entries with L2 — by SGD, or by ALS, which becomes many small parallel ridge regressions. For implicit data, weighted ALS with confidence weights. Weak spots: cold start and no context, which feature-based two-towers fix."
 
-- *Why not plain SVD?* It needs a complete matrix; imputing (filling in) zeros biases toward "dislike".
-- *How to choose k?* Validation sweep; larger k needs more regularisation.
-
-### Self-check
-1. What do bᵤ and bᵢ capture? → A user's general generosity; an item's general appeal.
-2. Why regularise? → Few ratings per user/item vs many parameters → overfitting (see the dashed curve).
-3. What makes ALS easy to distribute, and how does the implicit version differ? → With one side fixed, each user (or item) is an independent least-squares solve; implicit ALS covers all cells with 0/1 preferences and confidence weights.
+- *Why not plain SVD?* It needs a complete matrix; imputing zeros biases toward "dislike".
 
 ### TL;DR
-MF = users and items as short vectors, affinity = dot product (+ biases). Train on observed cells with L2, by SGD (flexible) or ALS (parallel, great for implicit data). Strong baseline; fails on cold start.
+Users and items as short vectors; affinity = dot product + biases. Train on observed cells with L2 by SGD (flexible) or ALS (parallel, great for implicit). Strong baseline; fails on cold start.
 
 ---
 
 ## 13.6 Embeddings
 
 ### What it is
-An **embedding** is a short, dense, learned vector of numbers (typically tens to a few hundred values) that represents a discrete thing — a user ID, an item ID, a word, a category. The factor vectors pᵤ and qᵢ from MF are embeddings.
+An **embedding** is a short, dense, learned vector (tens to a few hundred numbers) representing a discrete thing — user ID, item ID, word, category. MF's pᵤ and qᵢ are embeddings.
 
 ### The problem it solves
-Raw IDs carry no meaning: `item_5521` is not "closer" to `item_5522` than to `item_9`. The naive encoding, **one-hot** (a vector as long as the vocabulary with a single 1), is enormous for 100 million items, and every pair of one-hot vectors is equally far apart — it says nothing about which items resemble each other.
-
-An embedding is small, and training places the vectors so that **distance reflects the training objective**: items that serve the same users end up near each other. Mechanically, an embedding layer is a lookup table (one row per ID); multiplying a one-hot vector by it selects one row. Caution: "close" means close *for that objective* — two co-watched items may still differ in price, language or quality.
+Raw IDs carry no meaning (`item_5521` isn't closer to `item_5522` than to `item_9`). **One-hot** vectors are enormous for 100M items and every pair is equally distant. Embeddings are small and training places them so **distance reflects the training objective**: items serving the same users end up near each other. Mechanically an embedding layer is a lookup table (one row per ID); multiplying a one-hot vector by it selects a row. "Close" means close *for that objective* — co-watched items may still differ in price, language or quality.
 
 ### Four ways to train them
 
 | Route | Idea | Best when |
 |---|---|---|
-| **Matrix factorisation** | Factor the interaction matrix (§13.5) | Only interactions available; strong baseline |
-| **Two-tower (contrastive: learn by contrasting real pairs with fake ones)** | Real (user, item) pairs must outscore sampled negatives (§13.7) | Large-scale retrieval with features |
-| **Graph embeddings** | Random walks (hopping randomly along links) or graph neural networks (networks that pass information along a graph's links) over users, items, follows, co-purchases | Relationships are the signal (e.g. Pinterest's PinSage) |
-| **Pretrained content encoders** | A pretrained text/image/audio model embeds the item's content | Brand-new items; text/image-heavy catalogues |
+| **Matrix factorisation** | Factor the interaction matrix (§13.5) | Only interactions; strong baseline |
+| **Two-tower (contrastive)** | Real (user, item) pairs must outscore sampled negatives (§13.7) | Large-scale retrieval with features |
+| **Graph embeddings** | Random walks or graph neural networks over users, items, follows, co-purchases | Relationships are the signal (Pinterest's PinSage) |
+| **Pretrained content encoders** | Text/image/audio model embeds item content | Brand-new items; text/image-heavy catalogues |
 
-This chapter focuses on vectors learned from *your own behaviour logs*. Text embeddings from pretrained language models (for semantic search — search by meaning — and RAG, retrieval-augmented generation) are covered in the AI book ([embeddings, vector databases and RAG](../../../ai/chapters/07-embeddings-vector-databases-and-rag/README.md)); the geometry is the same.
+Text embeddings from pretrained language models (semantic search, RAG) are in the AI book ([embeddings, vector databases and RAG](../../../ai/chapters/07-embeddings-vector-databases-and-rag/README.md)); the geometry is the same.
 
-### word2vec intuition → item2vec
-**word2vec** (Mikolov et al., 2013) learns word vectors from one idea: *a word is known by the company it keeps*. The **skip-gram** version:
-1. Slide a window over text. For each centre word, the words within ±w positions are its **context**.
-2. Train so that σ(centre vector · true context vector) → 1 (σ = sigmoid, an S-shaped function that squashes any number into 0–1), and for k random **negative** words σ → 0. This is **negative sampling**; negatives are drawn in proportion to frequency^0.75, giving rare words a little more weight than raw frequency would.
-3. Words used in similar contexts end up with similar vectors (the famous "king − man + woman ≈ queen").
+### word2vec → item2vec
+**word2vec** (Mikolov et al., 2013) skip-gram with negative sampling — centre word predicts window context, σ(centre · context) → 1 for real pairs and → 0 for k frequency^0.75-sampled negatives — is taught in [§12.9](../12-sequences-rnns-and-attention/README.md). **item2vec** (Barkan & Koenigstein, 2016) treats a session, playlist or basket as a "sentence" and its items as "words", so co-consumed items get nearby vectors — no labels needed. Airbnb (listing embeddings from search click sessions, Grbovic & Cheng, KDD 2018) and Spotify (tracks co-occurring in playlists) describe using it; case study [18.9](../18-ml-case-studies-2/README.md) builds a similar-listings carousel on it.
 
-**item2vec** (Barkan & Koenigstein, 2016) treats a session, playlist or basket as a "sentence" and its items as "words", so items consumed together get nearby vectors — no labels needed. Airbnb (listing embeddings from users' search click sessions, Grbovic & Cheng, KDD 2018) and Spotify (tracks co-occurring in playlists) have described using this idea. Case study [18.9](../18-ml-case-studies-2/README.md) builds a similar-listings carousel on it.
-
-`code/item2vec.py` implements skip-gram with negative sampling in numpy:
+`code/item2vec.py` implements it in numpy:
 ```python
 pos = sig(np.sum(vc * W_out[o], 1))                  # centre . true context  -> want 1
 ngs = sig(np.einsum("bd,bkd->bk", vc, W_out[negs]))  # centre . 5 negatives   -> want 0
@@ -437,7 +385,6 @@ np.add.at(W_out, negs, -lr * g_neg * vc[:, None, :])
 np.add.at(W_in, c, -lr * grad_c)
 ```
 
-Output:
 ```
 epoch  1  mean loss per pair 2.884
 epoch 10  mean loss per pair 2.581
@@ -445,52 +392,47 @@ top-5 neighbours sharing the main genre: 79% (random would give ~17%)
 item 51 (Drama) neighbours: ['113:Drama', '236:Drama', '281:Action', '321:Drama', '146:Drama']
 ```
 
-The model only saw lists of item IDs, yet 79% of each item's nearest neighbours share its genre (chance: 17%). That is the core promise of embeddings: **meaningful geometry learned from behaviour**.
+Seeing only lists of item IDs, 79% of nearest neighbours share the item's genre (chance 17%) — **meaningful geometry learned from behaviour**.
 
 ### When not to use embeddings
-- **Small catalogues** where exact scoring of everything already fits the budget — learned retrieval plus an ANN index is extra machinery.
-- **Numeric inputs** (price, distance, account age) are already meaningful: scale them and use them directly.
-- **Decisions that must be explained**: embedding dimensions have no human meaning, so credit and fraud systems keep interpretable features alongside.
+- **Small catalogues** where exact scoring already fits the budget.
+- **Numeric inputs** (price, distance, account age) — already meaningful; scale and use directly.
+- **Decisions that must be explained** — embedding dimensions have no human meaning; credit and fraud keep interpretable features alongside.
 
 ### Common mistakes
 - Comparing vectors from two different trainings — each run has its own coordinate system (§13.7).
-- A separate embedding for every rare ID (noisy) — use a minimum count, hashing (mapping many IDs into a fixed number of shared buckets), or content features.
+- An embedding per rare ID (noisy) — use a minimum count, **hashing** (many IDs into a fixed number of shared buckets), or content features.
 - Assuming "near" means "similar in every way".
 
-### Self-check
-1. Why is one-hot bad for 100 M IDs? → Enormous and every pair is equally distant — no similarity information.
-2. What is an embedding layer mechanically? → A trainable lookup table; row i is ID i's vector.
-3. What plays the role of "sentence" in item2vec? → A session, playlist or basket.
-
 ### TL;DR
-Embeddings are short learned vectors that give IDs a geometry where near = related (for the training objective). Learn them by MF, two-tower, graphs or content encoders; item2vec = word2vec on sessions.
+Short learned vectors giving IDs a geometry where near = related (for the objective). Learn via MF, two-tower, graphs or content encoders; item2vec = word2vec on sessions.
 
 ---
 
 ## 13.7 Two-tower retrieval
 
 ### What it is
-A **two-tower model** (also *dual encoder*) has two separate neural networks:
-- the **user (query) tower** reads user features — ID, recent watches/clicks, search terms, context such as device and hour — and outputs a vector;
-- the **item (candidate) tower** reads item features — ID, category, text/image content — and outputs a vector of the **same length** (commonly 64–256 numbers).
+A **two-tower model** (*dual encoder*) has two separate networks:
+- **user (query) tower**: user features — ID, recent clicks, search terms, device, hour → vector;
+- **item (candidate) tower**: item features — ID, category, text/image content → vector of the **same length** (64–256).
 
-The score is simply the **dot product** (or cosine) of the two vectors.
+Score = **dot product** (or cosine) of the two.
 
 ![The two towers meet only at the dot product.](img/course_two_towers.svg)
-*Figure — The user tower and item tower run independently and meet only at the final dot product (course diagram).*
+*Figure — The towers run independently and meet only at the final dot product (course diagram).*
 
 ### Why it matters — the key property
-The two towers **never see each other's inputs**; they meet only in the final dot product. So the item tower can embed the **entire catalogue ahead of time** and load the vectors into a nearest-neighbour index; when a request arrives, the system computes just the user's vector with the **user tower** and asks the index for its nearest items — 100 million items searched in milliseconds.
+The towers **never see each other's inputs**. So the item tower embeds the **entire catalogue ahead of time** into a nearest-neighbour index; per request only the user vector is computed and the index returns its nearest items — 100M items searched in milliseconds.
 
-A **cross model**, which reads user and item features together, can learn interactions such as "this user × this item's price" and is more accurate, but nothing can be precomputed: it would have to run once per catalogue item per request. Hence two-towers do **retrieval** and cross models do **ranking** (§13.8).
+A **cross model** reads user and item features together and learns interactions ("this user × this item's price") — more accurate, but nothing precomputes; it would run per item per request. Hence two-towers do **retrieval**, cross models **ranking** (§13.8).
 
 ### How it is trained
-The logs already hold positive pairs: (user, video watched), (user, product bought).
-1. Sample a **batch** (a small group of examples processed together in one training step) of B positive pairs (uⱼ, iⱼ) and encode them → B user vectors, B item vectors.
-2. Score every user against every item: a B × B matrix of dot products, divided by a **temperature** τ (e.g. 0.05–0.1; a small τ sharpens the **softmax**, the function that turns scores into probabilities summing to 1).
-3. For row j the correct "class" is column j; the other B − 1 items are **negatives**. Apply softmax **cross-entropy** (the classification loss that punishes a low probability on the correct answer). This is **in-batch negative sampling** — negatives for free.
-4. **Popularity correction**: a hit item appears as somebody's negative in batch after batch and gets pushed down too hard. The **logQ correction** (Yi et al., 2019) subtracts log(item's sampling probability) from its **logit** (its raw score before softmax).
-5. Optionally add a few **hard negatives** (close but wrong, e.g. shown-but-not-clicked) — useful, but too many or mislabelled ones hurt. Add them last, after the first two steps work.
+Logs hold positive pairs (user, video watched), (user, product bought).
+1. Take a batch of B positive pairs; encode → B user and B item vectors.
+2. Score all users against all items: a B × B dot-product matrix divided by a **temperature** τ (0.05–0.1; small τ sharpens the softmax).
+3. Row j's correct "class" is column j; the other B − 1 items are negatives; softmax cross-entropy. This is **in-batch negative sampling** — negatives for free.
+4. **logQ correction** (Yi et al., 2019): a hit item appears as a negative in batch after batch and gets pushed down too hard, so subtract log(item's sampling probability) from its logit.
+5. Optionally a few **hard negatives** (close but wrong, e.g. shown-not-clicked) — useful, but too many or mislabelled ones hurt. Add them last.
 
 ### Code — `code/two_tower.py`
 ```python
@@ -516,9 +458,8 @@ logits = uv @ iv.T / temperature              # (B, B) in-batch scores
 logits = logits - log_q[i][None, :]           # logQ popularity correction
 loss = F.cross_entropy(logits, torch.arange(len(idx)))
 ```
-40 items are held out of training entirely to act as brand-new items; for them we use the item tower with the ID part zeroed (content only).
+40 items are held out entirely as brand-new items, scored with the item tower's ID part zeroed (content only).
 
-Output:
 ```
 epoch  1  in-batch softmax loss 6.637
 epoch  5  in-batch softmax loss 6.022
@@ -528,27 +469,27 @@ warm items  recall@50: two-tower 0.649 | popularity 0.510
 cold items  hit@10 among the 40 new items: 0.586 (random = 0.250)
 ```
 
-- Known items: recall@50 is 0.65 vs 0.51 for "show the most popular".
-- Items **never seen in training**: the content half of the item tower still puts the right new item in the top 10 of 40 for 59% of users (random: 25%) — two-towers soften **item cold start**. The `id_dropout` trick (randomly hiding the ID in training) is what makes the content-only vector meaningful.
-- (Batches hold 512 pairs, so plain uniform guessing would give a loss of ln 512 ≈ 6.24. The logQ term shifts the logits, so the absolute numbers are not directly comparable with that — read the downward trend, and judge the model by the recall figures.)
+- Known items: recall@50 0.65 vs 0.51 for "most popular".
+- **Never-seen items**: content alone puts the right new item in the top 10 of 40 for 59% of users (random 25%) — two-towers soften **item cold start**. `id_dropout` is what makes the content-only vector meaningful.
+- (Batch 512 → uniform guessing loss ln 512 ≈ 6.24, but logQ shifts the logits, so read the trend and judge by recall.)
 
 ### How it serves
 ![What runs nightly, and what runs per request.](img/course_two_tower_serving.svg)
 *Figure — Offline item embedding and index build vs the online per-request path (course diagram).*
 
-1. **Offline (e.g. nightly):** embed the catalogue with the item tower and rebuild an **ANN index** (approximate nearest neighbour — returns *almost* the exact closest vectors, much faster; §13.9).
-2. **Per request:** run the user tower (or reuse a recently cached user vector).
-3. **Lookup:** the index returns a few hundred nearest items in milliseconds — the **candidates** the ranker will order.
+1. **Offline (e.g. nightly):** embed the catalogue, rebuild the **ANN index** (approximate nearest neighbour, §13.9).
+2. **Per request:** run the user tower (or reuse a recently cached vector).
+3. **Lookup:** a few hundred nearest items in milliseconds — the **candidates** for the ranker.
 
-**Freshness differs by tower.** Item vectors are refreshed as often as the catalogue and measured retrieval quality demand (nightly is an example, not a rule). The user side must be fresher — someone who just watched three cooking videos should get cooking candidates *now* — so the user tower reads **real-time features** from an online **feature store** (a fast database that serves up-to-date model inputs) at request time.
+**Freshness differs by tower.** Item vectors refresh as often as catalogue change and measured retrieval quality demand (nightly is an example). The user side must be fresher — three cooking videos just watched should yield cooking candidates *now* — so the user tower reads **real-time features** from an online **feature store** at request time.
 
 ### The versioning trap
 ![Version skew, and promoting the tower and the index as one artifact.](img/course_version_skew.svg)
 *Figure — Version skew: a new user tower querying an index built by an old item tower (course diagram).*
 
-An embedding only has meaning **inside the space its model created**; retraining generally rotates and rescales that space. So upgrading is a coordinated migration: (1) re-embed the whole catalogue with the **new** item tower, (2) build a **new** index, (3) switch the new user tower and new index **together, atomically**, as a versioned pair in the **model registry** (a versioned catalogue of trained models), keeping the old pair for **rollback** (switching back to the previous version if something goes wrong). **Atomically** means all at once — there is never a moment with one half switched and the other not.
+An embedding means something only **inside its model's space**; retraining rotates and rescales it. Upgrading is a coordinated migration: (1) re-embed the catalogue with the **new** item tower, (2) build a **new** index, (3) switch new user tower and new index **together, atomically** (never half-switched) as a versioned pair in the **model registry**, keeping the old pair for **rollback**.
 
-**Version skew** (new user tower querying an old index, or the reverse) is dangerous because nothing crashes — scores are valid numbers, latency looks normal, only quality silently drops. Defences: version tags on requests and indexes, routing to compatible pairs, offline validation of the pair, retrieval-quality monitoring during rollout. Budget the re-embedding compute too (100 M items through a new tower is not free).
+**Version skew** (new tower on old index, or the reverse) is dangerous because nothing crashes — scores are valid numbers, latency is normal, only quality silently drops. Defences: version tags on requests and indexes, routing to compatible pairs, offline validation of the pair, retrieval-quality monitoring during rollout. Budget re-embedding compute (100M items is not free).
 
 ### Trade-offs
 
@@ -560,38 +501,33 @@ An embedding only has meaning **inside the space its model created**; retraining
 | Role | Retrieval / candidate generation | Ranking |
 
 ### When not to use it
-Small catalogues (score everything exactly), or when simple co-occurrence is good enough and the training + indexing + versioning machinery isn't affordable.
+Small catalogues (score everything exactly), or when co-occurrence is good enough and training + indexing + versioning machinery isn't affordable.
 
 ### Common mistakes
-- The same item twice in a batch becomes its own false "negative" — deduplicate or mask.
+- The same item twice in a batch becomes its own false negative — deduplicate or mask.
 - No popularity correction → hits pushed down (or, with uniform random negatives, pushed up).
 - Mixing tower and index versions; leaking the future into user features (events after the label).
 
 ### Real-world examples
-- **YouTube**: Covington, Adams & Sargin (2016) — a candidate-generation network trained as a huge softmax over videos and served by nearest-neighbour search, then a ranking network; Yi et al. (2019) — a two-tower model with streaming logQ correction.
-- **Pinterest, LinkedIn, Airbnb** and many e-commerce sites describe embedding-based retrieval in engineering blogs.
+- **YouTube**: Covington, Adams & Sargin (2016) — candidate generation as a huge softmax over videos, served by nearest-neighbour search, then a ranking network; Yi et al. (2019) — two-tower with streaming logQ.
+- **Pinterest, LinkedIn, Airbnb** and many e-commerce sites describe embedding-based retrieval.
 
 ### In the interview
-**30-second answer** ("How do you find candidates among 100 M items?"): "A two-tower model trained with in-batch negatives and logQ correction. Item vectors are computed offline into an ANN index; per request I compute a fresh user vector and pull a few hundred nearest items for the ranker. I'd watch retrieval recall and refresh cadence, and ship tower and index as a tested, versioned pair."
+**30-second answer** ("How do you find candidates among 100M items?"): "A two-tower model trained with in-batch negatives and logQ correction. Item vectors go offline into an ANN index; per request I compute a fresh user vector and pull a few hundred nearest items for the ranker. I'd watch retrieval recall and refresh cadence, and ship tower and index as a tested, versioned pair."
 
-- *What stops the two sides drifting apart?* Ship tower + index as one versioned **artifact** (a packaged, deployable build output), switched atomically, with a rollback pair.
-- *Can retrieval surface an item with zero interactions?* Yes, through the item tower's content features; add a "new arrivals" slot or exploration traffic.
-- *Why not one network over user and item together?* It can't be precomputed — use it as the ranker on the retrieved few hundred.
-
-### Self-check
-1. What property lets item vectors be precomputed? → The item tower never sees user inputs.
-2. What are in-batch negatives? → The other positives' items in the same batch, used as negatives for each user.
-3. Why is version skew hard to detect? → Scores are still valid numbers; only quality degrades.
+- *What keeps the sides consistent?* Tower + index as one versioned **artifact**, switched atomically, with a rollback pair.
+- *Can retrieval surface a zero-interaction item?* Yes, via content features; add a "new arrivals" slot or exploration traffic.
+- *Why not one network over user and item?* Can't precompute — use it as the ranker on the few hundred retrieved.
 
 ### TL;DR
-Two towers encode users and items independently into one space; they meet only at a dot product, so items are embedded offline into an ANN index and only the user tower runs per request. Train with in-batch negatives + logQ correction; release tower and index together.
+Two towers encode users and items independently; they meet only at a dot product, so items go offline into an ANN index and only the user tower runs per request. In-batch negatives + logQ; release tower and index together.
 
 ---
 
 ## 13.8 The funnel: candidate generation → ranking → re-ranking
 
 ### What it is
-Large recommenders are **multi-stage funnels**. Each stage sees fewer items and can afford a heavier model.
+Large recommenders are **multi-stage funnels**; each stage sees fewer items and can afford a heavier model.
 
 ```mermaid
 flowchart LR
@@ -603,30 +539,21 @@ flowchart LR
 
 | Stage | Input → output | Model | Optimises |
 |---|---|---|---|
-| **Candidate generation** (retrieval) | 10⁸ → 10³ | Several merged sources: two-tower + ANN, item-kNN, co-visitation (items viewed in the same sessions), trending, followed creators | **Recall** (share of the good items kept): don't lose good items |
-| **Ranking** | 10³ → ordered 10² | Gradient-boosted trees (decision-tree ensembles, Chapter 7) or deep nets (Wide & Deep, DCN, DLRM) on user × item × context features; predicts P(click) (probability of a click), watch time, P(purchase)… combined into one score | **Precision** (share of the top results that are good) at the top |
+| **Candidate generation** (retrieval) | 10⁸ → 10³ | Several merged sources: two-tower + ANN, item-kNN, **co-visitation** (items viewed in the same sessions), trending, followed creators — each covers a different need, merging raises recall | **Recall**: don't lose good items |
+| **Ranking** | 10³ → ordered 10² | GBDTs or deep nets (Wide & Deep, DCN, DLRM) on user × item × context features; predicts P(click), watch time, P(purchase)… combined into one score | **Precision** at the top |
 | **Re-ranking** | 10² → 10–50 | Rules + algorithms (MMR, quotas) | Diversity, freshness, fairness, policy, de-duplication |
 
-Some systems add a **pre-ranking** ("light ranking") stage between retrieval and ranking when candidate counts are very large.
-
-### Why it matters
-No single model is both cheap enough for 100 M items and rich enough for detailed feature interactions, so the funnel spends compute where it matters. Retrieval sets a **ceiling**: an item not retrieved can never be ranked.
+Some systems add a **pre-ranking** ("light ranking") stage when candidate counts are very large. No single model is both cheap enough for 100M items and rich enough for fine feature crosses — the funnel spends compute where it matters. Retrieval sets a **ceiling**: an item not retrieved can never be ranked.
 
 ### Maximal Marginal Relevance (MMR)
-A ranker scores items independently, so the top 10 are often near-duplicates (ten episodes of one show). **MMR** (Carbonell & Goldstein, 1998) re-ranks greedily:
+A ranker scores items independently, so the top 10 are often near-duplicates (ten episodes of one show) — diversity therefore belongs in re-ranking. **MMR** (Carbonell & Goldstein, 1998) re-ranks greedily:
 
 next item = argmax over remaining j of [ λ·relevance(j) − (1 − λ)·max similarity(j, already chosen) ]
 
-(argmax = pick the j that gives the largest value.) λ = 1 is pure relevance; smaller λ trades relevance for variety.
-
-### In the interview
-**30-second answer:** "No single model is both cheap enough for the whole catalogue and rich enough for fine feature crosses, so I'd build a funnel: several high-recall retrievers to about a thousand candidates, a heavy ranker trained on logged impressions to order them, and a re-ranker for diversity, freshness and policy. I'd track retrieval recall separately, since it caps everything after it."
-
-- *Why several retrievers?* Each covers a different need (similar items, trending, followed creators, fresh items); merging raises recall.
-- *Where does diversity go?* In re-ranking (MMR or quotas), because the ranker scores items one at a time.
+λ = 1 is pure relevance; smaller λ trades relevance for variety.
 
 ### Code — `code/funnel_rerank.py`
-Stage 1: item-kNN retrieves 100 candidates. Stage 2: a logistic-regression ranker (a linear model that outputs a probability, Chapter 5), trained on half the users, scores them with richer features (kNN score, a heavier implicit-ALS score, popularity, genre match with the user's profile, average star rating). Stage 3: MMR with λ = 0.7 on the ranker's top 30.
+Stage 1: item-kNN retrieves 100 candidates. Stage 2: a logistic-regression ranker trained on half the users scores them with richer features (kNN score, implicit-ALS score, popularity, genre match, average stars). Stage 3: MMR (λ = 0.7) on the ranker's top 30.
 
 ```python
 def mmr(cands, relevance, sim, lam=0.7, k=K):
@@ -638,7 +565,6 @@ def mmr(cands, relevance, sim, lam=0.7, k=K):
     return [cands[j] for j in chosen]
 ```
 
-Output:
 ```
 stage 1 candidate recall@100 = 0.787  (ceiling for later stages)
 stage 1 only (kNN order)           recall@10 0.375  NDCG@10 0.398  diversity 0.728
@@ -647,42 +573,36 @@ stage 3 re-rank (MMR, lambda=0.7)  recall@10 0.375  NDCG@10 0.391  diversity 0.6
 ranker weights: {'knn_score': 0.18, 'als_score': 0.63, 'log_popularity': 0.36, 'genre_match': 0.62, 'avg_star': 0.07}
 ```
 
-- Retrieval keeps 79% of the held-out items within 100 candidates — the most any later stage can recover.
-- The ranker improves accuracy (NDCG 0.398 → 0.409) by combining signals; it leans on the heavier ALS score and genre match.
-- But the ranker made lists much **less diverse** (0.728 → 0.524), piling onto the favourite genre. MMR restores diversity (0.683) at a small offline accuracy cost; online, users often reward variety — an A/B test decides.
+- Retrieval keeps 79% of held-out items in 100 candidates — the most any later stage can recover.
+- The ranker lifts NDCG (0.398 → 0.409) by combining signals, leaning on ALS score and genre match.
+- But it makes lists much **less diverse** (0.728 → 0.524), piling onto the favourite genre. MMR restores diversity (0.683) at a small offline cost; online, users often reward variety — an A/B test decides.
 
 ### Common mistakes
 - Training the ranker only on what the *old* system showed (exposure bias) — log impressions and some randomised exposure.
 - Evaluating the ranker but not retrieval recall.
-- One objective (clicks) when the business wants long-term satisfaction — use a **multi-task** ranker (one model predicting several targets at once) (click, watch time, like, "not interested") with tuned weights.
+- A single objective (clicks) when the business wants long-term satisfaction — use a **multi-task** ranker (click, watch time, like, "not interested") with tuned weights.
+
+### In the interview
+**30-second answer:** "No single model is both cheap enough for the whole catalogue and rich enough for fine feature crosses, so: several high-recall retrievers to ~a thousand candidates, a heavy ranker trained on logged impressions, and a re-ranker for diversity, freshness and policy. I track retrieval recall separately — it caps everything after it."
 
 ### TL;DR
-Funnel = cheap high-recall retrieval (10⁸ → 10³) → heavy precise ranking (10³ → 10²) → re-ranking for diversity/business rules (→ 10). Retrieval caps what ranking can achieve; MMR buys variety for a little relevance.
+Cheap high-recall retrieval (10⁸ → 10³) → heavy precise ranking (→ 10²) → re-ranking for diversity/rules (→ 10). Retrieval caps ranking; MMR buys variety for a little relevance.
 
 ---
 
 ## 13.9 Approximate nearest neighbour (ANN) search
 
 ### What it is
-**k-nearest-neighbour search** returns the k item vectors most similar to a query q. **Exact** (brute-force) search compares q with all N vectors of d dimensions: O(N·d) per query. **Approximate** nearest neighbour (ANN) search returns *almost* the same top-k while looking at a small fraction.
-
-### Why it matters
-10⁸ items × 128 dimensions ≈ 1.3·10¹⁰ multiply-adds per query — far too slow at thousands of requests per second. ANN trades a little **recall** (fraction of the true top-k found) for large speed-ups (often 10–1000×).
+**k-nearest-neighbour search** returns the k vectors most similar to a query q. **Exact** (brute-force) search is O(N·d) per query. **ANN** returns *almost* the same top-k while scanning a small fraction. 10⁸ items × 128 dims ≈ 1.3·10¹⁰ multiply-adds per query is far too slow at thousands of QPS; ANN trades a little **recall** (fraction of the true top-k found) for 10–1000× speed-ups.
 
 ### How the main families work
-**1. IVF — inverted file index (clustering).**
-1. Offline: run **k-means** (a clustering method that groups vectors around k centre points) on the vectors to get `nlist` **centroids** (cluster centres); store each vector in the list of its nearest centroid.
-2. Query: find the `nprobe` centroids nearest to q; scan only those lists exactly.
-3. Knob: larger `nprobe` → higher recall, slower.
+**1. IVF — inverted file index (clustering).** Offline: **k-means** the vectors into `nlist` centroids; store each vector in its nearest centroid's list. Query: find the `nprobe` nearest centroids, scan only those lists exactly. Larger `nprobe` → higher recall, slower.
 
-**2. HNSW — Hierarchical Navigable Small World graphs** (Malkov & Yashunin, 2016/2018).
-1. Each vector is a node linked to about M close neighbours; upper layers hold few nodes ("highways"), the bottom layer holds all — like zooming from a country map to a street map.
-2. Query: start at the top and greedily hop to whichever neighbour is closer to q; when none is closer, drop a layer; at the bottom keep a candidate list of size `ef_search` and return the best k.
-3. Knobs: M, `ef_construction`, `ef_search` (recall vs speed). Excellent recall/latency and incremental inserts, but more memory than IVF.
+**2. HNSW — Hierarchical Navigable Small World graphs** (Malkov & Yashunin, 2016/2018). Each vector links to ~M close neighbours; upper layers hold few nodes (long-range "express" hops), the bottom holds all. Query: start at the top, greedily hop closer to q, drop a layer when stuck; at the bottom keep a candidate list of size `ef_search`. Knobs M, `ef_construction`, `ef_search`. Excellent recall/latency and incremental inserts; more memory than IVF.
 
-**3. Product quantisation (PQ)** compresses vectors (e.g. 128 floats — decimal numbers, 4 bytes each — = 512 bytes → 16 bytes) by splitting each into sub-vectors and replacing each sub-vector by the ID of its nearest sub-centroid. Distances are computed from small lookup tables. Often combined: **IVF-PQ**.
+**3. Product quantisation (PQ)** compresses vectors (128 floats = 512 bytes → 16 bytes) by splitting into sub-vectors, each replaced by its nearest sub-centroid's ID; distances come from small lookup tables. Often combined: **IVF-PQ**.
 
-**4. Tree forests** (e.g. Spotify's Annoy): random **hyperplane** splits (flat cuts through the vector space) build several trees; search a few.
+**4. Tree forests** (Spotify's Annoy): random **hyperplane** splits build several trees; search a few.
 
 ```mermaid
 flowchart TD
@@ -704,7 +624,7 @@ for q in queries:
     top = cand[np.argsort(-(X[cand] @ q))[:K]]
 ```
 
-Output (100,000 unit vectors, 32 dimensions; timings depend on the machine):
+100,000 unit vectors, 32 dims (timings machine-dependent):
 ```
 brute force: scans 100% of 100,000 vectors, 6.13 ms/query, recall@10 = 1.000
 IVF build (k-means, 256 lists): 0.1 s
@@ -719,7 +639,7 @@ IVF nprobe=64: scans 24.96%, 2.56 ms/query, recall@10 = 0.961
 
 ![IVF speed/recall trade-off](img/ivf_recall_tradeoff.png)
 
-The curve is the whole story of ANN: scanning 12% of the data gives 87% recall at ~5× speed; 25% gives 96%. (This data is deliberately hard — overlapping clusters; real embeddings usually reach high recall at smaller `nprobe`, and production libraries are far faster than this numpy loop.)
+Scanning 12% gives 87% recall at ~5× speed; 25% gives 96%. (Deliberately hard, overlapping clusters; real embeddings reach high recall at smaller `nprobe`, and production libraries are far faster than this numpy loop.)
 
 ### Trade-offs
 
@@ -728,77 +648,67 @@ The curve is the whole story of ANN: scanning 12% of the data gives 87% recall a
 | Brute force | Exact, O(N) | Vectors only | None | Trivial |
 | IVF | Good, tune `nprobe` | Low | k-means (fast) | Add to lists; re-train centroids occasionally |
 | IVF-PQ | Good at huge scale | Very low (compressed) | Slower | As IVF |
-| HNSW | Excellent | Higher (graph links) | Slowest | Incremental inserts; deletes are awkward |
+| HNSW | Excellent | Higher (graph links) | Slowest | Incremental inserts; deletes awkward |
 
-Libraries: **FAISS** (Meta), **ScaNN** (Google), **hnswlib**, **Annoy**/**Voyager** (Spotify), plus **vector databases** (databases built for nearest-vector search: Milvus, Weaviate, Qdrant, pgvector, OpenSearch).
+Libraries: **FAISS** (Meta), **ScaNN** (Google), **hnswlib**, **Annoy**/**Voyager** (Spotify); **vector databases**: Milvus, Weaviate, Qdrant, pgvector, OpenSearch.
 
 ### When not to use it
-Up to around a million vectors, a batched brute-force matrix multiply (especially on a GPU — a graphics chip that does many multiplications in parallel) may already meet the latency budget — exact and simple. Measure first.
+Up to ~a million vectors, batched brute-force matrix multiply (especially on GPU) may meet the latency budget — exact and simple. Measure first.
 
 ### Common mistakes
 - A cosine index fed un-normalised vectors (or vice versa).
-- Reporting latency without recall@k measured against exact search.
+- Reporting latency without recall@k against exact search.
 - Filtering (country, availability) *after* ANN and ending with too few results — use filtered search or over-retrieve.
 
-### Self-check
-1. What does `nprobe` control? → How many clusters are scanned; recall ↑, speed ↓.
-2. Why does HNSW have upper layers? → Long-range "express" hops to reach the right region quickly.
-3. What does PQ buy you? → Much smaller memory per vector, with approximate distances.
-
 ### TL;DR
-Exact k-NN is O(N) per query; ANN (IVF clustering, HNSW graphs, PQ compression) scans a fraction for a small recall loss. Always report recall with latency.
+Exact k-NN is O(N); ANN (IVF clustering, HNSW graphs, PQ compression) scans a fraction for a small recall loss. Always report recall with latency.
 
 ---
 
 ## 13.10 Cold start
 
-### What it is
-**Cold start** = making recommendations with little or no history.
-- **New user**: we know nothing about their taste.
-- **New item**: nobody has interacted with it yet, so CF/MF have no vector.
-- **New system**: no data at all.
-
-### How to handle it
+**Cold start** = recommending with little or no history: **new user**, **new item** (CF/MF have no vector), **new system**.
 
 | Case | Strategies |
 |---|---|
-| New user | Popular/trending items by region or device; short onboarding ("pick 3 genres"); context (location, time, referrer — the site or link the user came from); fast updates from the first clicks (session-based models) |
-| New item | Content features in the item tower (59% vs 25% random in `two_tower.py`); creator/brand signals; **exploration** — a small controlled share of traffic (bandits — algorithms that balance trying new options with using proven ones, [Chapter 14](../14-reinforcement-learning/README.md)) and a "new arrivals" slot |
+| New user | Popular/trending by region or device; short onboarding ("pick 3 genres"); context (location, time, referrer); fast updates from first clicks (session-based models) |
+| New item | Content features in the item tower (59% vs 25% random in `two_tower.py`); creator/brand signals; **exploration** — a small controlled traffic share and a "new arrivals" slot |
 | New system | Rules + popularity + content similarity, then collect data |
 
-**Exploration** is essential: if only proven items are shown, new items never get to prove themselves. Multi-armed bandits (ε-greedy, UCB, Thompson sampling — three standard strategies, explained in Chapter 14) balance exploiting proven items with exploring newcomers.
+**Exploration** is essential: if only proven items are shown, new ones never get to prove themselves. **Multi-armed bandits** (ε-greedy, UCB, Thompson sampling — [Chapter 14](../14-reinforcement-learning/README.md)) balance exploiting proven items with exploring newcomers.
 
 ### Common mistakes
-- Letting cold items sink forever because their score rests on zero data; asking for long onboarding questionnaires few people finish.
+Letting cold items sink forever because their score rests on zero data; long onboarding questionnaires few finish.
 
 ### TL;DR
-New users: popularity + onboarding + context + fast session updates. New items: content features + controlled exploration. Never let "no data" mean "never shown".
+New users: popularity + onboarding + context + fast session updates. New items: content features + controlled exploration. "No data" must never mean "never shown".
 
 ---
 
 ## 13.11 Evaluation
 
 ### What it is
-Recommenders are evaluated **offline** (on held-out historical data, fast and cheap) and **online** (A/B tests on real users, the final judge).
+**Offline** (held-out history — fast, cheap) then **online** (A/B tests — the final judge).
 
 ### Offline accuracy metrics (top-K)
-For one user, with a ranked list `recs` and a set of `relevant` held-out items:
+For one user with ranked `recs` and held-out `relevant` items:
 
 | Metric | Formula | Meaning |
 |---|---|---|
-| **Precision@k** | (# relevant in top k) / k | How much of what we showed was good |
+| **Precision@k** | (# relevant in top k) / k | Quality of what we showed |
 | **Recall@k** | (# relevant in top k) / (# relevant) | How much of the good stuff we found |
-| **Hit rate@k** | 1 if any relevant item is in top k, else 0 | Did we get at least one right? (common with leave-one-out: hide one item per user as the test) |
-| **AP@k** (average precision) | (sum of precision@i over the ranks i that hold a hit) / min(#relevant, k) | Rewards putting hits early |
+| **Hit rate@k** | 1 if any relevant in top k | At least one right? (common with leave-one-out) |
+| **AP@k** (average precision) | (Σ precision@i over ranks i holding a hit) / min(#relevant, k) | Rewards early hits |
 | **MAP@k** | mean AP@k over users | |
-| **NDCG@k** | DCG / ideal DCG, where DCG = Σᵢ relᵢ / log₂(i + 1) (i = rank; a common variant uses 2^relᵢ − 1 as the gain) | Position-discounted gain (log₂ = logarithm base 2), normalised to [0, 1]; supports graded relevance (a scale, not just yes/no) |
+| **NDCG@k** | DCG / ideal DCG, DCG = Σᵢ relᵢ / log₂(i + 1) (variant gain: 2^relᵢ − 1) | Position-discounted, normalised to [0, 1]; supports graded relevance |
 | **MRR** | mean of 1 / (rank of first hit) | Only the first hit matters (search-like) |
-| **RMSE / MAE** (mean absolute error) | error on predicted ratings | Only for the rating-prediction framing |
+| **RMSE / MAE** (root mean squared / mean absolute error) | error on predicted ratings | Rating-prediction framing only |
 
 **Worked example** (`implicit_eval.py`): recs = A B C D E, relevant = {A, C, F}, k = 5.
-- Hits at ranks 1 (A) and 3 (C). Precision@5 = 2/5 = **0.400**. Recall@5 = 2/3 = **0.667**. Hit@5 = **1**.
-- AP@5 = (precision@1 + precision@3) / min(3, 5) = (1/1 + 2/3) / 3 = **0.556**.
-- DCG = 1/log₂2 + 1/log₂4 = 1 + 0.5 = 1.5. Ideal (3 hits at ranks 1–3) = 1 + 0.631 + 0.5 = 2.131. NDCG@5 = 1.5 / 2.131 = **0.704**.
+- Hits at ranks 1 and 3. Precision@5 = **0.400**; Recall@5 = **0.667**; Hit@5 = **1**.
+- AP@5 = (1/1 + 2/3) / 3 = **0.556**.
+- DCG = 1/log₂2 + 1/log₂4 = 1.5; ideal = 1 + 0.631 + 0.5 = 2.131; NDCG@5 = **0.704**.
+- (Single hit at rank 4: NDCG@5 = 1/log₂5 ≈ 0.431; MRR = 0.25.)
 
 ```python
 def average_precision_at_k(recs, relevant, k=K):
@@ -816,15 +726,14 @@ def ndcg_at_k(recs, relevant, k=K):
 ```
 
 ### Beyond-accuracy metrics
-- **Catalogue coverage**: fraction of all items shown to *anyone* (low = only the hits).
-- **Intra-list diversity**: 1 − average pairwise similarity within one list (here: genre cosine).
-- **Novelty**: average popularity of recommended items (lower = more novel); **serendipity** = relevant *and* unexpected.
+- **Catalogue coverage**: fraction of items shown to *anyone*.
+- **Intra-list diversity**: 1 − mean pairwise similarity within a list (here genre cosine).
+- **Novelty**: mean popularity of recommendations (lower = more novel); **serendipity** = relevant *and* unexpected.
 - **Fairness / exposure**: how impressions spread across creators or sellers.
 
-### Code — comparing three models on implicit data (`code/implicit_eval.py`)
-Each user's interactions are binarised (turned into 0/1) to "watched"; 5 random watched items per user are hidden as the **test** set, and models must rank them among all unseen items. The ALS settings are chosen on a separate **validation** split (5 more items per user hidden from the training data), never on the test items.
+### Code — three models on implicit data (`code/implicit_eval.py`)
+Interactions binarised to "watched"; 5 random watched items per user hidden as **test**, ranked among all unseen items. ALS settings chosen on a separate **validation** split (5 more items per user), never on test.
 
-Output:
 ```
 ALS chosen on validation split: alpha=10, lambda=50 (validation NDCG@10 0.331)
 
@@ -835,43 +744,38 @@ Implicit ALS       0.195  0.390  0.282  0.416  0.893  0.42   0.591   154
 (average item popularity in the catalogue = 46 interactions)
 ```
 
-- **Popularity** is a strong baseline (hit rate 71%) — always include it. But it covers 7% of the catalogue, with items ~5× more popular than average.
-- **Implicit ALS** wins every accuracy metric, covers 42% and recommends less popular items — but its lists are less genre-diverse. Accuracy, coverage, novelty and diversity pull apart; choose deliberately.
-- The validation sweep (α ∈ {5, 10, 20}, λ ∈ {10, 50, 100}, k = 16) picked α = 10, λ = 50; the model was then refit on all training data and scored once on the test items.
+- **Popularity** is a strong baseline (hit rate 71%) — always include it — but covers 7% of the catalogue with items ~5× more popular than average.
+- **Implicit ALS** wins every accuracy metric, covers 42%, recommends less popular items — but lists are less genre-diverse. Accuracy, coverage, novelty and diversity pull apart; choose deliberately.
+- The sweep (α ∈ {5, 10, 20}, λ ∈ {10, 50, 100}, k = 16) picked α = 10, λ = 50; refit on all training data, scored once on test.
 
 ### Offline evaluation pitfalls
-- **Random splits leak the future.** Use a **time-based split** (train before day T, test after), matching real use.
-- **Sampled metrics** (true item vs only 100 random negatives) inflate scores and can even flip which model looks best (Krichene & Rendle, 2020). Rank against the full catalogue when possible.
-- **Logs are biased by the old system** (feedback only on what it showed). **Inverse propensity scoring (IPS)** reweights each logged example by 1 / (probability the old system showed it), removing that bias at the cost of higher **variance** (the estimate jumps around more from sample to sample).
+- **Random splits leak the future** — use a **time-based split**.
+- **Sampled metrics** (true item vs 100 random negatives) inflate scores and can flip which model wins (Krichene & Rendle, 2020) — rank against the full catalogue when possible.
+- **Logs are biased by the old system**. **Inverse propensity scoring (IPS)** reweights each example by 1 / P(old system showed it) — unbiased, but higher variance.
 
 ### Online evaluation
-- **A/B test**: randomly split users; compare business metrics (watch time, **retention** — users who keep coming back — purchases) plus **guardrails** (metrics that must not get worse: latency, complaints, diversity); run long enough for **novelty effects** (users react to anything new at first) to fade.
-- **Interleaving**: merge two rankers' lists and see whose items get clicked — detects a preference with far less traffic; Netflix uses it to pre-screen ideas.
-- Offline metrics are a filter, not the verdict.
+- **A/B test**: random user split; business metrics (watch time, **retention**, purchases) plus **guardrails** (latency, complaints, diversity); run long enough for **novelty effects** to fade.
+- **Interleaving**: merge two rankers' lists and see whose items get clicked — needs far less traffic; Netflix uses it to pre-screen ideas.
+- Offline metrics are a filter, not the verdict — logs reflect the old policy and ignore presentation and long-term effects.
 
 ### In the interview
-**30-second answer:** "Offline: a time-based split, recall@k for retrieval and NDCG@k or MAP@k for ranking over the full catalogue, plus coverage, diversity and novelty, versus a popularity baseline. Then an A/B test on the real objective, such as retention, with latency and diversity guardrails."
+**30-second answer:** "Offline: time-based split, recall@k for retrieval and NDCG@k or MAP@k for ranking over the full catalogue, plus coverage, diversity and novelty, versus a popularity baseline. Then an A/B test on the real objective, such as retention, with latency and diversity guardrails."
 
-- *Precision@k vs recall@k?* Precision = quality of what's shown; recall = how much of the relevant set was found. Retrieval cares about recall, the final list about precision/NDCG.
-- *Why NDCG over precision?* It rewards putting good items higher and supports graded relevance.
-- *Why can offline and online disagree?* Logs reflect the old policy and ignore presentation and long-term effects.
-
-### Self-check
-1. Relevant = {X}, X at rank 4. NDCG@5? MRR? → 1/log₂5 ≈ 0.431 (ideal = 1); MRR = 1/4 = 0.25.
-2. Why is a random train/test split risky? → The model sees the future (later interactions) during training.
-3. Model A: higher NDCG, 5% coverage. Model B: slightly lower NDCG, 40% coverage. Which? → Depends on goals; usually test B online — low coverage starves the long tail and feeds the popularity loop.
+- *Precision@k vs recall@k?* Quality of what's shown vs how much of the relevant set was found; retrieval cares about recall, the final list about precision/NDCG.
+- *Why NDCG over precision?* Rewards higher placement; supports graded relevance.
+- *Model A: higher NDCG, 5% coverage; B: slightly lower NDCG, 40% coverage?* Depends on goals; usually test B online — low coverage starves the long tail and feeds the popularity loop.
 
 ### TL;DR
-Offline: precision/recall/hit rate@k, MAP, NDCG on a time-based split, full-catalogue ranking, plus coverage/diversity/novelty and a popularity baseline. Online: A/B tests (or interleaving) on the true objective.
+Offline: precision/recall/hit@k, MAP, NDCG on a time-based split over the full catalogue, plus coverage/diversity/novelty and a popularity baseline. Online: A/B tests or interleaving on the true objective.
 
 ---
 
 ## 13.12 Popularity bias and feedback loops
 
 ### What it is
-**Popularity bias**: models over-recommend already-popular items. Causes: the data (more interactions → more gradient updates and co-occurrences) and the model (dot products favour long vectors).
+**Popularity bias**: models over-recommend popular items — from the data (more interactions → more updates and co-occurrences) and the model (dot products favour long vectors).
 
-**Feedback loop**: popular items are shown → get more clicks → the next model, trained on those clicks, rates them even higher → shows them more. Long-tail items rarely get shown, so never collect the data to prove themselves. Result: less diversity, "filter bubbles", struggling niche creators.
+**Feedback loop**: popular items shown → more clicks → next model rates them higher → shown more. Long-tail items never collect data to prove themselves → less diversity, filter bubbles, struggling niche creators.
 
 ```mermaid
 flowchart LR
@@ -882,38 +786,38 @@ flowchart LR
 ```
 
 ### How to counter it
-1. **Measure**: average popularity of recommendations, coverage, Gini coefficient of exposure (0 = perfectly even, 1 = all to one item).
+1. **Measure**: average popularity of recommendations, coverage, Gini coefficient of exposure (0 = even, 1 = all to one item).
 2. **Correct in training**: logQ (§13.7), down-weighting popular positives, IPS.
 3. **Explore**: a little bandit traffic for new and long-tail items.
 4. **Re-rank**: MMR, novelty boosts, exposure quotas for new creators.
-5. **Log impressions** so training can tell "not shown" from "shown and ignored".
+5. **Log impressions** to tell "not shown" from "shown and ignored".
 
 ### Common mistakes
 - Celebrating an offline win that comes only from recommending more popular items (test sets are popularity-biased too).
-- Removing popularity entirely — it is real information; aim for calibration, not elimination.
+- Removing popularity entirely — it's real information; aim for calibration, not elimination.
 
 ### TL;DR
-Popular items get more data, so models over-recommend them and the loop reinforces itself. Measure it, correct it in training (logQ, IPS), explore, and re-rank for diversity.
+Popular items get more data, so models over-recommend them and the loop reinforces itself. Measure, correct in training (logQ, IPS), explore, re-rank.
 
 ---
 
 ## 13.13 Real-world systems
 
-Amazon's item-to-item CF is covered in §13.4; the others are collected here.
+Amazon's item-to-item CF is in §13.4.
 
 | Company | Publicly described approach | Ideas to remember |
 |---|---|---|
 | **Netflix** | Netflix Prize (2006–2009, $1M, won by BellKor's Pragmatic Chaos); personalised rows and ranking; artwork chosen per member with contextual bandits; recommender influences ~80% of hours streamed (2015) | Moved from star prediction to ranking on implicit signals; heavy A/B testing plus interleaving |
-| **YouTube** | Deep candidate generation + a ranking net predicting expected watch time (Covington et al., 2016); two-tower with streaming logQ correction (Yi et al., 2019); multi-task ranking (Zhao et al., 2019) | Two-stage funnel; watch time rather than clicks; an "example age" feature for freshness |
-| **Spotify** | Discover Weekly (2015) blends collaborative filtering on listening and playlists, NLP (natural language processing) on text about music, and audio models; bandits on home shelves; open-sourced Annoy and Voyager | Playlists as co-occurrence data; skips and saves as implicit feedback |
-| **Pinterest** | PinSage (Ying et al., 2018): graph convolutional network (a graph neural network) over billions of pins and boards | The graph-embedding route |
+| **YouTube** | Deep candidate generation + ranking net predicting expected watch time (Covington et al., 2016); two-tower with streaming logQ (Yi et al., 2019); multi-task ranking (Zhao et al., 2019) | Two-stage funnel; watch time over clicks; "example age" feature for freshness |
+| **Spotify** | Discover Weekly (2015) blends CF on listening and playlists, NLP on text about music, and audio models; bandits on home shelves; open-sourced Annoy and Voyager | Playlists as co-occurrence data; skips and saves as implicit feedback |
+| **Pinterest** | PinSage (Ying et al., 2018): graph convolutional network over billions of pins and boards | The graph-embedding route |
 
 ---
 
 ## Chapter TL;DR
-- **Frame** it as top-K ranking on a meaningful outcome; implicit feedback dominates, and unobserved ≠ negative.
-- **Content-based** covers new items; **collaborative** finds quality and surprise but needs history. Hybrids win.
-- **Matrix factorisation** (r̂ = μ + bᵤ + bᵢ + pᵤ·qᵢ, SGD or ALS; weighted ALS for implicit) is the strong baseline; its vectors are **embeddings**.
-- **Two-tower** retrieval: items precomputed into an ANN index (IVF, HNSW, PQ), only the user tower runs per request; ship tower and index as one version.
+- **Frame** as top-K ranking on a meaningful outcome; implicit feedback dominates; unobserved ≠ negative.
+- **Content-based** covers new items; **collaborative** finds quality and surprise but needs history; hybrids win.
+- **MF** (r̂ = μ + bᵤ + bᵢ + pᵤ·qᵢ; SGD or ALS; weighted ALS for implicit) is the strong baseline; its vectors are **embeddings**.
+- **Two-tower** retrieval: items precomputed into an ANN index (IVF, HNSW, PQ); only the user tower runs per request; ship tower and index as one version.
 - **Funnel**: retrieval (recall ceiling) → ranking (precision) → re-ranking (diversity, rules).
-- **Evaluate** on a time-based split over the full catalogue (recall, NDCG, MAP + coverage, diversity, novelty) against a popularity baseline, then A/B test. Handle cold start with content and exploration; counter popularity bias's feedback loop.
+- **Evaluate** on a time-based split over the full catalogue against a popularity baseline, then A/B test. Cold start → content + exploration; counter popularity feedback loops.

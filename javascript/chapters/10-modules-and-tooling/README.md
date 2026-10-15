@@ -1,39 +1,25 @@
 # Chapter 10 — Modules and Tooling
 
-A real JavaScript program is hundreds of files and thousands of third-party packages (bundles of reusable code written by other people and downloaded into your project). **Modules** let each file keep its own private scope and share only what it chooses to export. **Tooling** — npm, bundlers, transpilers, linters and formatters, each explained in its own section below — turns those files and packages into something a browser or server can run, and keeps the code consistent. This chapter covers the language feature first (ES modules), then how Node runs both module systems, then the everyday tool chain.
+A real program is hundreds of files plus thousands of third-party **packages** (bundles of reusable code downloaded into your project). **Modules** give each file a private scope that shares only what it exports. **Tooling** — npm, bundlers, transpilers, linters, formatters — turns files and packages into something a browser or server can run, and keeps code consistent. This chapter covers ES modules, how Node runs both module systems, then the tool chain.
 
-**What you'll learn**
+**What you'll learn:** why modules exist and how module systems evolved; every `import`/`export` form, default vs named, barrels, side-effect imports; how ESM loads (three phases, hoisting, live bindings, singletons, cycles); `import()`, top-level `await`, `import.meta`, JSON modules; browser modules and import maps; CommonJS vs ESM in Node (`require(esm)`, `createRequire`, `"exports"`); npm and `package.json` (`npx`, `node --run`, `node_modules` resolution); semver, ranges, lockfiles; bundlers (Vite, esbuild, webpack, Rollup/Rolldown); transpilers, polyfills, ESLint, Prettier.
 
-1. Why modules exist and how the module systems evolved (scripts → IIFE → CommonJS → ES modules).
-2. Every `import` / `export` form; default vs named exports; barrels; side-effect imports.
-3. How ES modules load: the three phases, hoisting, live bindings, singletons, circular imports.
-4. Dynamic `import()`, top-level `await`, `import.meta`, JSON modules with import attributes.
-5. Modules in the browser: `<script type="module">`, bare specifiers, import maps.
-6. CommonJS vs ESM in Node: how Node decides, interop, `require(esm)`, `createRequire`, package `"exports"`.
-7. npm and `package.json`: dependencies, scripts, `npx`, `node --run`, how `node_modules` resolution works.
-8. Semantic versioning, version ranges and lockfiles (with a runnable range checker).
-9. Bundlers (Vite, esbuild, webpack, Rollup/Rolldown): tree shaking, code splitting, source maps, dev servers.
-10. Transpilers and polyfills; linters and formatters (ESLint, Prettier).
+**Before you start:** functions and closures ([Chapter 4](../04-functions-scope-and-closures/README.md)) — the pre-module "module pattern" is a closure. Here we only need that `await` pauses until a promise (a result arriving later) settles; full details in [Chapter 12](../12-asynchronous-javascript/README.md).
 
-**Before you start.** You should know functions and closures ([Chapter 4](../04-functions-scope-and-closures/README.md)) — the pre-module "module pattern" is a closure (a function that keeps access to the variables around where it was created). Promises and `await` are covered properly in [Chapter 12](../12-asynchronous-javascript/README.md); here we only need that `await` pauses until a promise (an object standing for a result that arrives later) settles (finishes with a value or an error).
-
-All runnable code is in [`code/`](code/) — a small multi-file ES module project. Files whose first line is `// tools_run: skip` are helper modules imported by the numbered programs. Outputs are real (Node 24). **Commands for npm, bundlers and linters are shown as not-run snippets** (they need the network or a full project); their output is described, not pasted.
+Code in [`code/`](code/) is a small multi-file ES module project; files starting `// tools_run: skip` are helpers imported by the numbered programs. Outputs are real (Node 24). **npm, bundler and linter commands are not-run snippets** (they need the network or a full project); their output is described.
 
 ---
 
 ## 10.1 Why modules?
 
 ### What it is
-A **module** is a file whose top-level variables are private to that file. It explicitly **exports** the values it wants to share and explicitly **imports** what it needs from other modules. The set of modules connected by imports is the **module graph**; the first module you run is the **entry point**.
-
-Analogy: departments in a company. Each department (module) has its own internal files; it publishes a few official forms (exports); other departments must request those forms by name (imports). Nobody rummages through anybody else's drawers.
+A **module** is a file whose top-level variables are private; it **exports** what it shares and **imports** what it needs. Modules connected by imports form the **module graph**; the first one run is the **entry point**.
 
 ### The problem it solves
-Early web pages loaded several `<script>` files that all shared **one global scope**. Any `var` or function at the top of any file became a global, so:
-
-- **Name collisions** — two libraries both defining `$` or `init` silently overwrote each other.
-- **Hidden dependencies** — `app.js` only worked if `utils.js` had been loaded first; script order in HTML was the dependency system.
-- **No encapsulation** (keeping a piece of code's internals hidden behind a small public surface) — anything could change anything.
+Early pages loaded `<script>` files sharing **one global scope**, so every top-level `var`/function was global:
+- **Name collisions** — two libraries defining `$` or `init` overwrote each other.
+- **Hidden dependencies** — script order in HTML *was* the dependency system.
+- **No encapsulation** (internals hidden behind a small public surface) — anything could change anything.
 
 ### How the solutions evolved
 | Era | Approach | How it works | Still seen? |
@@ -44,17 +30,17 @@ Early web pages loaded several `<script>` files that all shared **one global sco
 | 2011 | AMD (RequireJS), later UMD | Asynchronous (loads in the background and calls back when ready) `define()` for browsers; UMD wraps a file to work as AMD, CommonJS or a global | Old libraries |
 | **ES2015** | **ES modules (ESM)** | `import` / `export` built into the language; static; async-friendly | **The standard** — browsers and Node |
 
-**ESM** is the only one that is part of the language itself, works natively in browsers and Node, and can be statically analyzed (understood by reading the code, without running it) by tools. Use it for new code.
+**ESM** alone is part of the language, native in browsers and Node, and **statically analyzable** (understood without running). Use it for new code.
 
 ### TL;DR
-Modules give each file a private scope and explicit imports/exports. ES modules (ES2015) are the standard; CommonJS remains common in Node.
+Modules give each file a private scope with explicit imports/exports. ESM (ES2015) is the standard; CommonJS remains common in Node.
 
 ---
 
 ## 10.2 `export` and `import` syntax
 
 ### Export forms
-A module can have any number of **named exports** and at most one **default export**.
+Any number of **named exports**, at most one **default export**.
 
 [`code/math.mjs`](code/math.mjs) — named exports:
 
@@ -68,7 +54,7 @@ export { square, cube as toThePowerOfThree };   // export list, with renaming
 console.log('[math.mjs] evaluated');            // runs once, however many importers
 ```
 
-[`code/logger.mjs`](code/logger.mjs) — a default export plus a named one:
+[`code/logger.mjs`](code/logger.mjs) — default plus named:
 
 ```js
 export default function log(level, msg) {       // the default export
@@ -77,7 +63,7 @@ export default function log(level, msg) {       // the default export
 export const LEVELS = ['debug', 'info', 'warn', 'error'];
 ```
 
-[`code/barrel.mjs`](code/barrel.mjs) — re-exports (a **barrel** is a file that gathers several modules' exports into one import point):
+[`code/barrel.mjs`](code/barrel.mjs) — re-exports (a **barrel** gathers several modules' exports into one import point):
 
 ```js
 export * from './math.mjs';                            // re-export all named exports
@@ -95,7 +81,7 @@ export * as counterNS from './counter.mjs';            // re-export a namespace 
 | Name something the default | `export { x as default };` |
 | Re-export | `export { a } from './m.mjs';` `export * from './m.mjs';` `export * as ns from './m.mjs';` |
 
-`export *` does **not** re-export the default export — re-export it by name, as `barrel.mjs` does.
+`export *` does **not** re-export the default — re-export it by name (as `barrel.mjs` does).
 
 ### Import forms
 [`code/01_import_export.mjs`](code/01_import_export.mjs):
@@ -135,13 +121,13 @@ polyfill: true
 | `import x, { a } from './m.mjs'` | default + named together |
 | `import './m.mjs'` | runs the module for its side effects (things it does on load besides exporting — e.g. polyfills, which add missing built-in features; CSS in bundlers; registering elements) |
 
-Notice the output order: `side_effect.mjs` and `math.mjs` printed **before** any line of the importing file ran, even though `math.mjs` is imported by three statements. Imports are processed before the module body, and every module is evaluated exactly once.
+`side_effect.mjs` and `math.mjs` printed **before** the importer's body, and `math.mjs` ran once despite three importing statements: imports are processed first and each module is evaluated exactly once.
 
 A **module specifier** is the string after `from`:
-- **Relative** — `'./math.mjs'`, `'../lib/x.js'`. In browsers and Node ESM you must include the file extension; there's no automatic `.js` guessing (CommonJS and bundlers do guess).
-- **Absolute URL** — `'https://cdn.example.com/lib.js'` (browsers; a CDN is a network of servers that delivers files from close to the user — see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)).
-- **Bare** — `'react'`, `'lodash-es'`: a package name. Node resolves it in `node_modules` (the folder where installed packages live); browsers need an import map or a bundler (§10.7).
-- **Built-in** — `'node:fs'`, `'node:path'` in Node. The `node:` prefix makes it unambiguous that this is a core module.
+- **Relative** — `'./math.mjs'`, `'../lib/x.js'`. Browsers and Node ESM need the extension (no `.js` guessing; CommonJS and bundlers do guess).
+- **Absolute URL** — `'https://cdn.example.com/lib.js'` (browsers; a CDN serves files from servers near the user — [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)).
+- **Bare** — `'react'`: a package name, resolved by Node in `node_modules` (where installed packages live); browsers need an import map or bundler (§10.7).
+- **Built-in** — `'node:fs'`, `'node:path'`; `node:` marks a core module unambiguously.
 
 ### Default vs named exports
 | | Named exports | Default export |
@@ -151,33 +137,33 @@ A **module specifier** is the string after `from`:
 | Tree shaking (removing unused code from the final build, §10.11) | Fine-grained | Works, but a default *object* of many functions is all-or-nothing |
 | Typical use | Utility modules, libraries | One main thing per file: a React component, a class, a config |
 
-Many teams prefer named exports for consistency (the `eslint-plugin-import` package even has an `import/no-default-export` rule to enforce it); frameworks such as Next.js (a popular React framework for full websites) require default exports for page files. Either is fine — be consistent within a project.
+Many teams prefer named exports (`eslint-plugin-import`'s `import/no-default-export` enforces it); Next.js (a React framework for full websites) requires default exports for page files. Be consistent.
 
 ### Common mistakes
-- `import { default } from …` — `default` is a reserved word; write `import x from …` or `import { default as x } from …`.
-- Forgetting the extension (`'./math'`) in native ESM → `ERR_MODULE_NOT_FOUND` in Node.
-- Big barrels in application code: importing one function from `index.js` can make tools and test runners (programs that find and run your automated tests) load every re-exported module. Import from the specific file in hot paths (code that runs very often or on startup).
-- Mixing up `export default const x = 1` (syntax error — `export default` takes an expression, or a function/class declaration) with `export const x = 1`.
+- `import { default } from …` — reserved word; use `import x from …` or `import { default as x } from …`.
+- Missing extension (`'./math'`) in native ESM → `ERR_MODULE_NOT_FOUND`.
+- Big barrels in apps: importing one function from `index.js` can make tools and test runners load every re-exported module — import the specific file in hot paths (startup or very frequent code).
+- `export default const x = 1` is a syntax error (`export default` takes an expression or function/class declaration).
 
 ### Self-check
-1. How many default exports can a module have? → At most one.
-2. Does `export * from './m.mjs'` include `m`'s default? → No.
-3. What's in `ns` after `import * as ns`? → All named exports as read-only properties, plus `default` if there is one.
+1. Default exports per module? → At most one.
+2. Does `export * from './m.mjs'` include the default? → No.
+3. `import * as ns` contents? → All named exports as read-only properties, plus `default` if any.
 
 ### TL;DR
-Named exports: many per module, name must match. Default: one, importer picks the name. `import * as ns` gives a namespace object; `import './x'` runs side effects only. Always write file extensions in native ESM.
+Named: many, name must match. Default: one, importer names it. `import * as ns` → namespace; `import './x'` → side effects. Always write extensions in native ESM.
 
 ---
 
 ## 10.3 How ES modules load
 
 ### What it is
-ES modules are **static**: `import` and `export` may only appear at the top level of a module (not inside `if` or functions), and specifiers must be string literals. That lets the engine read the whole dependency graph *before running any code*.
+ES modules are **static**: `import`/`export` only at a module's top level (not in `if`s or functions) with string-literal specifiers, so the engine knows the whole graph *before running any code*.
 
 ### How it works — three phases
-1. **Construction (parse)** — starting at the entry point, fetch each file, parse it, find its `import` statements, fetch those, and so on until the whole graph is known. Nothing executes yet. Each module URL is recorded in a **module map**, so a module is fetched once no matter how many times it's imported.
-2. **Linking (instantiation)** — create each module's environment and wire every import to the matching export's variable slot. Imports are *references to the exporter's bindings*, not copies. Missing named exports fail here, before any code runs (`SyntaxError: The requested module … does not provide an export named …`).
-3. **Evaluation** — run each module's top-level code exactly once, **dependencies first** (a depth-first, post-order walk: children before parents, siblings in the order they were imported).
+1. **Construction (parse)** — from the entry point, fetch and parse each file, follow its imports until the graph is complete. Nothing runs. A **module map** records each URL, so each module is fetched once.
+2. **Linking (instantiation)** — create module environments and wire each import to the exporter's variable slot — *references, not copies*. Missing named exports fail here, before any code runs (`SyntaxError: The requested module … does not provide an export named …`).
+3. **Evaluation** — run each module's top level exactly once, **dependencies first** (depth-first post-order: children before parents, siblings in import order).
 
 ```mermaid
 sequenceDiagram
@@ -191,8 +177,6 @@ sequenceDiagram
     D-->>E: exports now initialised
     L->>E: run entry module body
 ```
-
-Consequences you can observe:
 
 | Property | Meaning |
 |---|---|
@@ -212,6 +196,7 @@ export function increment() { count++; }
 ```
 
 ```js
+// 02_live_bindings.mjs (abridged — each output line labels its check)
 import { count, increment } from './counter.mjs';
 import * as ns from './math.mjs';
 import * as again from './math.mjs';     // same module -> evaluated once, same namespace object
@@ -219,26 +204,11 @@ import * as again from './math.mjs';     // same module -> evaluated once, same 
 console.log('before     :', count);
 increment(); increment();
 console.log('after x2   :', count, '(the import sees the new value)');
-
-try {
-  count = 100;                           // imports are read-only
-} catch (e) {
-  console.log('assign     :', e.name, '-', e.message);
-}
-
-console.log('same ns?   :', ns === again);
-console.log('ns tag     :', Object.prototype.toString.call(ns));
-console.log('ns sealed  :', Object.isSealed(ns), '| frozen:', Object.isFrozen(ns));
-try { ns.add = null; } catch (e) { console.log('ns write   :', e.name, '-', e.message); }
-
-// Module scope: strict mode, `this` is undefined, top-level bindings are not globals
-console.log('this       :', this);
-const topLevel = 1;
-console.log('global?    :', 'topLevel' in globalThis);
-try { undeclared = 5; } catch (e) { console.log('strict     :', e.name, '-', e.message); }
+try { count = 100; } catch (e) { console.log('assign     :', e.name, '-', e.message); }   // imports are read-only
+// ... then checks ns === again, the namespace's tag/sealing, top-level `this`, globals and strict mode
 ```
 
-Output:
+Output (full run):
 ```
 [math.mjs] evaluated
 before     : 0
@@ -253,12 +223,12 @@ global?    : false
 strict     : ReferenceError - undeclared is not defined
 ```
 
-- `count` changed from 0 to 2 in the importer — a CommonJS `const { count } = require(...)` would have copied `0` and stayed `0`.
-- Assigning to an import throws as if it were a `const`, even though the exporter declared it with `let`. Only the exporting module can change it (here via `increment`).
-- The namespace object is sealed and its properties are non-writable; it reports "not frozen" only because its properties stay live (their values can still change from inside the module).
+- `count` went 0 → 2 in the importer; CommonJS `const { count } = require(...)` would have copied `0`.
+- Assigning an import throws like a `const` even though the exporter used `let`; only the exporter can change it.
+- The namespace is sealed with non-writable properties; "not frozen" only because its values stay live.
 
 ### Circular imports
-A **circular dependency** is when A imports B and B (directly or indirectly) imports A. ESM allows it: while evaluating, the loader notices the cycle and runs one module before the other has finished. The rule: **top-level code must not use an imported `let`/`const`/`class` binding that hasn't been initialized yet** — it's in its temporal dead zone (TDZ). Using imports inside functions that run later is fine, and function declarations are initialized during linking, so they're usable early.
+A **circular dependency**: A imports B and B (directly or indirectly) imports A. ESM allows it — one module runs before the other finishes. Rule: **top-level code must not use an imported `let`/`const`/`class` not yet initialized** (it's in its **TDZ**, temporal dead zone). Use inside later-running functions is fine, and function declarations are initialized at link time, so they're usable early.
 
 [`code/07_circular_imports.mjs`](code/07_circular_imports.mjs) loads two tiny cycles:
 
@@ -292,63 +262,49 @@ unsafe cycle: ReferenceError - Cannot access 'a' before initialization
 safe cycle  : B calls A
 ```
 
-Starting from `cyc_a`, the loader evaluates its dependency `cyc_b` first; `cyc_b`'s top level reads `a`, but `cyc_a` hasn't run yet. In the safe version, `nameA` is a hoisted function declaration, so `describeB()` can call it. Best fix in real code: **break the cycle** — move the shared piece into a third module that both import.
+`cyc_b` evaluates first and reads `a` before `cyc_a` has run; in the safe version `nameA` is a hoisted function declaration. Best real fix: **break the cycle** by moving the shared piece into a third module.
 
 ### In the interview
-**30-second answer:** "ES modules are static: the loader parses the whole graph, links imports to exports, then evaluates each module once, dependencies first. Imports are hoisted, read-only live bindings — not copies — and modules are singletons in strict mode with their own scope. That static structure is what enables tree shaking. Circular imports work as long as top-level code doesn't touch a binding that's still in its TDZ."
+**30-second answer:** "ES modules are static: the loader parses the whole graph, links imports to exports, then evaluates each module once, dependencies first. Imports are hoisted, read-only live bindings, and modules are strict singletons with their own scope. That static structure enables tree shaking. Cycles work as long as top-level code doesn't touch a binding still in its TDZ."
 
-- *Q: Difference between ESM live bindings and CommonJS exports?* A: CommonJS `require` returns the `module.exports` object; destructuring copies values at that moment. ESM imports stay connected to the exporter's variable.
-- *Q: Why can't you put `import` inside an `if`?* A: Static imports must be known before execution; use `import()` for conditional loading.
+- *Q: ESM live bindings vs CommonJS exports?* A: `require` returns `module.exports`; destructuring copies values at that moment. ESM imports stay connected to the exporter's variable.
+- *Q: Why no `import` inside `if`?* A: Static imports must be known before execution; use `import()`.
 
 ### Self-check
-1. Two files import `config.mjs`. How many times does its top-level code run? → Once.
-2. Can an importer reassign an imported binding? → No — `TypeError`.
-3. In which phase is a missing named export reported? → Linking, before any code runs.
+1. Two files import `config.mjs` — top level runs how often? → Once.
+2. Can an importer reassign an import? → No — `TypeError`.
+3. Phase that reports a missing named export? → Linking.
 
 ### TL;DR
-Parse the graph → link bindings → evaluate once, dependencies first. Imports are hoisted, live and read-only; modules are strict singletons. Avoid top-level use of bindings in cycles.
+Parse → link → evaluate once, dependencies first. Imports: hoisted, live, read-only; modules: strict singletons. Avoid top-level use of bindings in cycles.
 
 ---
 
 ## 10.4 Dynamic `import()`
 
 ### What it is
-`import(specifier)` (ES2020) looks like a function call but is special syntax. It can appear anywhere — inside `if`, functions, event handlers — accepts a computed string, and returns a **promise** that resolves to the module's namespace object.
+`import(specifier)` (ES2020) is special syntax that works anywhere (`if`, functions, handlers), accepts computed strings, and returns a **promise** of the module's namespace object.
 
 ### Why it matters
-- **Lazy loading / code splitting** — load a heavy chart library only when the user opens the chart tab. Bundlers turn each `import()` into a separate file (**chunk**) downloaded on demand (§10.11).
-- **Conditional loading** — pick a module by platform, feature flag (a switch that turns a feature on or off) or locale (language + region setting) (`import(\`./locales/${lang}.mjs\`)`).
-- **From CommonJS** — the only way for a CommonJS file to load an ES module that uses top-level `await`.
+- **Lazy loading / code splitting** — load a heavy chart library only when its tab opens; bundlers emit each `import()` as a separate on-demand file (**chunk**, §10.11).
+- **Conditional loading** — by platform, feature flag (on/off switch for a feature) or locale (`import(\`./locales/${lang}.mjs\`)`).
+- **From CommonJS** — the only way for CJS to load an ES module that uses top-level `await`.
 
 [`code/03_dynamic_import.mjs`](code/03_dynamic_import.mjs):
 
 ```js
-import * as staticMath from './math.mjs';
-
+// 03_dynamic_import.mjs (abridged)
 const verbose = process.env.VERBOSE !== '0';   // decide at runtime whether to load the logger
 if (verbose) {
   const { default: log } = await import('./logger.mjs');  // default export is the "default" key
   console.log(log('debug', 'logger loaded lazily'));
 }
-
-const name = 'math';
 const dyn = await import(`./${name}.mjs`);                 // computed specifier
-console.log('same instance as static import?', dyn === staticMath);
-
 const [m, l] = await Promise.all([import('./math.mjs'), import('./logger.mjs')]);  // in parallel
-console.log('parallel :', m.add(1, 1), l.LEVELS.length);
-
-try {
-  await import('./does-not-exist.mjs');                    // failure = rejected promise
-} catch (e) {
-  console.log('missing  :', e.code);
-}
-
-const { basename } = await import('node:path');
-console.log('node:path:', basename('/a/b/report.pdf'));
+try { await import('./does-not-exist.mjs'); } catch (e) { console.log('missing  :', e.code); }  // rejected promise
 ```
 
-Output:
+Output (full run — the file also compares `dyn` with a static import and loads `node:path`):
 ```
 [math.mjs] evaluated
 [DEBUG] logger loaded lazily
@@ -368,18 +324,18 @@ node:path: report.pdf
 | Errors | whole graph fails to load | a catchable rejected promise |
 
 ### Common mistakes
-- Forgetting that the default export is under `.default`: `const mod = await import('./x.mjs'); mod.default(...)`.
-- Fully dynamic paths (`import(userInput)`) — bundlers can't pre-build them, and it's a security risk if the input isn't trusted.
+- Forgetting the default export is `.default`: `(await import('./x.mjs')).default(...)`.
+- Fully dynamic paths (`import(userInput)`) — un-prebuildable, and a security risk with untrusted input.
 
 ### TL;DR
-`import()` loads modules on demand and returns a promise of the namespace. Use it for code splitting and conditional loading; keep static imports for everything else.
+`import()` loads on demand and returns a promise of the namespace — for code splitting and conditional loading.
 
 ---
 
 ## 10.5 Top-level `await`
 
 ### What it is
-Since ES2022, `await` may be used at the **top level of an ES module** (not in classic scripts, and not in CommonJS). A module that awaits is an **async module**: modules that import it wait until it finishes evaluating before they run.
+Since ES2022, `await` works at the **top level of an ES module** (not classic scripts or CommonJS). Such an **async module** makes its importers wait until it finishes evaluating.
 
 [`code/slow_config.mjs`](code/slow_config.mjs) and [`code/04_top_level_await.mjs`](code/04_top_level_await.mjs):
 
@@ -410,27 +366,27 @@ settings: { theme: 'dark', retries: 3 }
 awaited at top level: [ 10, 20, 30 ]
 ```
 
-The `import` line is written *after* the first `console.log`, yet the dependency ran completely first — imports are hoisted, and the importer waited for `slow_config`'s `await`.
+The `import` written after the first `console.log` still ran first (hoisting), and the importer waited for `slow_config`'s `await`.
 
 ### Why it matters / real-world examples
-- Loading configuration, a WebAssembly module (fast compiled code, often from C or Rust, that browsers and Node can run), or opening a database connection before exporting it.
-- Scripts and CLIs (command-line programs): no more wrapping everything in `(async () => { … })()`.
+- Loading config, a WebAssembly module (fast compiled code, often from C/Rust), or a database connection before exporting it.
+- Scripts and CLIs (command-line programs) without `(async () => { … })()` wrappers.
 - Fallbacks: `let lib; try { lib = await import('fast-lib'); } catch { lib = await import('./slow-fallback.mjs'); }`.
 
 ### When not to use it
-- **In widely imported library modules** — every importer (and their importers) is delayed, and a slow `await` blocks the app's startup. Prefer exporting an async function (`export async function connect()`), and let the application decide when to wait.
-- **Modules loaded via `require()`** — Node throws `ERR_REQUIRE_ASYNC_MODULE` if the ESM graph contains top-level `await` (§10.8).
+- **Widely imported library modules** — every importer waits; a slow `await` blocks startup. Export an async function (`export async function connect()`) and let the app decide.
+- **Modules loaded via `require()`** — `ERR_REQUIRE_ASYNC_MODULE` (§10.8).
 
 ### TL;DR
-Top-level `await` works in ES modules only; importers wait for it. Great for entry points and scripts, risky in shared libraries.
+ES modules only; importers wait. Great for entry points and scripts, risky in shared libraries.
 
 ---
 
 ## 10.6 `import.meta` and JSON modules
 
 ### What it is
-- **`import.meta`** is an object holding metadata (data about the module itself, rather than its contents) about the *current* module, filled in by the host (browser or Node). The standard part is `import.meta.url` (the module's full URL) and `import.meta.resolve(specifier)` (turn a specifier into a URL relative to this module).
-- **Import attributes** (ES2025) add a `with { … }` clause to an import that tells the host how to interpret the file. The first standardized use is **JSON modules**: `import data from './data.json' with { type: 'json' }`. The attribute is required so a server can't trick a page into *executing* a file it expected to be data.
+- **`import.meta`** — host-provided **metadata** (data about the module, not its contents) for the current module. Standard: `import.meta.url` (full URL) and `import.meta.resolve(specifier)` (specifier → URL relative to this module).
+- **Import attributes** (ES2025) — a `with { … }` clause telling the host how to interpret a file. First use: **JSON modules**, `import data from './data.json' with { type: 'json' }`. Required so a server can't trick a page into *executing* a file it expected to be data.
 
 [`code/05_import_meta_and_json.mjs`](code/05_import_meta_and_json.mjs) (with [`code/data.json`](code/data.json)):
 
@@ -456,7 +412,7 @@ resolve  : math.mjs
 is main? : true
 ```
 
-(Only base names are printed so the output doesn't depend on where the book lives on disk.)
+(Base names only, so output doesn't depend on the book's location.)
 
 | Property | Where | Replaces |
 |---|---|---|
@@ -465,12 +421,10 @@ is main? : true
 | `import.meta.filename` / `.dirname` | Node 20.11+ | CommonJS `__filename` / `__dirname` |
 | `import.meta.main` | Node 24.2+ (early development) | `require.main === module` |
 
-A JSON module's default export is the parsed value; it has no named exports. It is evaluated once, so all importers share (and could mutate) the same object — treat it as read-only. For files outside the module graph (user uploads, data read at runtime), use `fs` or `fetch` + `JSON.parse` instead ([Chapter 5](../05-objects-math-date-and-json/README.md), [Chapter 15](../15-nodejs-basics/README.md)).
-
-Before import attributes existed, there was an earlier `assert { type: 'json' }` syntax; it was replaced by `with` and removed from V8/Node, so update old code that uses `assert`.
+A JSON module's default export is the parsed value (no named exports), evaluated once and shared — treat it as read-only. For runtime data (uploads etc.) use `fs` or `fetch` + `JSON.parse` ([Chapter 5](../05-objects-math-date-and-json/README.md), [Chapter 15](../15-nodejs-basics/README.md)). The earlier `assert { type: 'json' }` syntax was replaced by `with` and removed from V8/Node — update old code.
 
 ### TL;DR
-`import.meta.url` identifies the current module (Node adds `filename`/`dirname`). Import JSON with `with { type: 'json' }` (ES2025).
+`import.meta.url` identifies the module (Node adds `filename`/`dirname`); import JSON with `with { type: 'json' }` (ES2025).
 
 ---
 
@@ -485,7 +439,7 @@ Before import attributes existed, there was an earlier `assert { type: 'json' }`
 </script>
 ```
 
-(HTML — not run.) Differences from a classic `<script>`:
+(HTML — not run.) Versus a classic `<script>`:
 
 | | Classic `<script>` | `<script type="module">` |
 |---|---|---|
@@ -498,10 +452,10 @@ Before import attributes existed, there was an earlier `assert { type: 'json' }`
 | `file://` pages | work | blocked by browsers — use a local dev server (a small web server on your own machine for development) |
 | `import` / `export` / top-level `await` | ✗ | ✓ |
 
-`<script nomodule>` runs only in browsers that *don't* understand modules; it was used to ship a fallback bundle to old browsers and is rarely needed today — all evergreen browsers (browsers that update themselves automatically) have supported modules since about 2018.
+`<script nomodule>` runs only in browsers *without* module support — once used for fallback bundles, rarely needed now: all evergreen (self-updating) browsers have supported modules since about 2018.
 
 ### Bare specifiers and import maps
-Browsers can't resolve `import { h } from 'preact'` on their own — there is no `node_modules` on the web. An **import map** (supported in all major browsers since 2023) tells the browser what bare names mean:
+Browsers can't resolve `import { h } from 'preact'` — there's no `node_modules` on the web. An **import map** (all major browsers since 2023) maps bare names:
 
 ```html
 <script type="importmap">
@@ -518,24 +472,24 @@ Browsers can't resolve `import { h } from 'preact'` on their own — there is no
 </script>
 ```
 
-(HTML — not run.) Import maps are useful for small apps and prototypes without a build step (an automated pass that processes source files before release). Larger apps still use a bundler (§10.11) for tree shaking, minification (shrinking code by removing spaces and shortening names) and fewer network requests. The browser side of the platform (fetching, `<script>` loading, CORS) is covered in [Chapter 14](../14-browser-apis-and-security/README.md).
+(HTML — not run.) Good for small apps and prototypes without a **build step** (automated processing before release); larger apps still bundle (§10.11) for tree shaking, **minification** (removing spaces, shortening names) and fewer requests. Browser loading and CORS: [Chapter 14](../14-browser-apis-and-security/README.md).
 
 ### TL;DR
-`<script type="module">` = module scope, strict, deferred, once per URL, CORS required, no `file://`. Import maps let browsers resolve bare package names.
+`<script type="module">`: module scope, strict, deferred, once per URL, CORS, no `file://`. Import maps resolve bare names.
 
 ---
 
 ## 10.8 CommonJS vs ES modules in Node
 
 ### What it is
-**CommonJS (CJS)** is Node's original module system: `require(path)` synchronously loads and runs a file and returns its `module.exports` object. Node wraps every CJS file in a function — `(function (exports, require, module, __filename, __dirname) { … })` — which is where those five "globals" come from. It's still everywhere on npm, so you must be able to read, write and mix both systems.
+**CommonJS (CJS)**, Node's original system: `require(path)` synchronously loads and runs a file and returns its `module.exports`. Node wraps each CJS file in `(function (exports, require, module, __filename, __dirname) { … })` — the source of those five "globals". Still everywhere on npm, so you must read, write and mix both.
 
 ### How Node decides which system a file uses
-1. **`.mjs`** → always ESM. **`.cjs`** → always CommonJS.
-2. **`.js`** → look at the nearest `package.json`: `"type": "module"` → ESM; `"type": "commonjs"` → CJS.
-3. `.js` with **no** `"type"` field → CommonJS, *unless* the file contains ESM-only syntax (`import`/`export`, top-level `await`); since Node 22.7 Node then re-runs it as ESM (**syntax detection**). This is a convenience — set `"type"` explicitly in real projects so nothing is guessed.
+1. **`.mjs`** → ESM; **`.cjs`** → CommonJS.
+2. **`.js`** → nearest `package.json`: `"type": "module"` → ESM; `"type": "commonjs"` → CJS.
+3. `.js` with **no** `"type"` → CJS, *unless* it contains ESM-only syntax (`import`/`export`, top-level `await`); since Node 22.7 it's then re-run as ESM (**syntax detection**). Set `"type"` explicitly in real projects.
 
-This book's examples use `.mjs`/`.cjs` so there's never any doubt.
+This book uses `.mjs`/`.cjs` so there's never doubt.
 
 ### Side-by-side comparison
 | | CommonJS | ES modules |
@@ -554,9 +508,9 @@ This book's examples use `.mjs`/`.cjs` so there's never any doubt.
 | Browsers | ✗ (needs a bundler) | ✓ native |
 
 ### Interop
-- **ESM importing CJS** — works. The **default import** is `module.exports`. **Named imports** also work when Node can detect them by statically scanning the CJS source (it recognizes patterns like `exports.name = …` and `module.exports = { name, … }`).
-- **CJS requiring ESM** — `require(esm)` is enabled by default since Node 22.12 / 20.19 (no warning since 23.5 / 22.13; officially stable in 25.4). It returns the module namespace object. It **fails with `ERR_REQUIRE_ASYNC_MODULE`** if the ESM graph uses top-level `await` — use `await import()` then.
-- **`createRequire(import.meta.url)`** gives an ES module a real `require` function — handy for loading CJS-only files or using `require.resolve`.
+- **ESM importing CJS** — the **default import** is `module.exports`; **named imports** work when Node can detect them by statically scanning the CJS source (patterns like `exports.name = …`, `module.exports = { name, … }`).
+- **CJS requiring ESM** — `require(esm)` is on by default since Node 22.12 / 20.19 (no warning since 23.5 / 22.13; officially stable in 25.4), returning the namespace object. It **fails with `ERR_REQUIRE_ASYNC_MODULE`** if the ESM graph has top-level `await` — use `await import()`.
+- **`createRequire(import.meta.url)`** gives ESM a real `require` — for CJS-only files or `require.resolve`.
 
 [`code/legacy.cjs`](code/legacy.cjs), [`code/uses_esm.cjs`](code/uses_esm.cjs) and [`code/06_commonjs_interop.mjs`](code/06_commonjs_interop.mjs):
 
@@ -606,18 +560,18 @@ require(esm): { sum: 42, keys: [ 'TAU', 'add', 'square', 'toThePowerOfThree' ] }
 cache key: true
 ```
 
-- `legacy.cjs` ran once; the ESM import and the later `require` share one cached instance (the call counter continued from 1 to 2).
-- `version` was added *after* the `module.exports = {…}` assignment, so static analysis didn't list it as a named export — but it's on the default import. When in doubt with CJS packages, use the default import.
+- `legacy.cjs` ran once; ESM import and later `require` share the cached instance (counter 1 → 2).
+- `version`, added *after* `module.exports = {…}`, isn't detected as a named export but is on the default import — when in doubt with CJS, use the default import.
 
 ### Common mistakes
-- `exports = { a }` (reassigning the `exports` shortcut) exports nothing — only `module.exports = …` or `exports.a = …` work.
-- `ReferenceError: require is not defined in ES module scope` — you're in ESM; use `import` or `createRequire`.
-- `SyntaxError: Cannot use import statement outside a module` — Node treated the file as CJS (a `"type": "commonjs"` somewhere up the tree, or a `.cjs` file); rename to `.mjs` or set `"type": "module"`.
-- `__dirname is not defined` in ESM — use `import.meta.dirname`.
-- The **dual package hazard**: a package that ships both CJS and ESM builds may get loaded *twice* (once per system) — two copies of its state, and `instanceof` checks that fail across them.
+- `exports = { a }` exports nothing — only `module.exports = …` or `exports.a = …`.
+- `ReferenceError: require is not defined in ES module scope` — use `import` or `createRequire`.
+- `SyntaxError: Cannot use import statement outside a module` — Node treated the file as CJS (`"type": "commonjs"` up the tree, or `.cjs`); rename to `.mjs` or set `"type": "module"`.
+- `__dirname is not defined` in ESM — `import.meta.dirname`.
+- **Dual package hazard**: a package shipping CJS and ESM builds may load *twice* — two copies of state, and `instanceof` failing across them.
 
 ### Package entry points: `"exports"`
-A package's `package.json` can declare exactly which files outsiders may import and which file each module system gets:
+`package.json` can declare which files outsiders may import and which file each system gets:
 
 ```json
 {
@@ -631,32 +585,32 @@ A package's `package.json` can declare exactly which files outsiders may import 
 }
 ```
 
-(Not run.) With `"exports"` present, `import 'tiny-date/dist/secret.js'` fails with `ERR_PACKAGE_PATH_NOT_EXPORTED` — the package's internals are encapsulated. The older `"main"` field only named a single entry file and exposed everything. (`"imports"`, with keys starting `#`, defines private aliases *inside* a package, e.g. `import db from '#db'`.)
+(Not run.) With `"exports"`, `import 'tiny-date/dist/secret.js'` fails with `ERR_PACKAGE_PATH_NOT_EXPORTED` — internals are encapsulated. The older `"main"` named one entry and exposed everything. `"imports"` (keys starting `#`) defines private in-package aliases, e.g. `import db from '#db'`.
 
 ### In the interview
-**30-second answer:** "CommonJS is Node's original synchronous `require`/`module.exports` system; ES modules are the language standard with static `import`/`export`, live bindings, top-level `await` and browser support. Node picks the system by extension (`.mjs`/`.cjs`) or the `type` field in `package.json`. ESM can import CJS (default = `module.exports`), and modern Node can `require()` ESM unless it uses top-level `await`. New code should be ESM."
+**30-second answer:** "CommonJS is Node's original synchronous `require`/`module.exports`; ES modules are the standard with static `import`/`export`, live bindings, top-level `await` and browser support. Node chooses by extension (`.mjs`/`.cjs`) or `package.json` `type`. ESM can import CJS (default = `module.exports`), and modern Node can `require()` ESM unless it uses top-level `await`. New code should be ESM."
 
-- *Q: Why can't `require()` load an ESM file with top-level await?* A: `require` is synchronous and must return immediately; an async module can't finish synchronously.
-- *Q: What does `"exports"` do?* A: Defines the public entry points and conditional builds (`import` vs `require`), blocking deep imports of internal files.
+- *Q: Why can't `require()` load ESM with top-level await?* A: `require` is synchronous and must return immediately; an async module can't finish synchronously.
+- *Q: What does `"exports"` do?* A: Defines public entry points and conditional builds (`import` vs `require`), blocking deep imports.
 
 ### Self-check
-1. A `.js` file in a folder whose `package.json` has `"type": "module"` — which system? → ESM.
-2. How do you get `__dirname` in ESM? → `import.meta.dirname` (Node 20.11+), or `path.dirname(fileURLToPath(import.meta.url))` on older versions.
-3. What does `import x from './legacy.cjs'` give you? → The CJS `module.exports` value.
+1. `.js` under `"type": "module"`? → ESM.
+2. `__dirname` in ESM? → `import.meta.dirname` (Node 20.11+), or `path.dirname(fileURLToPath(import.meta.url))` earlier.
+3. `import x from './legacy.cjs'` gives? → `module.exports`.
 
 ### TL;DR
-`.mjs`/`.cjs` or `"type"` decides. CJS: sync `require`, copied values, `__dirname`. ESM: static, live, strict, TLA. They interoperate; prefer ESM for new code and declare entry points with `"exports"`.
+`.mjs`/`.cjs` or `"type"` decides. CJS: sync `require`, copied values, `__dirname`. ESM: static, live, strict, TLA. They interoperate; prefer ESM, declare entry points with `"exports"`.
 
 ---
 
 ## 10.9 npm and `package.json`
 
 ### What it is
-- **npm** is three things: the **registry** (npmjs.com, millions of public packages), the **CLI** (command-line interface — the `npm` command, installed with Node) and the company that runs them.
-- A **package** is a folder with a `package.json` file. A package you depend on is a **dependency**; the dependencies of your dependencies are **transitive dependencies**.
-- **`package.json`** is the manifest of your project: its name, version, module type, scripts and dependencies.
+- **npm** = the **registry** (npmjs.com, millions of public packages) + the **CLI** (command-line interface, `npm`, installed with Node) + the company running them.
+- A **package** is a folder with a `package.json`. What you depend on is a **dependency**; their dependencies are **transitive dependencies**.
+- **`package.json`** is the project manifest: name, version, module type, scripts, dependencies.
 
-Alternatives with the same registry and a compatible `package.json`: **pnpm** (content-addressed store (each file stored once, named by its contents), strict `node_modules`, saves disk space), **Yarn**, and **Bun** (a runtime with a built-in package manager). Pick one per project and commit its lockfile (the file recording exact installed versions, §10.10).
+Alternatives on the same registry: **pnpm** (content-addressed store — each file stored once, named by its contents — strict `node_modules`, saves disk), **Yarn**, **Bun** (runtime with built-in package manager). Pick one per project and commit its lockfile (exact installed versions, §10.10).
 
 ### A typical `package.json`
 ```json
@@ -685,7 +639,7 @@ Alternatives with the same registry and a compatible `package.json`: **pnpm** (c
 }
 ```
 
-(Not run; version numbers are examples.)
+(Not run; versions are examples.)
 
 | Field | Meaning |
 |---|---|
@@ -722,28 +676,28 @@ node --run test                 # Node 22+: run a script without npm's startup c
 node --watch server.mjs         # restart on file change (stable since Node 22)
 ```
 
-How scripts find tools: `npm run` (and `node --run`) put `./node_modules/.bin` on the `PATH` (the list of folders your shell searches for commands), so a script can say `eslint .` without a global install. `npm run build` also runs `prebuild` and `postbuild` scripts if they exist; `node --run` deliberately skips those pre/post hooks and package-manager-specific environment variables in exchange for speed.
+`npm run` and `node --run` put `./node_modules/.bin` on the `PATH` (folders the shell searches for commands), so scripts say `eslint .` without global installs. `npm run build` also runs `prebuild`/`postbuild` if present; `node --run` skips those hooks and package-manager environment variables for speed.
 
 ### How `node_modules` resolution works
-For a bare specifier like `import 'date-fns'` in `/app/src/utils/x.mjs`, Node looks for `node_modules/date-fns` in `/app/src/utils`, then `/app/src`, then `/app`, then `/`, stopping at the first match, then reads that package's `package.json` (`exports`, else `main`). npm **hoists** (flattens) most transitive dependencies to the top-level `node_modules` to share them; if two packages need incompatible versions, one gets a nested copy.
+For `import 'date-fns'` in `/app/src/utils/x.mjs`, Node checks `node_modules/date-fns` in `/app/src/utils`, `/app/src`, `/app`, `/` — first match wins — then reads its `package.json` (`exports`, else `main`). npm **hoists** (flattens) most transitive dependencies to the top level to share them; incompatible versions get nested copies.
 
-A consequence called **phantom dependencies**: your code can import a package you never declared, because a dependency happened to hoist it. It works until that dependency changes. pnpm's stricter layout prevents this.
+Consequence: **phantom dependencies** — importing an undeclared package that a dependency happened to hoist; it breaks when that dependency changes. pnpm's strict layout prevents this.
 
 ### Common mistakes
-- Installing tools globally (`npm install -g`) so the project silently depends on your machine. Use devDependencies + scripts/`npx`.
-- Putting build tools in `dependencies` (bloats production installs) or runtime libs in `devDependencies` (breaks production).
-- Committing `node_modules` (never) or *not* committing the lockfile (always commit it).
-- Running `npx some-package-name` with a typo — it may download and run a look-alike package. Check names.
+- Global installs (`npm install -g`) make the project depend on your machine — use devDependencies + scripts/`npx`.
+- Build tools in `dependencies` (bloat) or runtime libs in `devDependencies` (breaks production).
+- Committing `node_modules` (never); *not* committing the lockfile (always commit it).
+- `npx` with a typo may download and run a look-alike package.
 
 ### TL;DR
-`package.json` = identity + type + scripts + dependencies. `dependencies` for runtime, `devDependencies` for tooling. Run tools through scripts or `npx`. `node_modules` is searched upward from the importing file.
+`package.json` = identity + type + scripts + dependencies. `dependencies` runtime, `devDependencies` tooling; tools via scripts/`npx`; `node_modules` searched upward.
 
 ---
 
 ## 10.10 Semantic versioning, ranges and lockfiles
 
 ### What it is
-**Semantic versioning (semver)** gives version numbers a meaning: `MAJOR.MINOR.PATCH`.
+**Semantic versioning (semver)**: `MAJOR.MINOR.PATCH`.
 
 | Bump | When | Example | Should upgrading break you? |
 |---|---|---|---|
@@ -752,7 +706,7 @@ A consequence called **phantom dependencies**: your code can import a package yo
 | PATCH | backward-compatible bug fix | 3.4.1 → 3.4.2 | No |
 | Pre-release | unstable preview | 4.0.0-beta.2 | Anything goes |
 
-Special rule: **`0.x` versions are "initial development"** — anything may change at any time, so tools treat the *minor* number of a `0.x` version like a major.
+**`0.x` = initial development** — anything may change, so tools treat a `0.x` minor like a major.
 
 ### Version ranges in `package.json`
 | Range | Means | Allows |
@@ -768,30 +722,13 @@ Special rule: **`0.x` versions are "initial development"** — anything may chan
 | `^1 \|\| ^2` | either range | |
 | `*` / `latest` | anything | avoid |
 
-Caret's rule in one sentence: **don't change the left-most non-zero number.**
+Caret in one sentence: **don't change the left-most non-zero number.**
 
-[`code/08_semver.mjs`](code/08_semver.mjs) is a tiny model of these rules (it ignores pre-release tags and `||`/hyphen ranges; real projects use the `semver` package that npm itself uses):
+[`code/08_semver.mjs`](code/08_semver.mjs) models these rules (ignoring pre-release tags and `||`/hyphen ranges; real projects use the `semver` package npm itself uses):
 
 ```js
-function toBounds(range) {
-  const op = range.match(/^[\^~]/)?.[0] ?? '';
-  const parts = range.slice(op.length).split('.');
-  const given = parts.filter((p) => p !== 'x' && p !== '*').length;       // how many numbers were given
-  const [M = 0, m = 0, p = 0] = parts.map((x) => (x === 'x' || x === '*' ? 0 : Number(x)));
-  const low = [M, m, p];
-  let high;
-  if (op === '^') {                    // don't change the left-most non-zero part
-    if (M > 0 || given === 1) high = [M + 1, 0, 0];
-    else if (m > 0 || given === 2) high = [0, m + 1, 0];
-    else high = [0, 0, p + 1];
-  } else if (op === '~') {             // allow patch changes (or minor, if only major given)
-    high = given === 1 ? [M + 1, 0, 0] : [M, m + 1, 0];
-  } else {                             // exact or x-range
-    high = given === 3 ? [M, m, p + 1] : given === 2 ? [M, m + 1, 0] : given === 1 ? [M + 1, 0, 0] : [Infinity, 0, 0];
-  }
-  return { low, high };
-}
-// ... satisfies(version, range) checks low <= version < high
+// code/08_semver.mjs (core idea): turn a range into [low, high) bounds, then test low <= version < high
+// '^' -> bump the left-most non-zero part; '~' -> bump minor (or major if only major given); exact/x-range -> bump the last given part
 ```
 
 Output:
@@ -806,7 +743,7 @@ Output:
 ```
 
 ### Lockfiles
-A range like `^4.1.0` means two developers installing a month apart could get 4.1.0 and 4.3.2 — and every transitive dependency could differ too. A **lockfile** (`package-lock.json` for npm, `pnpm-lock.yaml`, `yarn.lock`, `bun.lock`) records the **exact** version, download URL and integrity hash (a fingerprint of the file's contents, used to detect tampering) of *every* package in the tree.
+With `^4.1.0`, installs a month apart may get 4.1.0 vs 4.3.2 — and every transitive dependency may differ. A **lockfile** (`package-lock.json`, `pnpm-lock.yaml`, `yarn.lock`, `bun.lock`) records the **exact** version, download URL and **integrity hash** (content fingerprint detecting tampering) of *every* package in the tree.
 
 | | `npm install` | `npm ci` |
 |---|---|---|
@@ -815,35 +752,35 @@ A range like `^4.1.0` means two developers installing a month apart could get 4.
 | Existing `node_modules` | reused/updated | deleted first |
 | Use for | development, adding packages | CI servers (continuous integration — machines that automatically build and test every change), deploy builds, reproducible installs |
 
-Rules: **commit the lockfile**, use `npm ci` in automated builds, and upgrade deliberately (`npm outdated` → `npm update` or `npm install pkg@latest` → run tests). Tools like Dependabot and Renovate open pull requests (proposed code changes for review, on sites like GitHub) for updates.
+**Commit the lockfile**, use `npm ci` in automated builds, upgrade deliberately (`npm outdated` → `npm update` or `npm install pkg@latest` → test). Dependabot and Renovate open **pull requests** (proposed changes for review, e.g. on GitHub) for updates.
 
 ### Real-world examples — why this matters
 - **left-pad (2016)**: an 11-line package was unpublished and thousands of builds broke; npm then restricted unpublishing.
-- **Supply-chain attacks** (attacks that sneak malicious code into something you depend on, rather than attacking you directly): compromised maintainers have published malicious patch versions of popular packages (for example `event-stream` in 2018, and several hijacked packages in 2025). Caret ranges + no lockfile = you install the bad version automatically. Lockfiles, `npm ci`, `npm audit`, and reviewing new dependencies reduce the risk.
+- **Supply-chain attacks** (malicious code smuggled into your dependencies): compromised maintainers published malicious patch versions (e.g. `event-stream` in 2018, several hijacked packages in 2025). Caret ranges without a lockfile install the bad version automatically; lockfiles, `npm ci`, `npm audit` and reviewing new dependencies reduce the risk.
 
 ### In the interview
-**30-second answer:** "Semver is MAJOR.MINOR.PATCH — breaking, feature, fix. `^` allows everything that doesn't change the left-most non-zero number, `~` allows patch updates. Ranges keep you flexible, but the lockfile pins the exact tree so everyone and CI install the same thing — and `npm ci` installs exactly from it."
+**30-second answer:** "Semver is MAJOR.MINOR.PATCH — breaking, feature, fix. `^` allows anything not changing the left-most non-zero number, `~` allows patch updates. Ranges stay flexible, but the lockfile pins the exact tree so everyone and CI install the same thing — `npm ci` installs exactly from it."
 
-- *Q: `^0.3.1` allows 0.4.0?* A: No — for `0.x`, caret locks the minor: ≥0.3.1 <0.4.0.
-- *Q: Should a library commit its lockfile?* A: Yes for its own development/CI reproducibility, but consumers ignore it — they resolve the library's ranges themselves.
+- *Q: Does `^0.3.1` allow 0.4.0?* A: No — for `0.x` caret locks the minor: ≥0.3.1 <0.4.0.
+- *Q: Should a library commit its lockfile?* A: Yes, for its own dev/CI reproducibility — consumers ignore it and resolve the library's ranges themselves.
 
 ### Self-check
 1. Largest version `~2.4.1` allows? → Anything <2.5.0.
-2. Which command never modifies the lockfile? → `npm ci`.
-3. A library fixes a bug without changing its API — which number bumps? → PATCH.
+2. Command that never modifies the lockfile? → `npm ci`.
+3. Bug fix without API change bumps? → PATCH.
 
 ### TL;DR
-MAJOR.MINOR.PATCH; `^` = same left-most non-zero, `~` = same minor. Commit the lockfile, use `npm ci` in CI, upgrade on purpose.
+MAJOR.MINOR.PATCH; `^` = same left-most non-zero, `~` = same minor. Commit the lockfile, `npm ci` in CI, upgrade on purpose.
 
 ---
 
 ## 10.11 Bundlers
 
 ### What it is
-A **bundler** reads your entry file, follows every `import` (including CSS, images and packages in `node_modules`) to build the module graph, and writes a few optimized output files (**bundles**) for the browser. Along the way it can transpile, minify and split code.
+A **bundler** follows every `import` from your entry file (including CSS, images, `node_modules` packages) to build the module graph and writes a few optimized **bundles** for the browser, transpiling, minifying and splitting along the way.
 
 ### The problem it solves
-Native ESM works in browsers, but shipping a large app as hundreds of unoptimized files means many requests, no dead-code removal, un-minified code, and no way to import from `node_modules` with bare names or to import CSS/images/TypeScript/JSX. Bundlers solve all of these.
+Shipping a large app as hundreds of raw native-ESM files means many requests, no dead-code removal, unminified code, and no bare-name imports from `node_modules` or CSS/image/TypeScript/JSX imports. Bundlers fix all of these.
 
 ### What a bundler does
 | Feature | Meaning |
@@ -876,7 +813,7 @@ flowchart LR
 | **Turbopack** | Rust bundler from Vercel; the default in Next.js since version 16. | Next.js apps |
 | **Parcel** | Zero-configuration bundler. | Quick projects |
 
-A Vite workflow (not run):
+A Vite workflow and an esbuild one-liner (not run):
 
 ```bash
 npm create vite@latest my-app -- --template vanilla   # scaffold a project
@@ -884,11 +821,6 @@ cd my-app && npm install
 npm run dev        # dev server with HMR, e.g. http://localhost:5173
 npm run build      # production bundle in dist/
 npm run preview    # serve dist/ locally to check the build
-```
-
-An esbuild one-liner (not run):
-
-```bash
 npx esbuild src/main.js --bundle --minify --sourcemap --format=esm --outdir=dist
 ```
 
@@ -901,25 +833,25 @@ npx esbuild src/main.js --bundle --minify --sourcemap --format=esm --outdir=dist
 | esbuild directly | Blazing fast, simple | Fewer features (no HMR dev server of its own, limited code-splitting options) |
 
 ### When not to use a bundler
-Node servers and CLIs usually run source files directly (Node understands ESM, and strips TypeScript types natively since 23.6/22.18). Bundle server code only for special cases (serverless cold starts (the delay when a serverless platform starts a fresh copy of your function), single-file distribution).
+Node servers and CLIs usually run source directly (Node runs ESM, and strips TypeScript types natively since 23.6/22.18). Bundle server code only for special cases: serverless **cold starts** (delay when the platform starts a fresh copy of your function), single-file distribution.
 
 ### Common mistakes
-- Importing a whole library (`import _ from 'lodash'`) when you use one function — prefer ESM packages and named imports (`import { debounce } from 'lodash-es'`) so tree shaking works.
-- Deploying without source maps (unreadable production errors) — or publishing them publicly when the source is secret (upload them to your error tracker, a service such as Sentry that collects crashes from users, instead).
-- Assuming dev behaviour equals production — always run `build` + `preview` before shipping.
+- `import _ from 'lodash'` for one function — use ESM packages and named imports (`import { debounce } from 'lodash-es'`) so tree shaking works.
+- Deploying without source maps (unreadable production errors) — or publishing them when source is secret (upload to an error tracker like Sentry, which collects users' crashes, instead).
+- Assuming dev equals production — run `build` + `preview` before shipping.
 
 ### TL;DR
-Bundlers build the module graph and emit optimized bundles: resolve, transform, tree shake, split, minify, source-map. Use Vite for apps, esbuild/Rollup-style tools for libraries, webpack where a project already has it.
+Bundlers resolve, transform, tree shake, split, minify, source-map. Vite for apps, esbuild/Rollup-style tools for libraries, webpack where a project already has it.
 
 ---
 
 ## 10.12 Transpilers and polyfills
 
 ### What it is
-- A **transpiler** (source-to-source compiler) rewrites code into different JavaScript: newer syntax → older syntax for old browsers, TypeScript → JavaScript (removing types), JSX → function calls. Examples: **Babel** (JS, plugin-based), **TypeScript's `tsc`**, **SWC** (Rust), **esbuild** (Go).
-- A **polyfill** is code that *adds a missing API at runtime* (e.g., defining `Array.prototype.at` if the browser lacks it). Libraries: **core-js**.
+- A **transpiler** (source-to-source compiler) rewrites JavaScript: newer → older syntax, TypeScript → JavaScript (types removed), JSX → function calls. **Babel** (plugin-based), **`tsc`**, **SWC** (Rust), **esbuild** (Go).
+- A **polyfill** *adds a missing API at runtime* (e.g. defines `Array.prototype.at` if absent). Library: **core-js**.
 
-The key distinction: **syntax** (`?.`, `class`, `#private`) can't be polyfilled — it must be transpiled, because an old parser would reject the file. **APIs** (`Array.prototype.findLast`, `Object.groupBy`, `structuredClone`) can be polyfilled.
+**Syntax** (`?.`, `class`, `#private`) can't be polyfilled — old parsers reject the file — so it must be transpiled; **APIs** (`findLast`, `Object.groupBy`, `structuredClone`) can be polyfilled.
 
 ```js
 // Input (modern)                       // Transpiled for an old target (roughly)
@@ -933,26 +865,26 @@ const city = user?.address?.city ?? 'n/a';
 (Illustrative, not run — exact output varies by tool.)
 
 ### How targets are chosen
-Tools read a **browserslist** query (in `package.json` or `.browserslistrc`), for example `"> 0.5%, last 2 versions, not dead"` or `"baseline widely available"` (features that have worked in all major browsers for at least about two and a half years), and only transform what those browsers don't support. Vite's default build target is a set of modern "baseline widely available" browsers, so very little is transpiled. Targeting only evergreen browsers keeps bundles smaller and faster.
+Tools read a **browserslist** query (`package.json` or `.browserslistrc`), e.g. `"> 0.5%, last 2 versions, not dead"` or `"baseline widely available"` (working in all major browsers for at least ~2.5 years), and transform only what those browsers lack. Vite's default target is modern "baseline widely available" browsers, so little is transpiled; evergreen-only targets keep bundles small.
 
 ### TypeScript note
-TypeScript is covered in [Chapter 16](../16-testing-and-typescript/README.md). Most bundlers (esbuild, Vite, SWC) **strip types without checking them** for speed; run `tsc --noEmit` separately (in CI or your editor) to actually type-check.
+TypeScript: [Chapter 16](../16-testing-and-typescript/README.md). Most bundlers (esbuild, Vite, SWC) **strip types without checking them**; run `tsc --noEmit` separately (CI or editor) to type-check.
 
 ### TL;DR
-Transpile syntax, polyfill APIs. Configure targets with browserslist; modern targets mean less transformation. Bundlers usually strip TS types; type-check separately.
+Transpile syntax, polyfill APIs; set targets with browserslist; bundlers strip TS types — type-check separately.
 
 ---
 
 ## 10.13 Linters and formatters
 
 ### What it is
-- A **linter** statically analyzes code (without running it) to find likely **bugs** and bad patterns: unused variables, use-before-define, `==` where `===` was meant, unreachable code, missing `await`, rules of React hooks. **ESLint** is the standard for JavaScript (Biome and Oxlint are faster Rust-based alternatives).
-- A **formatter** rewrites code **layout** — indentation, quotes, semicolons, line wrapping — to one consistent style so reviews focus on logic. **Prettier** is the standard.
+- A **linter** statically analyzes code to find likely **bugs**: unused variables, use-before-define, `==` for `===`, unreachable code, missing `await`, React hook rules. **ESLint** is the standard (Biome, Oxlint are faster Rust alternatives).
+- A **formatter** rewrites **layout** (indentation, quotes, semicolons, wrapping) to one style so reviews focus on logic. **Prettier** is the standard.
 
-They're complementary: let the formatter own style and the linter own correctness. ESLint deprecated its formatting-related core rules (v8.53, 2023) for exactly this reason; `eslint-config-prettier` turns off any remaining rules that would fight Prettier.
+Formatter owns style, linter owns correctness: ESLint deprecated its formatting core rules (v8.53, 2023), and `eslint-config-prettier` turns off remaining rules that would fight Prettier.
 
 ### ESLint's flat config
-Since ESLint 9, the configuration file is **`eslint.config.js`** (a JavaScript module exporting an array of config objects — the "flat config"). ESLint 10 (February 2026) removed the old `.eslintrc.*` format entirely.
+Since ESLint 9 the config is **`eslint.config.js`** (a module exporting an array of config objects — "flat config"); ESLint 10 (February 2026) removed the old `.eslintrc.*` format.
 
 ```js
 // eslint.config.js  (not run)
@@ -980,7 +912,7 @@ export default [
 ];
 ```
 
-Each object can target files with `files` and set language options, plugins and rules. Rule severity is `"off"`, `"warn"` or `"error"` (or 0/1/2). Later objects override earlier ones for matching files.
+Objects target files via `files` and set language options, plugins, rules; severity `"off"`/`"warn"`/`"error"` (0/1/2); later objects override earlier ones for matching files.
 
 Commands (not run):
 
@@ -992,7 +924,7 @@ npx prettier . --check             # report unformatted files (CI)
 npx prettier . --write             # format files in place
 ```
 
-Typical ESLint output for a file with problems looks like (illustrative):
+Typical ESLint output (illustrative):
 
 ```
 src/cart.js
@@ -1002,20 +934,20 @@ src/cart.js
 ✖ 2 problems (2 errors, 0 warnings)
 ```
 
-A minimal Prettier config, `.prettierrc.json`: `{ "singleQuote": true, "semi": true, "printWidth": 100 }`. Prettier is deliberately "opinionated": it has few options, to end style debates.
+Minimal Prettier config `.prettierrc.json`: `{ "singleQuote": true, "semi": true, "printWidth": 100 }`. Prettier is deliberately "opinionated" (few options) to end style debates.
 
 ### Wiring it into the workflow
-1. **Editor** — ESLint and Prettier extensions show problems as you type and format on save.
-2. **Pre-commit hook** — tools like husky + lint-staged run the linter/formatter on staged files (the changes you've marked with `git add` for the next commit) before each commit.
-3. **CI** — `npm run lint` and `prettier --check` fail the build if anything slipped through.
+1. **Editor** — extensions show problems as you type and format on save.
+2. **Pre-commit hook** — husky + lint-staged run lint/format on **staged files** (changes marked with `git add`) before each commit.
+3. **CI** — `npm run lint` and `prettier --check` fail the build on misses.
 
 ### Common mistakes
-- Letting ESLint and Prettier fight over formatting (two tools rewriting the same lines) — use `eslint-config-prettier`.
-- Turning every warning off to "get green" — fix the root cause or disable a rule for one line with a comment explaining why (`// eslint-disable-next-line no-console -- CLI output`).
-- Following old tutorials with `.eslintrc.json` — that format no longer works in ESLint 10.
+- ESLint and Prettier fighting over formatting — use `eslint-config-prettier`.
+- Disabling warnings to "get green" — fix the cause, or disable one line with a reason (`// eslint-disable-next-line no-console -- CLI output`).
+- Old `.eslintrc.json` tutorials — that format no longer works in ESLint 10.
 
 ### TL;DR
-ESLint finds bugs (flat config `eslint.config.js`); Prettier formats. Run both in the editor, pre-commit and CI; let Prettier own style.
+ESLint finds bugs (flat config `eslint.config.js`); Prettier formats; run both in editor, pre-commit and CI.
 
 ---
 
@@ -1037,20 +969,20 @@ notes-app/
 └─ dist/                 # build output (git-ignored)
 ```
 
-Daily loop: `npm run dev` (Vite + HMR) → edit → the editor lints/formats on save → `npm test` → commit (pre-commit hook lints staged files) → CI runs `npm ci`, `npm run lint`, `npm test`, `npm run build` → deploy `dist/`.
+Daily loop: `npm run dev` (Vite + HMR) → edit → editor lints/formats on save → `npm test` → commit (pre-commit hook lints staged files) → CI runs `npm ci`, `npm run lint`, `npm test`, `npm run build` → deploy `dist/`.
 
 ---
 
 ## Chapter 10 TL;DR
 
-- **Modules** give each file its own scope; **ES modules** (`import`/`export`) are the standard in browsers and Node.
-- **Named exports** (many, names must match) vs **default** (one, importer names it); `import * as ns`; `export … from` for barrels.
-- ESM loads in three phases (**parse → link → evaluate**): imports are **hoisted**, **live, read-only bindings**; modules are **strict singletons**; cycles work if top-level code avoids TDZ bindings.
-- **`import()`** loads on demand (code splitting); **top-level `await`** makes importers wait — fine in apps, risky in libraries.
+- **Modules** give files their own scope; **ES modules** are the standard in browsers and Node.
+- **Named exports** (many, names match) vs **default** (one, importer names it); `import * as ns`; `export … from` for barrels.
+- ESM loads **parse → link → evaluate**: imports **hoisted**, **live, read-only**; modules **strict singletons**; cycles work if top-level code avoids TDZ bindings.
+- **`import()`** loads on demand; **top-level `await`** makes importers wait — fine in apps, risky in libraries.
 - **`import.meta.url`/`dirname`/`filename`**; JSON via `with { type: 'json' }` (ES2025).
 - Browsers: `<script type="module">` is deferred, strict, CORS-bound; **import maps** resolve bare names.
-- Node: **`.mjs`/`.cjs`/`"type"`** choose ESM vs CommonJS; ESM imports CJS (default = `module.exports`); `require(esm)` works unless top-level `await`; `"exports"` defines a package's public entry points.
-- **npm**: `dependencies` vs `devDependencies`, scripts, `npx`, `node --run`; **semver** `^`/`~`; **commit the lockfile** and use **`npm ci`** in CI.
+- Node: **`.mjs`/`.cjs`/`"type"`** choose the system; ESM imports CJS (default = `module.exports`); `require(esm)` unless top-level `await`; `"exports"` defines public entry points.
+- **npm**: `dependencies` vs `devDependencies`, scripts, `npx`, `node --run`; **semver** `^`/`~`; **commit the lockfile**, **`npm ci`** in CI.
 - **Bundlers** (Vite, esbuild, webpack, Rolldown): tree shaking, code splitting, minification, source maps, HMR. **Transpile syntax, polyfill APIs.**
 - **ESLint** (flat config) finds bugs; **Prettier** formats; run both in editor, hooks and CI.
 
