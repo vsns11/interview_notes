@@ -28,6 +28,7 @@ render_one() {  # $1 book  $2 json
         -reset_timestamps 1 "$DIR/deliver/$book/$base-Part%d.mp4"
     fi
     cp "$out/subtitles.srt" "$DIR/deliver/$book/$base.srt"
+    python3 "$HERE/make_deck.py" "$out" "$DIR/deliver/$book/$base-Slides.pdf" >> "$out/build.log" 2>&1
     rm -rf "$out/frames" "$out/audio" "$out/narration.wav"
     echo "$(date +%H:%M) done $book/$ep $(grep -o '([0-9.]* min' "$out/build.log")" >> "$DIR/queue.log"
     touch "${js%.json}.rendered"
