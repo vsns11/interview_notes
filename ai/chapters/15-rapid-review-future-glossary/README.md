@@ -2,7 +2,7 @@
 
 *Last reviewed: September 2026. The review sheets summarise this book as written; the trends section describes directions visible in 2026, not predictions of fact.*
 
-Everything before this chapter built understanding at chapter depth. An interview — or a design review at work — asks you to pull that understanding out at conversation speed, out loud, under mild pressure. That is a separate skill, and it needs separate practice. This chapter compresses the book into revision tools, then looks outward: where the field is heading, how to keep learning, and every key term in one place.
+Earlier chapters built understanding at chapter depth; an interview or design review asks you to pull it out at conversation speed, aloud, under mild pressure — a separate skill needing separate practice. This chapter compresses the book into revision tools, then looks outward: where the field is heading, how to keep learning, and every key term in one place.
 
 **What you'll learn**
 
@@ -12,7 +12,7 @@ Everything before this chapter built understanding at chapter depth. An intervie
 - A 52-question interview bank with compressed answers, plus a script that drills it
 - Future trends (model capabilities, agents, AI with IoT/AR/VR/robotics/quantum — internet-connected devices, augmented and virtual reality, robots and quantum computers — the future of work, regulation), stated as trends
 - A staged learning roadmap with a project per stage
-- An alphabetical glossary of 426 terms, each pointing to the chapter that explains it
+- An alphabetical glossary defining each key term once, each pointing to the chapter that explains it
 
 ### How to revise with this chapter
 
@@ -24,7 +24,7 @@ Everything before this chapter built understanding at chapter depth. An intervie
 | **Question bank** (§15.4) | Shuffled, aloud, ~30 s each, in the final week | Interviews grade spoken recall, not recognition |
 | **One full design** per session | Pair every drill with one narrated case from [Chapter 14](../14-ai-case-studies/README.md) or [§13.11](../13-ai-system-design-and-genai-products/README.md) | Drills keep vocabulary ready; full designs keep assembly ready |
 
-Three drilling rules: **random order, out loud, timed**; after answering, **check the deciding variable** (if you cannot say what drives the choice, reread the section rather than memorising the words); and **re-drill misses after a day or two**, not immediately — answering again straight away only tests short-term memory.
+Three drilling rules: **random order, out loud, timed**; after answering, **check the deciding variable** (if you can't say what drives the choice, reread the section rather than memorising words); **re-drill misses after a day or two**, not immediately — answering again at once only tests short-term memory.
 
 ---
 
@@ -32,50 +32,48 @@ Three drilling rules: **random order, out loud, timed**; after answering, **chec
 
 ### How to use them
 
-One sheet per chapter: the ideas you must be able to explain without notes, a few numbers worth remembering, and a "can you…?" test. If any bullet feels shaky, follow its section link. Read a sheet in two minutes; explain it aloud in five.
-
-The sheets are deliberately compressed. Unfamiliar acronyms get a short gloss in brackets at first use below, and **every term is defined in plain English in the [glossary](#157-glossary) (section 15.7)** at the end of this chapter — keep it open beside you while revising.
+One sheet per chapter: ideas to explain without notes, numbers worth remembering, and a "can you…?" test. Read a sheet in two minutes, explain it aloud in five; follow the section link for any shaky bullet. Sheets don't re-teach — **every term is defined once in the [glossary](#157-glossary) (§15.7)**; keep it open beside you.
 
 ### Chapter 1 — The World of AI ([Chapter 1](../01-ai-landscape/README.md))
 
-- **AI** = building agents that act rationally: maximise an expected performance measure given their percepts (everything the agent has sensed so far). Specify tasks with **PEAS** (Performance measure, Environment, Actuators, Sensors) and classify the environment. ([§1.1](../01-ai-landscape/README.md))
-- The **Turing test** measures imitation, not understanding. ([§1.2](../01-ai-landscape/README.md))
-- **History**: 1956 Dartmouth → symbolic AI (hand-written rules and logic) → AI winters (periods when funding and interest collapsed) → statistical ML → deep learning (2012) → transformers (2017) → ChatGPT (Nov 2022) → reasoning models and agents. ([§1.3](../01-ai-landscape/README.md))
-- Everything deployed is **narrow** AI (built for specific tasks); AGI (artificial general intelligence, human-level across most tasks) has no agreed definition. ([§1.4](../01-ai-landscape/README.md))
+- **AI** = agents acting rationally: maximise expected performance given percepts; specify tasks with **PEAS**, classify the environment. ([§1.1](../01-ai-landscape/README.md))
+- **Turing test** measures imitation, not understanding. ([§1.2](../01-ai-landscape/README.md))
+- **History**: 1956 Dartmouth → symbolic AI → AI winters → statistical ML → deep learning (2012) → transformers (2017) → ChatGPT (Nov 2022) → reasoning models and agents. ([§1.3](../01-ai-landscape/README.md))
+- Everything deployed is **narrow** AI; AGI has no agreed definition. ([§1.4](../01-ai-landscape/README.md))
 - **Family tree**: AI ⊃ ML ⊃ deep learning ⊃ generative AI ⊃ LLMs; agentic AI wraps models in a plan–act–observe loop; symbolic vs statistical knowledge. ([§1.5](../01-ai-landscape/README.md))
-- **Constraints** decide projects: data, cost, latency (the time one request takes, start to finish), reliability compounding over steps (pⁿ: n steps that each succeed with probability p all succeed with probability p to the power n), integration, regulation. ([§1.8](../01-ai-landscape/README.md))
+- **Constraints** decide projects: data, cost, latency, reliability compounding over steps (pⁿ), integration, regulation. ([§1.8](../01-ai-landscape/README.md))
 - **Can you…** write PEAS for a self-driving taxi? explain why a 95%-reliable step repeated 10 times is only ~60% reliable?
 
 ### Chapter 2 — Classical AI and Search ([Chapter 2](../02-classical-ai-search/README.md))
 
-- **Formulate** a problem: states, actions, transition model, goal test, path cost. ([§2.1](../02-classical-ai-search/README.md))
-- **Uninformed** (no estimate of distance to the goal): BFS (breadth-first search: shallowest first, memory-hungry), DFS (depth-first search: low memory, no guarantees), iterative deepening, uniform-cost (cheapest path). ([§2.2](../02-classical-ai-search/README.md))
-- **Informed**: greedy (f = h) is fast but not optimal; **A\*** (f = g + h, where g is the cost so far and h a heuristic — an estimate of the cost still to go) is optimal with an admissible heuristic (one that never overestimates). ([§2.3](../02-classical-ai-search/README.md))
+- **Formulate**: states, actions, transition model, goal test, path cost. ([§2.1](../02-classical-ai-search/README.md))
+- **Uninformed**: BFS (shallowest first, memory-hungry), DFS (low memory, no guarantees), iterative deepening, uniform-cost (cheapest path). ([§2.2](../02-classical-ai-search/README.md))
+- **Informed**: greedy (f = h) fast, not optimal; **A\*** (f = g + h) optimal with an admissible heuristic. ([§2.3](../02-classical-ai-search/README.md))
 - **Local search**: hill climbing, random restarts, simulated annealing, genetic algorithms. ([§2.4](../02-classical-ai-search/README.md))
-- **Games**: minimax (assume both players play their best), alpha-beta (same answer, far fewer nodes); **MCTS** (Monte Carlo tree search: grow the game tree using many simulated play-outs) + learned policy/value networks → AlphaGo. ([§2.5](../02-classical-ai-search/README.md), [§2.6](../02-classical-ai-search/README.md))
-- **CSPs** (constraint satisfaction problems: give variables values so every rule holds): backtracking with MRV (minimum remaining values — fill the most constrained variable first) and forward checking (prune neighbours' options after each assignment). ([§2.7](../02-classical-ai-search/README.md))
-- **Can you…** explain why Manhattan distance (horizontal steps + vertical steps) is admissible on a 4-connected grid (moves only up, down, left, right)? trace one alpha-beta cut-off?
+- **Games**: minimax, alpha-beta (same answer, far fewer nodes); **MCTS** + learned policy/value networks → AlphaGo. ([§2.5](../02-classical-ai-search/README.md), [§2.6](../02-classical-ai-search/README.md))
+- **CSPs**: backtracking with MRV and forward checking. ([§2.7](../02-classical-ai-search/README.md))
+- **Can you…** explain why Manhattan distance is admissible on a 4-connected grid (moves only up, down, left, right)? trace one alpha-beta cut-off?
 
 ### Chapter 3 — Transformers and Embeddings ([Chapter 3](../03-transformers-and-embeddings/README.md))
 
-- **Tokens**: subword pieces from BPE-style (byte-pair encoding: repeatedly merge the most frequent pair of symbols) tokenizers, ~4 English characters each; everything is counted and priced in tokens. ([§3.1](../03-transformers-and-embeddings/README.md))
-- **Embeddings**: learned vectors where closeness = similar meaning; compare with cosine similarity. ([§3.2](../03-transformers-and-embeddings/README.md))
-- **Position**: attention is order-blind, so add positional information (sinusoidal, learned, RoPE — rotary position embedding, which rotates vectors by an angle that depends on position). ([§3.3](../03-transformers-and-embeddings/README.md))
-- **Self-attention**: softmax(QKᵀ/√d_k)V — Q, K, V are the query, key and value vectors, d_k the key size, softmax turns scores into weights summing to 1; all tokens in parallel; cost grows with T² (T = sequence length). **Multi-head** attention; GQA/MQA (grouped-query / multi-query attention) share K/V. ([§3.4](../03-transformers-and-embeddings/README.md), [§3.5](../03-transformers-and-embeddings/README.md))
-- **Block**: attention + feed-forward (a small per-token neural network), each with residual (input added back to output) and normalisation (rescaling values to a stable range), stacked; **causal mask** (hides future tokens) for generation. ([§3.6](../03-transformers-and-embeddings/README.md), [§3.7](../03-transformers-and-embeddings/README.md))
+- **Tokens**: BPE-style subword pieces, ~4 English characters each; everything is counted and priced in tokens. ([§3.1](../03-transformers-and-embeddings/README.md))
+- **Embeddings**: closeness = similar meaning; compare with cosine similarity. ([§3.2](../03-transformers-and-embeddings/README.md))
+- **Position**: attention is order-blind → sinusoidal, learned or RoPE positions. ([§3.3](../03-transformers-and-embeddings/README.md))
+- **Self-attention**: softmax(QKᵀ/√d_k)V, all tokens in parallel, cost ∝ T²; **multi-head**; GQA/MQA share K/V. ([§3.4](../03-transformers-and-embeddings/README.md), [§3.5](../03-transformers-and-embeddings/README.md))
+- **Block**: attention + feed-forward, each with residual and normalisation, stacked; **causal mask** for generation. ([§3.6](../03-transformers-and-embeddings/README.md), [§3.7](../03-transformers-and-embeddings/README.md))
 - **Encoder / decoder / encoder–decoder**: BERT / GPT-Claude-Llama / T5-Whisper. ([§3.8](../03-transformers-and-embeddings/README.md))
 - **Can you…** compute attention weights for three tokens by hand? say why decoders need the mask?
 
 ### Chapter 4 — Large Language Models ([Chapter 4](../04-large-language-models/README.md))
 
-- An LLM is a decoder-only transformer trained to **predict the next token**, generating one token at a time. ([§4.1](../04-large-language-models/README.md), [§4.2](../04-large-language-models/README.md))
-- **Scaling laws**: training compute C ≈ 6·N·D (N = parameters, the learned weights; D = training tokens); Chinchilla ≈ 20 tokens per parameter; smaller over-trained models are cheaper to serve. ([§4.4](../04-large-language-models/README.md))
-- **Post-training**: SFT (supervised fine-tuning on example answers) → RLHF (reinforcement learning from human feedback) or DPO (direct preference optimisation) → RL on verifiable rewards (answers a program can check, such as maths or tests) for reasoning models. ([§4.5](../04-large-language-models/README.md), [§4.6](../04-large-language-models/README.md), [§4.11](../04-large-language-models/README.md))
-- **Decoding** (how the next token is picked): greedy, beam, temperature, top-k, top-p. ([§4.7](../04-large-language-models/README.md))
-- **Context**: the model is stateless; the window is finite; history must be selected, summarised or retrieved. ([§4.8](../04-large-language-models/README.md))
-- **Inference** (running the trained model): prefill (reading the whole prompt) sets time-to-first-token; decode (writing one token at a time) is memory-bound (limited by how fast weights move from memory, not by arithmetic); the KV cache (saved attention keys and values of earlier tokens) trades memory for speed. ([§4.9](../04-large-language-models/README.md))
+- An LLM is a decoder-only transformer trained to **predict the next token**, generating one at a time. ([§4.1](../04-large-language-models/README.md), [§4.2](../04-large-language-models/README.md))
+- **Scaling laws**: compute C ≈ 6·N·D (N parameters, D tokens); Chinchilla ≈ 20 tokens per parameter; smaller over-trained models are cheaper to serve. ([§4.4](../04-large-language-models/README.md))
+- **Post-training**: SFT → RLHF or DPO → RL on verifiable rewards for reasoning models. ([§4.5](../04-large-language-models/README.md), [§4.6](../04-large-language-models/README.md), [§4.11](../04-large-language-models/README.md))
+- **Decoding**: greedy, beam, temperature, top-k, top-p. ([§4.7](../04-large-language-models/README.md))
+- **Context**: the model is stateless, the window finite; history is selected, summarised or retrieved. ([§4.8](../04-large-language-models/README.md))
+- **Inference**: prefill sets time-to-first-token; decode is memory-bound; the KV cache trades memory for speed. ([§4.9](../04-large-language-models/README.md))
 - **Limits**: hallucination, knowledge cutoff, no private knowledge, prompt injection, output variance. **Open vs closed** models. ([§4.10](../04-large-language-models/README.md), [§4.13](../04-large-language-models/README.md))
-- **Can you…** estimate the training compute of a 7B model on 2T tokens (≈ 8.4 × 10²² FLOPs — floating-point operations, i.e. arithmetic steps)? explain why temperature 0 is still not perfectly deterministic?
+- **Can you…** estimate training compute for a 7B model on 2T tokens (≈ 8.4 × 10²² FLOPs)? explain why temperature 0 is still not perfectly deterministic?
 
 ### Chapter 5 — Prompt Engineering ([Chapter 5](../05-prompt-engineering/README.md))
 
@@ -83,120 +81,118 @@ The sheets are deliberately compressed. Unfamiliar acronyms get a short gloss in
 - **Zero-shot vs few-shot**; diverse, tagged examples are the clearest spec. ([§5.3](../05-prompt-engineering/README.md))
 - **System prompts** for stable rules; **scenario ("act as") prompts** for a stakeholder's viewpoint. ([§5.4](../05-prompt-engineering/README.md))
 - **Delimit** instructions from data (XML-style tags); **structured output** with schema, validation and retry. ([§5.5](../05-prompt-engineering/README.md), [§5.6](../05-prompt-engineering/README.md))
-- **Reasoning**: chain-of-thought for standard models, effort settings for reasoning models; **self-consistency** votes across samples; **chaining** and **ReAct** split work into checked steps. ([§5.7](../05-prompt-engineering/README.md)–[§5.10](../05-prompt-engineering/README.md))
-- **Iterate** one or two changes at a time; **troubleshoot** by finding the missing information; treat outside text as untrusted. ([§5.12](../05-prompt-engineering/README.md), [§5.13](../05-prompt-engineering/README.md))
+- **Reasoning**: chain-of-thought for standard models, effort settings for reasoning models; **self-consistency** votes; **chaining** and **ReAct** split work into checked steps. ([§5.7](../05-prompt-engineering/README.md)–[§5.10](../05-prompt-engineering/README.md))
+- **Iterate** one or two changes at a time; **troubleshoot** by finding the missing information; outside text is untrusted. ([§5.12](../05-prompt-engineering/README.md), [§5.13](../05-prompt-engineering/README.md))
 - **Evaluate prompts like code**: criteria, test set, graders, versions. ([§5.14](../05-prompt-engineering/README.md))
 - **Can you…** rewrite a vague one-line prompt into a full specification? name two defences against injected instructions?
 
 ### Chapter 6 — Building LLM Apps in Python ([Chapter 6](../06-building-llm-apps-in-python/README.md))
 
-- **API call** (a request to the provider's web endpoint) = model + system prompt + messages + max_tokens (the cap on reply length) (+ tools); the response has content blocks, a stop reason and token usage; the API is stateless. ([§6.2](../06-building-llm-apps-in-python/README.md))
+- **API call** = model + system prompt + messages + max_tokens (+ tools); response = content blocks, stop reason, token usage; the API is stateless. ([§6.2](../06-building-llm-apps-in-python/README.md))
 - **Streaming** reduces perceived latency. ([§6.3](../06-building-llm-apps-in-python/README.md))
 - **Structured output**: schema-constrained modes or strict tools; still validate. ([§6.4](../06-building-llm-apps-in-python/README.md))
 - **Tool-use loop**: JSON-Schema tools → model asks → your code validates and runs → result back by id → repeat, with limits. ([§6.5](../06-building-llm-apps-in-python/README.md))
 - **Cost** = input tokens × input price + output tokens × output price. ([§6.6](../06-building-llm-apps-in-python/README.md))
-- **Reliability**: backoff + jitter (waiting longer after each failure, plus a random offset so clients don't retry in lockstep) on 429 (HTTP "too many requests"), 5xx (server errors) and timeouts; no retries on other 4xx (client errors such as a malformed request). **Caching**: stable prefix first. **Memory**: recent turns + summary + durable facts under a budget. ([§6.7](../06-building-llm-apps-in-python/README.md)–[§6.9](../06-building-llm-apps-in-python/README.md))
-- **MCP** (Model Context Protocol, an open standard for plugging tools into AI apps): host / client / server over JSON-RPC (a simple format for calling a remote function with JSON messages); tools (model-controlled), resources (app-controlled), prompts (user-controlled). ([§6.10](../06-building-llm-apps-in-python/README.md))
+- **Reliability**: backoff + jitter on 429, 5xx and timeouts; no retries on other 4xx. **Caching**: stable prefix first. **Memory**: recent turns + summary + durable facts under a budget. ([§6.7](../06-building-llm-apps-in-python/README.md)–[§6.9](../06-building-llm-apps-in-python/README.md))
+- **MCP**: host / client / server over JSON-RPC; tools (model-controlled), resources (app-controlled), prompts (user-controlled). ([§6.10](../06-building-llm-apps-in-python/README.md))
 - **Can you…** sketch the tool loop from memory? estimate the monthly cost of 10,000 requests a day?
 
 ### Chapter 7 — Embeddings, Vector Databases and RAG ([Chapter 7](../07-embeddings-vector-databases-and-rag/README.md))
 
-- **RAG** (retrieval-augmented generation) = retrieve evidence, then generate from it; an offline indexing system (prepares documents ahead of time) plus an online request path (runs per question), evaluated separately. ([§7.1](../07-embeddings-vector-databases-and-rag/README.md))
-- **ANN indexes** (approximate nearest neighbour: HNSW — a layered graph, IVF — clustered buckets, PQ — compressed vectors) trade recall (the share of true nearest neighbours found) for speed and memory — measure recall against exact search. ([§7.3](../07-embeddings-vector-databases-and-rag/README.md))
-- A **vector database** adds filtering during search, updates/deletes and replication (keeping copies on several machines) to an index. ([§7.4](../07-embeddings-vector-databases-and-rag/README.md))
+- **RAG** = retrieve evidence, then generate from it: an offline indexing system plus an online request path, evaluated separately. ([§7.1](../07-embeddings-vector-databases-and-rag/README.md))
+- **ANN indexes** (HNSW, IVF, PQ) trade recall for speed and memory — measure recall against exact search. ([§7.3](../07-embeddings-vector-databases-and-rag/README.md))
+- A **vector database** adds filtering during search, updates/deletes and replication to an index. ([§7.4](../07-embeddings-vector-databases-and-rag/README.md))
 - **Ingestion** decides quality: parsing, structure-aware chunks with overlap, metadata, sync. ([§7.5](../07-embeddings-vector-databases-and-rag/README.md))
-- **Request path**: process the query (rewrite, HyDE — search with a drafted hypothetical answer —, routing), retrieve, assemble a budgeted context, generate, then run post-checks with a fallback. ([§7.6](../07-embeddings-vector-databases-and-rag/README.md))
-- **Hybrid** BM25 (classic keyword scoring) + vectors fused with RRF (reciprocal rank fusion: Σ 1/(60 + rank)); cross-encoder reranking (a model reads query and passage together to re-score the top hits). ([§7.7](../07-embeddings-vector-databases-and-rag/README.md))
+- **Request path**: process the query (rewrite, HyDE, routing), retrieve, assemble a budgeted context, generate, post-check with a fallback. ([§7.6](../07-embeddings-vector-databases-and-rag/README.md))
+- **Hybrid** BM25 + vectors fused with RRF (Σ 1/(60 + rank)); cross-encoder reranking. ([§7.7](../07-embeddings-vector-databases-and-rag/README.md))
 - **Grounding**, **permissions inside retrieval (fail closed)**, freshness and deletion. ([§7.8](../07-embeddings-vector-databases-and-rag/README.md), [§7.9](../07-embeddings-vector-databases-and-rag/README.md))
-- **Evaluate**: recall@k (did the right passage land in the top k?), faithfulness (is every claim backed by the retrieved text?), answer relevance, refusal correctness, zero leaks. ([§7.11](../07-embeddings-vector-databases-and-rag/README.md))
-- **Can you…** size raw vectors for 10M chunks × 1,024 float32 dims (4-byte numbers, one per dimension) (≈ 41 GB)? say which stage failed when the right document exists but is never retrieved?
+- **Evaluate**: recall@k, faithfulness, answer relevance, refusal correctness, zero leaks. ([§7.11](../07-embeddings-vector-databases-and-rag/README.md))
+- **Can you…** size raw vectors for 10M chunks × 1,024 float32 dims (≈ 41 GB)? say which stage failed when the right document exists but is never retrieved?
 
 ### Chapter 8 — Prompting vs Fine-Tuning vs RAG, and LLM Evaluation ([Chapter 8](../08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md))
 
-- **Adaptation**: prompting is the baseline; **RAG supplies knowledge** (fresh, private, permissioned, citable); **fine-tuning changes behaviour** (format, tone, narrow skill, cheaper small models). Diagnose the failure first; never use weights as access control. ([§8.1](../08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md))
-- **LoRA** (low-rank adaptation) trains two small matrices (h = W₀x + (α/r)·BAx, where W₀ is the frozen original weight, B and A the small trained matrices, r their rank and α a scaling factor): about 65K trainable parameters instead of 16.8M for one 4096 × 4096 matrix at r = 8. **QLoRA** adds a 4-bit base model (weights stored with 4 bits each to save memory). Full fine-tuning of a 7B model needs roughly 16 bytes per parameter. ([§8.2](../08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md))
-- **Tuning data**: instruction pairs (SFT), preference pairs (RLHF/DPO), teacher outputs (distillation: a small model learns to copy a big one); re-run every eval after tuning — forgetting (losing old skills) and safety erosion happen. ([§8.3](../08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md))
-- **Evaluation pyramid**: programmatic checks → LLM-as-judge (watch position, verbosity and self-preference bias) → human review, over a versioned golden set (fixed test cases with known good answers) run like CI (continuous integration: automatic tests on every change). ([§8.4](../08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md), [§8.5](../08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md))
-- **Metrics**: exact match/F1 (a balance of precision and recall), pass@k for code (does at least one of k attempts pass the tests?), BLEU/ROUGE (word-overlap scores against a reference text) only as rough signals, faithfulness/relevance/refusal for RAG — report uncertainty. ([§8.6](../08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md))
-- **Online evaluation** (A/B tests on split live traffic, canaries — a new version on a small slice first —, outcome metrics) and **guardrail suites** as hard gates. ([§8.7](../08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md), [§8.8](../08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md))
+- **Adaptation**: prompting is the baseline; **RAG supplies knowledge** (fresh, private, permissioned, citable); **fine-tuning changes behaviour** (format, tone, narrow skill, cheaper small models). Diagnose first; never use weights as access control. ([§8.1](../08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md))
+- **LoRA**: h = W₀x + (α/r)·BAx — ~65K trainable parameters instead of 16.8M for one 4096 × 4096 matrix at r = 8; **QLoRA** adds a 4-bit base; full fine-tuning of 7B needs ~16 bytes per parameter. ([§8.2](../08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md))
+- **Tuning data**: instruction pairs (SFT), preference pairs (RLHF/DPO), teacher outputs (distillation); re-run every eval — forgetting and safety erosion happen. ([§8.3](../08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md))
+- **Evaluation pyramid**: programmatic checks → LLM-as-judge (position, verbosity, self-preference bias) → human review, over a versioned golden set run like CI. ([§8.4](../08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md), [§8.5](../08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md))
+- **Metrics**: exact match/F1, pass@k for code, BLEU/ROUGE only as rough signals, faithfulness/relevance/refusal for RAG — report uncertainty. ([§8.6](../08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md))
+- **Online evaluation** (A/B tests, canaries, outcome metrics) and **guardrail suites** as hard gates. ([§8.7](../08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md), [§8.8](../08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md))
 - **Can you…** pick RAG, prompting or tuning for three different failures? compute LoRA's trainable parameters for one matrix?
 
 ### Chapter 9 — AI Agents ([Chapter 9](../09-ai-agents/README.md))
 
-
-- **Agent** = LLM + tools + memory + a loop in which the model picks the next step at run time; if you can draw the flowchart, build a **workflow** instead. ([§9.1](../09-ai-agents/README.md))
-- **Loop / ReAct**: reason → act → observe, bounded by steps, tokens, money, time and actions; errors compound (0.95¹⁰ ≈ 0.60), so verify intermediate results. ([§9.2](../09-ai-agents/README.md))
-- **Tool calling**: the model *requests*; the runtime validates, authorises, executes and logs. Few, coarse, well-described tools; idempotent writes (repeating one has the same effect as doing it once, so retries are safe). ([§9.3](../09-ai-agents/README.md))
-- **Guardrails**: least privilege (only the minimum permissions needed), user-scoped credentials (the agent acts with the user's own rights), consequence tiers, an action gate, targeted human approval — injection is stopped by the gate, not the prompt. ([§9.4](../09-ai-agents/README.md))
+- **Agent** = LLM + tools + memory + a loop where the model picks the next step at run time; drawable flowchart → **workflow**. ([§9.1](../09-ai-agents/README.md))
+- **Loop / ReAct**: reason → act → observe, bounded by steps, tokens, money, time and actions; 0.95¹⁰ ≈ 0.60, so verify intermediate results. ([§9.2](../09-ai-agents/README.md))
+- **Tool calling**: the model *requests*; the runtime validates, authorises, executes, logs. Few, coarse, well-described tools; idempotent writes. ([§9.3](../09-ai-agents/README.md))
+- **Guardrails**: least privilege, user-scoped credentials, consequence tiers, an action gate, targeted human approval — injection is stopped by the gate, not the prompt. ([§9.4](../09-ai-agents/README.md))
 - **Planning** (plan-and-execute, reflection) and **memory** (window, compaction, long-term, durable task state). ([§9.5](../09-ai-agents/README.md), [§9.6](../09-ai-agents/README.md))
-- **Multi-agent**: default to one; split only for isolation, parallelism or specialisation. **MCP** standardises the plug but does not replace authorisation. ([§9.7](../09-ai-agents/README.md), [§9.8](../09-ai-agents/README.md))
-- **Evaluate** whole trajectories (the full sequence of steps an agent took) in a sandbox (an isolated environment where actions cannot do real damage) (success with cost, pass^k — the chance that all k repeated runs succeed); **control** with a four-rung autonomy ladder per action tier, budgets, kill switches and alarms. ([§9.9](../09-ai-agents/README.md), [§9.10](../09-ai-agents/README.md))
+- **Multi-agent**: default to one; split only for isolation, parallelism or specialisation. **MCP** standardises the plug, not authorisation. ([§9.7](../09-ai-agents/README.md), [§9.8](../09-ai-agents/README.md))
+- **Evaluate** whole trajectories in a sandbox (success with cost, pass^k); **control** with a four-rung autonomy ladder per action tier, budgets, kill switches, alarms. ([§9.9](../09-ai-agents/README.md), [§9.10](../09-ai-agents/README.md))
 - **Can you…** design the customer-support agent's tools, tiers and approval gates ([§9.11](../09-ai-agents/README.md))? explain pass^k?
 
 ### Chapter 10 — Generative Models Beyond Text ([Chapter 10](../10-generative-models-beyond-text/README.md))
 
-- **Families**: VAEs (variational autoencoders: smooth latent space — a compressed internal representation —, blurrier), GANs (generative adversarial networks: sharp and fast, mode collapse — producing only a few kinds of output), autoregressive (token by token), diffusion/flow (top quality, slow without tricks). ([§10.1](../10-generative-models-beyond-text/README.md))
-- **VAE**: encode to a distribution, sample z = μ + σε (mean plus spread times random noise), loss = reconstruction + KL (Kullback–Leibler divergence, a measure of how far one probability distribution is from another); it is the compressor inside latent diffusion. ([§10.2](../10-generative-models-beyond-text/README.md))
+- **Families**: VAEs (smooth latent space, blurrier), GANs (sharp, fast, mode collapse), autoregressive (token by token), diffusion/flow (top quality, slow without tricks). ([§10.1](../10-generative-models-beyond-text/README.md))
+- **VAE**: encode to a distribution, sample z = μ + σε, loss = reconstruction + KL; the compressor inside latent diffusion. ([§10.2](../10-generative-models-beyond-text/README.md))
 - **GAN**: generator vs discriminator game. ([§10.3](../10-generative-models-beyond-text/README.md))
-- **Diffusion**: add noise on a schedule, train a network to predict the noise, generate by denoising step by step (U-Net — an image network that shrinks then re-expands the picture — or diffusion transformer). ([§10.4](../10-generative-models-beyond-text/README.md))
-- **Text-to-image**: CLIP (a model trained to place matching images and captions close together) aligns text and images; cross-attention injects the prompt; classifier-free guidance trades diversity for prompt adherence; Stable Diffusion = VAE + text encoder + denoiser in latent space. ([§10.5](../10-generative-models-beyond-text/README.md))
-- **Audio** (ASR — automatic speech recognition — with Whisper, TTS — text-to-speech —, voice cloning), **video** (temporal consistency is the hard part), **multimodal** models. ([§10.6](../10-generative-models-beyond-text/README.md)–[§10.8](../10-generative-models-beyond-text/README.md))
-- **Evaluate** with FID (Fréchet Inception Distance: how far generated images' feature statistics are from real ones; lower is better), precision/recall, CLIP score and human comparisons; **risks**: deepfakes (realistic fake media of real people), consent, copyright; watermarks and C2PA provenance (a standard for signed "content credentials" recording where media came from). ([§10.9](../10-generative-models-beyond-text/README.md), [§10.10](../10-generative-models-beyond-text/README.md))
+- **Diffusion**: noise on a schedule, train to predict the noise, generate by step-by-step denoising (U-Net or diffusion transformer). ([§10.4](../10-generative-models-beyond-text/README.md))
+- **Text-to-image**: CLIP aligns text and images; cross-attention injects the prompt; classifier-free guidance trades diversity for adherence; Stable Diffusion = VAE + text encoder + denoiser in latent space. ([§10.5](../10-generative-models-beyond-text/README.md))
+- **Audio** (ASR with Whisper, TTS, voice cloning), **video** (temporal consistency is the hard part), **multimodal** models. ([§10.6](../10-generative-models-beyond-text/README.md)–[§10.8](../10-generative-models-beyond-text/README.md))
+- **Evaluate** with FID (lower better), precision/recall, CLIP score, human comparisons; **risks**: deepfakes, consent, copyright; watermarks and C2PA provenance. ([§10.9](../10-generative-models-beyond-text/README.md), [§10.10](../10-generative-models-beyond-text/README.md))
 - **Can you…** explain classifier-free guidance in two sentences? say why diffusion runs in latent space?
 
 ### Chapter 11 — LLM Serving and Inference ([Chapter 11](../11-llm-serving-and-inference/README.md))
 
-
 - Treat the LLM as a **production component** with latency, cost and failure modes. ([§11.1](../11-llm-serving-and-inference/README.md))
-- **Prefill** (parallel, compute-bound) sets time-to-first-token; **decode** (sequential, memory-bandwidth-bound) sets tokens per second; end-to-end ≈ TTFT + TPOT × (n − 1) (TTFT = time to first token, TPOT = time per output token, n = output tokens). ([§11.2](../11-llm-serving-and-inference/README.md), [§11.3](../11-llm-serving-and-inference/README.md))
+- **Prefill** (parallel, compute-bound) sets TTFT; **decode** (sequential, bandwidth-bound) sets tokens/s; E2E ≈ TTFT + TPOT × (n − 1). ([§11.2](../11-llm-serving-and-inference/README.md), [§11.3](../11-llm-serving-and-inference/README.md))
 - **KV cache** per token = 2 × layers × KV-heads × head-dim × bytes — usually the real concurrency limit. ([§11.4](../11-llm-serving-and-inference/README.md))
-- **Continuous batching** and **PagedAttention** (vLLM, a popular open-source serving engine) keep GPUs (graphics processors, the chips models run on) busy and waste less memory. ([§11.5](../11-llm-serving-and-inference/README.md), [§11.6](../11-llm-serving-and-inference/README.md))
-- Make models cheaper: **quantization**, **distillation**, **speculative decoding** (same output distribution, fewer large-model passes). ([§11.7](../11-llm-serving-and-inference/README.md)–[§11.9](../11-llm-serving-and-inference/README.md))
-- **Memory sizing** = weights + users × context × KV-per-token + overhead; tensor parallelism (splitting each layer across GPUs) inside a node (one server), pipeline (different layers on different machines) across nodes. ([§11.10](../11-llm-serving-and-inference/README.md), [§11.11](../11-llm-serving-and-inference/README.md))
-- **Avoid calls**: exact, semantic (reuse an answer to a question with the same meaning) and prefix caching; **routing/cascades** to cheaper models. (Caching basics are in [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md).) ([§11.13](../11-llm-serving-and-inference/README.md), [§11.14](../11-llm-serving-and-inference/README.md))
-- **Cost**: per unit → price → volume → decision; API vs fleet; operate with rate limits (caps on requests per unit of time), backpressure (slowing or refusing new work when full), fallbacks and observability (logs, metrics and traces that show what the system is doing). ([§11.15](../11-llm-serving-and-inference/README.md)–[§11.17](../11-llm-serving-and-inference/README.md))
-- **Can you…** size memory for a 70B model at 16-bit (weights alone ≈ 140 GB)? price the inference layer for a large user base out loud ([§11.18](../11-llm-serving-and-inference/README.md))?
+- **Continuous batching** and **PagedAttention** (vLLM) keep GPUs busy and waste less memory. ([§11.5](../11-llm-serving-and-inference/README.md), [§11.6](../11-llm-serving-and-inference/README.md))
+- Cheaper models: **quantization**, **distillation**, **speculative decoding** (same output distribution, fewer large-model passes). ([§11.7](../11-llm-serving-and-inference/README.md)–[§11.9](../11-llm-serving-and-inference/README.md))
+- **Memory sizing** = weights + users × context × KV-per-token + overhead; tensor parallelism inside a node, pipeline across nodes. ([§11.10](../11-llm-serving-and-inference/README.md), [§11.11](../11-llm-serving-and-inference/README.md))
+- **Avoid calls**: exact, semantic and prefix caching; **routing/cascades** to cheaper models (caching basics: [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)). ([§11.13](../11-llm-serving-and-inference/README.md), [§11.14](../11-llm-serving-and-inference/README.md))
+- **Cost**: per unit → price → volume → decision; API vs fleet; operate with rate limits, backpressure, fallbacks, observability. ([§11.15](../11-llm-serving-and-inference/README.md)–[§11.17](../11-llm-serving-and-inference/README.md))
+- **Can you…** size memory for a 70B model at 16-bit (weights ≈ 140 GB)? price the inference layer for a large user base out loud ([§11.18](../11-llm-serving-and-inference/README.md))?
 
 ### Chapter 12 — Safety, Ethics and Governance ([Chapter 12](../12-safety-ethics-governance/README.md))
 
 - **Root cause**: instructions and data share one channel; the model is never the security boundary — enforce what matters in code. ([§12.1](../12-safety-ethics-governance/README.md))
-- **Hallucination**: ground with retrieval and citations, allow abstention, keep humans on high-stakes outputs. ([§12.2](../12-safety-ethics-governance/README.md))
-- **Bias** comes from history, representation, proxies and associations; measure per group; dropping the sensitive column is not enough. ([§12.3](../12-safety-ethics-governance/README.md))
-- **Prompt injection**: direct vs indirect (hidden in content the model reads); defend with screening, data tagging, least privilege and **action gates**. ([§12.4](../12-safety-ethics-governance/README.md))
-- **Privacy**: consent, GDPR/CCPA rights (the EU's and California's data-protection laws), PII (personally identifiable information) redaction, per-user scoping of retrieval and caches. ([§12.5](../12-safety-ethics-governance/README.md))
+- **Hallucination**: ground with retrieval and citations, allow abstention, humans on high-stakes outputs. ([§12.2](../12-safety-ethics-governance/README.md))
+- **Bias** from history, representation, proxies, associations; measure per group; dropping the sensitive column isn't enough. ([§12.3](../12-safety-ethics-governance/README.md))
+- **Prompt injection**: direct vs indirect; screening, data tagging, least privilege, **action gates**. ([§12.4](../12-safety-ethics-governance/README.md))
+- **Privacy**: consent, GDPR/CCPA rights, PII redaction, per-user scoping of retrieval and caches. ([§12.5](../12-safety-ethics-governance/README.md))
 - **Guardrails**: input gate → hardened assembly → output gate → action gate; measure over-refusal too. ([§12.6](../12-safety-ethics-governance/README.md))
-- **Misuse** and unreliable AI-text detection; **alignment** (SFT, RLHF, Constitutional AI, DPO) makes good behaviour likely, not guaranteed; continuous **red-teaming** (attacking your own system on purpose to find failures first). ([§12.7](../12-safety-ethics-governance/README.md)–[§12.9](../12-safety-ethics-governance/README.md))
-- **Copyright**, **environmental cost**, **governance**: EU AI Act risk tiers (high-risk duties now from 2 Dec 2027 for Annex III uses — listed sensitive uses such as hiring and credit —, 2 Aug 2028 for Annex I products — AI inside already-regulated products), NIST AI RMF (the US standards body's AI Risk Management Framework: Govern, Map, Measure, Manage); a deployment checklist. ([§12.10](../12-safety-ethics-governance/README.md)–[§12.13](../12-safety-ethics-governance/README.md))
+- **Misuse** and unreliable AI-text detection; **alignment** (SFT, RLHF, Constitutional AI, DPO) makes good behaviour likely, not guaranteed; continuous **red-teaming**. ([§12.7](../12-safety-ethics-governance/README.md)–[§12.9](../12-safety-ethics-governance/README.md))
+- **Copyright**, **environmental cost**, **governance**: EU AI Act tiers (high-risk duties from 2 Dec 2027 for Annex III uses such as hiring and credit, 2 Aug 2028 for Annex I products), NIST AI RMF (Govern, Map, Measure, Manage); a deployment checklist. ([§12.10](../12-safety-ethics-governance/README.md)–[§12.13](../12-safety-ethics-governance/README.md))
 - **Can you…** explain indirect prompt injection with an email-summarising assistant? list the four gates?
 
 ### Chapter 13 — AI System Design and GenAI Products ([Chapter 13](../13-ai-system-design-and-genai-products/README.md))
 
-- Identify the **interview form** and confirm the depth wanted in the first minute. ([§13.1](../13-ai-system-design-and-genai-products/README.md))
-- **What changes when the system learns**: quality becomes a metric, a feedback loop is required, cost and latency budgets matter, and failures are silent. ([§13.2](../13-ai-system-design-and-genai-products/README.md))
+- Identify the **interview form**; confirm the depth wanted in minute one. ([§13.1](../13-ai-system-design-and-genai-products/README.md))
+- **What changes when the system learns**: quality becomes a metric, a feedback loop is required, cost/latency budgets matter, failures are silent. ([§13.2](../13-ai-system-design-and-genai-products/README.md))
 - **Three families**: prediction (funnel), content (context + cost + evaluation + safety), action (tools + permissions + limits). ([§13.3](../13-ai-system-design-and-genai-products/README.md))
-- **Seven-step framework** with a time budget: frame → success metrics → data → model → serving → keep it working → failures and cost. ([§13.4](../13-ai-system-design-and-genai-products/README.md))
-- **Requirements as numbers**: TTFT/p95 (the latency that 95% of requests beat), quality metric, cost per unit, safety rules, scale, privacy. ([§13.5](../13-ai-system-design-and-genai-products/README.md))
+- **Seven steps** with a time budget: frame → success metrics → data → model → serving → keep it working → failures and cost. ([§13.4](../13-ai-system-design-and-genai-products/README.md))
+- **Requirements as numbers**: TTFT/p95, quality metric, cost per unit, safety rules, scale, privacy. ([§13.5](../13-ai-system-design-and-genai-products/README.md))
 - **Build vs buy**: API → RAG for facts → fine-tune for behaviour → self-host for control or high steady volume. ([§13.6](../13-ai-system-design-and-genai-products/README.md))
-- **Reference architecture**: gateway (the single entry point that authenticates, rate-limits and logs) → input guard → cache → context assembly (prompt registry, memory, permission-filtered RAG) → router → model → output guard → action gate, with traces feeding evaluation. ([§13.7](../13-ai-system-design-and-genai-products/README.md))
-- **LLMOps** (the operations discipline for shipping LLM features): version everything, golden sets, regression tests (checks that old behaviour did not break), shadow (run silently beside the live version) → canary → A/B. **Cost modelling** and scale estimates. ([§13.8](../13-ai-system-design-and-genai-products/README.md), [§13.9](../13-ai-system-design-and-genai-products/README.md))
-- **Archetypes**: chat, code, search, image, SaaS (software as a service, sold by subscription to many customer organisations) platform. ([§13.10](../13-ai-system-design-and-genai-products/README.md), [§13.11](../13-ai-system-design-and-genai-products/README.md))
-- **Can you…** draw the reference architecture from memory and put a latency budget on each arrow? explain why chat history cost grows quadratically with turns?
+- **Reference architecture**: gateway → input guard → cache → context assembly (prompt registry, memory, permission-filtered RAG) → router → model → output guard → action gate; traces feed evaluation. ([§13.7](../13-ai-system-design-and-genai-products/README.md))
+- **LLMOps**: version everything, golden sets, regression tests, shadow → canary → A/B. **Cost modelling** and scale estimates. ([§13.8](../13-ai-system-design-and-genai-products/README.md), [§13.9](../13-ai-system-design-and-genai-products/README.md))
+- **Archetypes**: chat, code, search, image, SaaS platform. ([§13.10](../13-ai-system-design-and-genai-products/README.md), [§13.11](../13-ai-system-design-and-genai-products/README.md))
+- **Can you…** draw the reference architecture from memory with a latency budget per arrow? explain why chat-history cost grows quadratically with turns?
 
 ### Chapter 14 — AI Case Studies ([Chapter 14](../14-ai-case-studies/README.md))
 
-- **Running a case**: a time budget per phase, an exit sentence for each, timeboxing aloud; handle redirects, stress tests and disagreement by naming the deciding variable. ([§14.1](../14-ai-case-studies/README.md))
-- **Legal research assistant**: wrong citations are the metric that binds; per-claim verification before release; refusal is a product feature; fail closed. ([§14.2](../14-ai-case-studies/README.md))
-- **Meeting assistant**: a workflow, not an agent; bursty load behind a queue; access rights bound what can be said; deletion propagates to summaries. ([§14.3](../14-ai-case-studies/README.md))
-- **Text-to-image at scale**: do the maths first (requests/s × seconds per image = busy GPUs); queues drive pricing, autoscaling and UX; moderation gates on prompt and image. ([§14.4](../14-ai-case-studies/README.md))
-- **Coding agent**: tests inside the loop, CI outside, humans at the end; sandbox without credentials; treat the repository as untrusted input. ([§14.5](../14-ai-case-studies/README.md))
+- **Running a case**: time budget per phase, exit sentences, timeboxing aloud; answer redirects, stress tests and disagreement by naming the deciding variable. ([§14.1](../14-ai-case-studies/README.md))
+- **Legal research**: wrong citations bind; per-claim verification before release; refusal is a feature; fail closed. ([§14.2](../14-ai-case-studies/README.md))
+- **Meeting assistant**: workflow, not agent; bursty load behind a queue; access rights bound what can be said; deletion propagates to summaries. ([§14.3](../14-ai-case-studies/README.md))
+- **Text-to-image at scale**: maths first (requests/s × seconds per image = busy GPUs); queues drive pricing, autoscaling and UX; gates on prompt and image. ([§14.4](../14-ai-case-studies/README.md))
+- **Coding agent**: tests inside, CI outside, humans at the end; sandbox without credentials; the repository is untrusted input. ([§14.5](../14-ai-case-studies/README.md))
 - **Critiquing a design**: invariants → loops → reliability → economics → quality, each finding with consequence and fix. ([§14.6](../14-ai-case-studies/README.md), [§14.7](../14-ai-case-studies/README.md))
-- **Email sentence completion**: small distilled LM (language model) under a ~100 ms keystroke budget; avoid requests on the client; beam search + confidence threshold tuned on trigger vs acceptance; never guess people's attributes. ([§14.8](../14-ai-case-studies/README.md))
-- **Machine translation**: one multilingual encoder-decoder with language tags instead of 9,900 pair models; back-translation (machine-translate target-language text back to make extra training pairs) for low-resource languages (those with little training text); per-pair chrF/COMET (automatic quality scores: character overlap, and a learned quality model) and human MQM (Multidimensional Quality Metrics, expert error annotation), never BLEU alone. ([§14.9](../14-ai-case-studies/README.md))
-- **Image captioning**: image encoder + bridge + LM, run async at upload; grounding rerank and CHAIR (a metric counting objects mentioned in a caption that are not in the image) against hallucinated objects; attribute policy outside the model. ([§14.10](../14-ai-case-studies/README.md))
-- **GAN faces**: StyleGAN (a GAN that controls image features through per-layer "style" inputs) mapping network and styles; judge by coverage, FID and precision/recall, not losses; truncation trades diversity for quality; a near-duplicate filter makes "not a real person" measurable. ([§14.11](../14-ai-case-studies/README.md))
-- **High-resolution synthesis**: compress first (latent f = 8), generate at the trained resolution, upscale only kept images; 2× side = 4× tokens = 16× attention. ([§14.12](../14-ai-case-studies/README.md))
-- **Personalised headshots**: per-user LoRA with a rare token (an unused word that comes to mean "this person") and prior preservation (also training on generic images so the model does not forget what people in general look like) (or a zero-shot identity encoder); photo QC and same-person check before GPU spend; biometric consent and verified deletion. ([§14.13](../14-ai-case-studies/README.md))
-- **Text-to-video**: spacetime latents (compressed blocks spanning several pixels and frames), factorised attention (attending within a frame and across time separately), frames denoised jointly for consistency; recaptioned training video; async multi-GPU jobs with previews and checkpoints. ([§14.14](../14-ai-case-studies/README.md))
+- **Email completion**: small distilled LM under ~100 ms; avoid requests on the client; beam search + confidence threshold on trigger vs acceptance; never guess people's attributes. ([§14.8](../14-ai-case-studies/README.md))
+- **Machine translation**: one multilingual encoder-decoder with language tags, not 9,900 pair models; back-translation for low-resource languages; per-pair chrF/COMET and human MQM, never BLEU alone. ([§14.9](../14-ai-case-studies/README.md))
+- **Image captioning**: image encoder + bridge + LM, async at upload; grounding rerank and CHAIR against hallucinated objects; attribute policy outside the model. ([§14.10](../14-ai-case-studies/README.md))
+- **GAN faces**: StyleGAN mapping network and styles; judge by coverage, FID and precision/recall, not losses; truncation trades diversity for quality; a near-duplicate filter makes "not a real person" measurable. ([§14.11](../14-ai-case-studies/README.md))
+- **High-resolution synthesis**: compress first (latent f = 8), generate at trained resolution, upscale only kept images; 2× side = 4× tokens = 16× attention. ([§14.12](../14-ai-case-studies/README.md))
+- **Personalised headshots**: per-user LoRA with a rare token and prior preservation (or a zero-shot identity encoder); photo QC and same-person check before GPU spend; biometric consent, verified deletion. ([§14.13](../14-ai-case-studies/README.md))
+- **Text-to-video**: spacetime latents, factorised attention, frames denoised jointly; recaptioned training video; async multi-GPU jobs with previews and checkpoints. ([§14.14](../14-ai-case-studies/README.md))
 - **Can you…** narrate one of these cases in 45 minutes without notes?
 
 ---
@@ -205,9 +201,7 @@ The sheets are deliberately compressed. Unfamiliar acronyms get a short gloss in
 
 ### What it is
 
-Most AI design questions come down to a handful of either-or choices. Each sheet below gives the **options**, the **deciding variable** (the fact about the requirements that picks the option), and a **default** with its main exception. In an interview, the sentence shape to practise is: *"The deciding variable here is X; ours is Y, so I'd choose Z, which costs us W."*
-
-Defaults are starting points. Several choices depend on more than one requirement, and the exceptions matter as much as the defaults.
+Most AI design questions reduce to a handful of either-or choices. Each sheet gives the **options**, the **deciding variable** (the requirement fact that picks the option) and a **default** with its main exception. Sentence shape to practise: *"The deciding variable here is X; ours is Y, so I'd choose Z, which costs us W."* Defaults are starting points; several choices depend on more than one requirement, and exceptions matter as much as defaults.
 
 ### Which kind of system is this?
 
@@ -217,33 +211,33 @@ Defaults are starting points. Several choices depend on more than one requiremen
 | New content: text, code, images | **Generative** | Retrieval, cost per request, evaluation, safety | Chapters 4–8, 10, 13 |
 | Tool calls that change things in the world | **Agentic** | What it may touch, loop limits, who signs off | Chapter 9 |
 
-Many real products mix families (a support assistant retrieves, generates *and* acts); name the dominant one and design its concerns first.
+Many products mix families (a support assistant retrieves, generates *and* acts); design the dominant one's concerns first.
 
 ### Workflow or agent?
 
 - **Deciding variable:** can you draw the flowchart at design time?
-- **Default:** yes → a fixed **workflow** (cheaper, testable, readable). Use an **agent** loop only for the part whose path depends on what is discovered at runtime, and bound it (steps, cost, time, which actions).
+- **Default:** yes → a fixed **workflow** (cheaper, testable, readable); an **agent** loop only for the part whose path depends on runtime discoveries, bounded (steps, cost, time, which actions).
 
 ### Build a model or call an API?
 
-- **Deciding variable:** does quality come from your own proprietary data (your users' clicks, purchases, outcomes)?
-- **Predictive** systems usually train on that data (bought or managed models can still fit). **Generative** features usually start on a hosted API; privacy, licensing, availability or scale can later favour self-hosting. Revisit with measured costs.
+- **Deciding variable:** does quality come from your own proprietary data (clicks, purchases, outcomes)?
+- **Predictive** systems usually train on it (bought or managed models can still fit). **Generative** features usually start on a hosted API; privacy, licensing, availability or scale can later favour self-hosting. Revisit with measured costs.
 
 ### Prompt, RAG or fine-tune?
 
 | What is failing | Reach for | Why |
 |---|---|---|
 | Missing, stale, private or per-user facts | **RAG** | Sources can be updated, cited and permission-filtered |
-| Wrong format, tone, length, or a narrow skill | **Prompting first**, then **fine-tuning** | Behaviour is learned into the parameters, so you need training examples and a test set |
-| Answers are good but the bill is too high at scale | A **smaller fine-tuned model**, with a router sending it the easy traffic | The problem is cost, not what the model can do |
+| Wrong format, tone, length, or a narrow skill | **Prompting first**, then **fine-tuning** | Behaviour is learned into the parameters — needs training examples and a test set |
+| Answers good but the bill too high at scale | A **smaller fine-tuned model**, with a router sending it easy traffic | The problem is cost, not capability |
 
-Tuning can inject knowledge too, but it is a poor substitute for retrieval when facts change or must be traceable. Training from scratch needs an exceptional reason and budget.
+Tuning can inject knowledge, but poorly when facts change or must be traceable. Training from scratch needs an exceptional reason and budget.
 
 ### Batch, online or streaming inference?
 
 | Situation | Mode |
 |---|---|
-| Inputs known in advance; slightly stale results are fine | **Batch** — precompute into a key-value store (fast lookup by ID) |
+| Inputs known in advance; slightly stale results are fine | **Batch** — precompute into a key-value store |
 | Inputs only exist at request time | **Online** — with a latency budget and fallbacks |
 | Events, not users, trigger the work | **Streaming** — queue-fronted scoring |
 | Huge catalogue plus need for fresh context | **Hybrid** — precomputed candidates, light online re-ranking |
@@ -254,47 +248,47 @@ Tuning can inject knowledge too, but it is a poor substitute for retrieval when 
 2. **Execute faster** — batching, KV-cache management, prefix caching, speculative decoding.
 3. **Shrink the model** — quantisation, distillation (check quality!).
 
-Measure the bottleneck first; every optimisation carries its own cost (cache invalidation — knowing when a stored answer is out of date —, stale answers, routing mistakes).
+Measure the bottleneck first; every optimisation has a cost (cache invalidation, stale answers, routing mistakes).
 
 ### Hosted API or self-host?
 
-- **Deciding variable:** sustained token volume versus the cost of a GPU fleet at the utilisation you can realistically achieve, gated by governance needs and team skills.
-- **Default:** API first; mixed setups (different tiers per task, overflow capacity) are common.
+- **Deciding variable:** sustained token volume vs the cost of a GPU fleet at realistically achievable utilisation, gated by governance needs and team skills.
+- **Default:** API first; mixed setups (tiers per task, overflow capacity) are common.
 
 ### Synchronous or asynchronous serving?
 
-- **Deciding variable:** generation time versus user patience.
-- A few seconds of text → synchronous, streamed. Long jobs (images, video, long documents) → a persistent **job queue** (a durable waiting line that worker machines pull tasks from), with priority levels and progress shown to the user.
+- **Deciding variable:** generation time vs user patience.
+- A few seconds of text → synchronous, streamed. Long jobs (images, video, long documents) → a persistent **job queue** with priority levels and visible progress.
 
 ### Vector, keyword or hybrid retrieval?
 
-- **Deciding variable:** the shape of the queries. IDs, codes and exact phrases favour **keyword** (lexical, e.g. BM25); paraphrases and concepts favour **vector** (dense, i.e. embedding-based) search.
-- **Default:** **hybrid**, merged with **reciprocal rank fusion**, plus a **cross-encoder reranker** when the top results are not precise enough. Choose a vector store by benchmarking your corpus, filters, traffic and update rate — not by brand.
+- **Deciding variable:** query shape. IDs, codes, exact phrases → **keyword** (lexical, e.g. BM25); paraphrases and concepts → **vector** (dense) search.
+- **Default:** **hybrid** with **reciprocal rank fusion**, plus a **cross-encoder reranker** when top results aren't precise enough. Choose a vector store by benchmarking your corpus, filters, traffic and update rate — not by brand.
 
 ### Where do permissions live?
 
-The one sheet with no trade-off: **below the model**. Enforce access in the retrieval query and in tool services, check current permissions before content reaches the model, and **fail closed** (if the check cannot run, deny). Never "in the prompt", never after generation.
+The one sheet with no trade-off: **below the model** — in the retrieval query and tool services, checking current permissions before content reaches the model, **failing closed**. Never "in the prompt", never after generation.
 
 ### How much grounding?
 
 - **Deciding variable:** stakes.
-- Low stakes → context-only instructions, citations that must resolve to real sources, sampled quality review. High stakes → mandatory checks before release, refuse or escalate when support is weak, expert review where needed.
+- Low → context-only instructions, citations that must resolve, sampled review. High → mandatory checks before release, refuse or escalate when support is weak, expert review where needed.
 
 ### Which evaluation layer?
 
-- **Can code assert it?** → programmatic checks (format, schema — the required structure of the output —, exact values, citations resolve).
-- **Needs judgement at scale?** → an **LLM judge** with a written rubric, calibrated against human scores.
-- **High stakes or new kinds of failure?** → human experts.
+- **Can code assert it?** → programmatic checks (format, schema, exact values, citations resolve).
+- **Judgement at scale?** → an **LLM judge** with a written rubric, calibrated against human scores.
+- **High stakes or new failure kinds?** → human experts.
 - Offline results must be confirmed online; engagement gains never override safety or correctness.
 
 ### How does anything ship?
 
-Offline eval against the current version → **shadow** (the new version runs silently alongside) → **canary** or **A/B test** on a small, fixed ("sticky") slice with a named rollback metric → ramp up. Agents also climb a four-rung **autonomy ladder**, separately for each action tier — proposals only, then human-approved actions, then bounded autonomy, then audited autonomy — and drop back a rung automatically on regression.
+Offline eval against the current version → **shadow** → **canary** or **A/B test** on a small sticky slice with a named rollback metric → ramp. Agents also climb a four-rung **autonomy ladder** per action tier — proposals only, human-approved, bounded autonomy, audited autonomy — dropping a rung automatically on regression.
 
 ### How often to retrain?
 
-- **Deciding variable:** how fast quality actually decays (measured), plus adversarial pressure (fraud, spam).
-- A drift alarm (an alert that live data no longer looks like training data) should trigger an **investigation**, not automatically a retrain. Online learning (updating the model continuously from live data) is possible for some workloads but needs validation, rollback and protection against poisoned feedback (deliberately misleading signals).
+- **Deciding variable:** measured quality decay, plus adversarial pressure (fraud, spam).
+- A drift alarm triggers **investigation**, not automatic retraining. Online learning suits some workloads but needs validation, rollback and protection against poisoned feedback.
 
 ### The one-table interview
 
@@ -308,20 +302,20 @@ Offline eval against the current version → **shadow** (the new version runs si
 | ~Minute 38 | Close the loop: logs → evals → retrain → safe rollout |
 | Closing | Top failure modes with their alarms; unit cost × volume |
 
-Rehearsal: cover the right-hand column and reproduce it from the left.
+Rehearsal: cover the right column and reproduce it from the left.
 
 ---
 
 ## 15.3 Red flags that sound junior (and what to say instead)
 
-Interviewers listen for signs that you could actually operate what you propose. These twelve phrases restate the book's lessons in negative form.
+Interviewers listen for signs you could operate what you propose. These twelve phrases restate the book's lessons in negative form.
 
 ### Three that can sink an interview
 
 | Red flag | Why it hurts | Say instead |
 |---|---|---|
 | "Let's have an LLM order the feed." | An off-the-shelf LLM has never seen your users' clicks; calling it per candidate is too slow and costly at feed scale | "Ranking is a model trained on our interaction logs; LLMs can help offline, e.g. enriching item features or generating labels." |
-| "Step one: we pretrain our own model on everything we have." | Pretraining a large model is a huge, rarely justified investment; even fine-tuning needs a named failure | "Start by prompting a hosted model; bring in retrieval when knowledge is missing; only then consider tuning a compact model, if behaviour stops improving or traffic makes it pay." |
+| "Step one: we pretrain our own model on everything we have." | Pretraining is a huge, rarely justified investment; even fine-tuning needs a named failure | "Prompt a hosted model first; add retrieval when knowledge is missing; only then tune a compact model, if behaviour stops improving or traffic makes it pay." |
 | An agent loop with no limits and admin credentials | Uncontrolled cost and damage | "Caps on steps, spend, time and actions; tools tiered by risk; approval gates on irreversible actions; autonomy earned step by step." |
 
 ### The three you will hear most often (all easy to repair)
@@ -330,13 +324,13 @@ Interviewers listen for signs that you could actually operate what you propose. 
 |---|---|
 | Requirements without numbers ("fast and accurate") | "Resolve >50% of tickets; first token < 1 s, streamed; cost per conversation < 10% of a human-handled one." |
 | The diagram stops at the response arrow | Log predictions and outcomes, evaluate, retrain, roll out safely — draw it and say how often each step runs |
-| Model calls treated as free | Estimate cost per request × volume out loud; then avoid calls → speed them up → shrink the model |
+| Model calls treated as free | Estimate cost per request × volume aloud; then avoid calls → speed them up → shrink the model |
 
 ### The control flags — a control the model can bypass
 
 | Red flag | Say instead |
 |---|---|
-| "We'll fine-tune the hallucinations away." | Retrieval for current or private facts, citations that must resolve, per-claim checks, and refusal as a designed outcome |
+| "We'll fine-tune the hallucinations away." | Retrieval for current or private facts, citations that must resolve, per-claim checks, refusal as a designed outcome |
 | "Permissions are in the prompt." | Access filters in the retrieval query, user-scoped tool credentials, action gates — the model never decides authorisation |
 | "The model will just know" / no evaluation plan | "Every change runs against a golden test set, like code through CI; these online metrics decide promotion." |
 
@@ -344,14 +338,14 @@ Interviewers listen for signs that you could actually operate what you propose. 
 
 | Red flag | Say instead |
 |---|---|
-| Multi-agent by default | One agent by default; add more only for context isolation, parallel independent subtasks, or specialised tools/models — and say which |
+| Multi-agent by default | One agent by default; more only for context isolation, parallel independent subtasks, or specialised tools/models — and say which |
 | Brand names as architecture ("Pinecone, LangChain, GPT" — a vector database, an LLM app framework, a model family) | Describe the component and its deciding variable, then a product as one example; benchmark what you already run first |
-| Assuming failures raise errors | Wrong answers return HTTP 200 (the "OK" status code). Name the silent failure, how far it spreads before someone notices, and the alarm (drift monitors, groundedness sampling, action-rate anomalies) |
+| Assuming failures raise errors | Wrong answers return HTTP 200. Name the silent failure, how far it spreads before anyone notices, and the alarm (drift monitors, groundedness sampling, action-rate anomalies) |
 
 ### Meta-flags across the whole hour
 
 1. **Depth only when asked** — pair every choice with its cost unprompted ("batch: degrades gracefully, but results are stale").
-2. **Treating follow-ups as attacks** — "what if the provider is down?" is an invitation to describe the fallback, its limits and its alarm.
+2. **Treating follow-ups as attacks** — "what if the provider is down?" invites the fallback, its limits and its alarm.
 3. **The invisible user** — say what the person experiences during waits, errors and refusals: progress messages, partial results, a way to recover.
 
 Self-audit drill: record one mock interview and count flags in the second group — numbers, the loop, the bill.
@@ -587,43 +581,43 @@ Leitner schedule for one card answered right, right, wrong, right:
 
 ## 15.5 Future trends (as of 2026)
 
-These are **directions of travel** visible today, not forecasts of specific products or dates. Revisit them each year; some will stall.
+**Directions of travel** visible today, not forecasts of products or dates; revisit yearly — some will stall.
 
 ### Where models are heading
 
-Covered in more depth in [§4.15 of Chapter 4](../04-large-language-models/README.md): longer and more reliable multi-step reasoning; answers grounded in tools and cited sources; multimodal input and output as standard; more capable agents; interpretability research; small specialised models, including on-device ones; better data efficiency; and architectural efficiency (mixture-of-experts — only a few sub-networks run per token —, quantisation — storing numbers with fewer bits —, speculative decoding — a small model drafts, the big one checks —, hybrid attention/state-space designs, which mix attention with layers that carry a fixed-size running summary).
+In more depth in [§4.15 of Chapter 4](../04-large-language-models/README.md): longer, more reliable multi-step reasoning; answers grounded in tools and cited sources; multimodal input and output as standard; more capable agents; interpretability research; small specialised and on-device models; better data efficiency; architectural efficiency (mixture-of-experts, quantisation, speculative decoding, hybrid attention/state-space designs).
 
 ### Agents maturing
 
-The practical trend is not "fully autonomous AI" but **bounded autonomy**: agents given narrow tool sets, spending limits, audit trails and approval gates, and promoted to more independence as evidence accumulates ([Chapter 9](../09-ai-agents/README.md)). Open standards for connecting models to tools, such as MCP ([§6.10](../06-building-llm-apps-in-python/README.md)), make it easier to plug agents into real systems — and make permission design more important.
+The practical trend is **bounded autonomy**, not "fully autonomous AI": narrow tool sets, spending limits, audit trails and approval gates, with independence widened as evidence accumulates ([Chapter 9](../09-ai-agents/README.md)). Open standards such as MCP ([§6.10](../06-building-llm-apps-in-python/README.md)) make agents easier to plug into real systems — and permission design more important.
 
 ### AI converging with other technologies
 
 | Pairing | What AI adds | Realistic now | Still largely experimental |
 |---|---|---|---|
-| **AI + IoT** (internet-connected sensors and devices) | Learns from sensor streams to predict and adapt | Predictive maintenance (spotting unusual vibration before a machine fails); smart thermostats that learn schedules; wearables that flag abnormal heart rhythms | City-wide adaptive traffic, fully automated infrastructure repair scheduling |
-| **AI + AR/VR** (digital overlays on the real world / fully virtual worlds) | Understands the scene, gestures and speech in real time | Live translation and captions, object recognition overlays, adaptive training simulations (surgery, aviation, factory work) | Seamless multilingual virtual workplaces with AI co-designers |
-| **AI + robotics** | Perception, planning and adaptation for machines that act physically | Warehouse picking and sorting, collaborative robots ("cobots") working beside people, agricultural drones, sidewalk delivery pilots | General-purpose household or humanoid robots; fully automated logistics end to end |
-| **AI + quantum computing** | — | Quantum computers today are small and error-prone; research focuses on simulating molecules and materials | Any practical speed-up for machine learning is **unproven**; quantum speed-ups exist only for specific problem types, not computing in general |
+| **AI + IoT** (internet-connected sensors and devices) | Learns from sensor streams to predict and adapt | Predictive maintenance (unusual vibration before a machine fails); thermostats that learn schedules; wearables flagging abnormal heart rhythms | City-wide adaptive traffic, fully automated infrastructure repair scheduling |
+| **AI + AR/VR** (digital overlays on the real world / fully virtual worlds) | Understands scene, gestures and speech in real time | Live translation and captions, object-recognition overlays, adaptive training simulations (surgery, aviation, factory work) | Seamless multilingual virtual workplaces with AI co-designers |
+| **AI + robotics** | Perception, planning and adaptation for machines that act physically | Warehouse picking and sorting, cobots beside people, agricultural drones, sidewalk delivery pilots | General-purpose household or humanoid robots; fully automated end-to-end logistics |
+| **AI + quantum computing** | — | Quantum computers are small and error-prone; research focuses on simulating molecules and materials | Any practical ML speed-up is **unproven**; quantum speed-ups exist only for specific problem types |
 
-Two accuracy notes. First, quantum computers are not "exponentially faster" in general — only for particular problems (for example factoring — splitting a large number into primes —, via Shor's algorithm, and certain simulations). Second, the security story runs the other way from what is often claimed: a large quantum computer would break today's common public-key encryption (the maths behind HTTPS and digital signatures), which is why standards bodies (NIST published its first **post-quantum cryptography** standards in 2024) are moving systems to new algorithms.
+Two accuracy notes: quantum computers are not "exponentially faster" in general — only for particular problems (e.g. factoring large numbers into primes via Shor's algorithm, certain simulations). And the security story runs the other way from what is often claimed: a large quantum computer would break today's common public-key encryption (the maths behind HTTPS and digital signatures), which is why NIST published its first **post-quantum cryptography** standards in 2024 and systems are migrating.
 
 ### The future of work: augmentation first
 
-- **Automation** fits repetitive, rule-like tasks: routine data checks, document sorting, parts of assembly. **Augmentation** fits most knowledge work: AI drafts, summarises, searches and flags, and a person decides. Examples: AI helps screen large applicant pools but people interview; clinicians use AI to support diagnosis while keeping responsibility for care.
-- **Changing roles more than new titles.** The biggest shift is *AI fluency inside existing jobs* — engineers, analysts, support leads and writers directing AI well: clear instructions, the right context, checking outputs. Many forecasts expected "prompt engineer" to become a big job category; in practice it rarely stuck as a title of its own, because the skill turned out to be useful in nearly every role.
-- **Roles that are growing**: AI/LLM engineers who build and evaluate AI features; people who **audit** AI for bias, privacy and compliance (AI ethics, governance and risk roles); **AI product and project managers** who connect technical teams with business goals, budgets and rollout; evaluation and red-teaming specialists.
-- **Skills that hold value**: fundamentals (data, statistics, systems), evaluation and measurement, communication, domain knowledge, and ethical judgement.
+- **Automation** fits repetitive, rule-like tasks (routine data checks, document sorting, parts of assembly); **augmentation** fits most knowledge work — AI drafts, summarises, searches and flags, a person decides (AI screens large applicant pools but people interview; clinicians use AI for diagnosis support but keep responsibility).
+- **Changing roles more than new titles**: the biggest shift is *AI fluency inside existing jobs* — directing AI with clear instructions and context, checking outputs. "Prompt engineer" was widely forecast as a big job category but rarely stuck as a title, because the skill is useful in nearly every role.
+- **Growing roles**: AI/LLM engineers who build and evaluate AI features; people who **audit** AI for bias, privacy and compliance (ethics, governance, risk); **AI product and project managers** linking technical teams to business goals, budgets and rollout; evaluation and red-teaming specialists.
+- **Lasting skills**: fundamentals (data, statistics, systems), evaluation and measurement, communication, domain knowledge, ethical judgement.
 
 ### Regulation and governance
 
-Rules are arriving in stages, and the dates move. The EU AI Act (in force since August 2024) is the clearest example: its bans and general-purpose-model duties already apply, and in 2026 the Digital Omnibus on AI (Regulation (EU) 2026/1744, in force 27 July 2026) pushed the high-risk obligations back to 2 December 2027 for Annex III uses such as hiring and credit and 2 August 2028 for AI inside Annex I products, added bans on generating non-consensual intimate imagery or child sexual abuse material from 2 December 2026, and gave generative systems already on the market until 2 December 2026 to mark their output (label it as AI-generated, e.g. with watermarks) under Article 50. Organisations are also adopting risk-management frameworks such as the NIST AI RMF. Expect documentation, evaluation evidence and human oversight to become normal parts of shipping AI, and check the current text before quoting a date ([§12.12](../12-safety-ethics-governance/README.md)).
+Rules arrive in stages and dates move. The EU AI Act (in force since August 2024): bans and general-purpose-model duties already apply; the 2026 Digital Omnibus on AI (Regulation (EU) 2026/1744, in force 27 July 2026) moved high-risk obligations to 2 December 2027 for Annex III uses (hiring, credit) and 2 August 2028 for AI inside Annex I products, added bans on generating non-consensual intimate imagery or child sexual abuse material from 2 December 2026, and gave generative systems already on the market until 2 December 2026 to mark output as AI-generated under Article 50. Organisations also adopt frameworks such as the NIST AI RMF. Expect documentation, evaluation evidence and human oversight to become normal parts of shipping AI; check the current text before quoting a date ([§12.12](../12-safety-ethics-governance/README.md)).
 
 ### Self-check
 
-1. Is quantum computing a near-term way to speed up model training? → No; practical ML speed-ups are unproven and today's machines are small and noisy.
-2. What is the most common way AI changes jobs today? → People in their current jobs learn to direct AI well; whole-job replacement and brand-new titles are the smaller effects.
-3. What does "bounded autonomy" mean for agents? → Limited tools, budgets and approvals, with independence widened only on evidence.
+1. Is quantum computing a near-term way to speed up training? → No; ML speed-ups are unproven and today's machines are small and noisy.
+2. Most common way AI changes jobs today? → People in current jobs learn to direct AI well; replacement and new titles are smaller effects.
+3. "Bounded autonomy"? → Limited tools, budgets and approvals, with independence widened only on evidence.
 
 ---
 
@@ -631,44 +625,44 @@ Rules are arriving in stages, and the dates move. The EU AI Act (in force since 
 
 ### How to use it
 
-Move through the stages in order; each ends with a small project that proves you can do it. Skip a stage only if you can already build its project without notes.
+Move through the stages in order; each ends with a project proving you can do it. Skip a stage only if you can already build its project without notes.
 
 | Stage | Learn | Where | Prove it with |
 |---|---|---|---|
-| **0. Python** | Syntax, functions, data structures, OOP (object-oriented programming), typing (type hints), testing | [Python Handbook](../../../python/chapters/01-getting-started/README.md) (ch. 1–15) | A tested command-line tool |
-| **1. ML foundations** | Learning types, maths intuition, NumPy/pandas/scikit-learn (Python libraries for arrays, tables and classic ML), evaluation | [ML Handbook](../../../ml/chapters/01-what-is-ml/README.md) (ch. 1–9) | A classifier with a proper train/validation/test split and a written evaluation |
-| **2. Deep learning to transformers** | Neural nets, attention, tokens, embeddings | ML Handbook ch. 10–12; Chapters 3–4 here | Train a tiny model in PyTorch (the most common deep-learning library); explain attention with worked numbers |
+| **0. Python** | Syntax, functions, data structures, OOP, type hints, testing | [Python Handbook](../../../python/chapters/01-getting-started/README.md) (ch. 1–15) | A tested command-line tool |
+| **1. ML foundations** | Learning types, maths intuition, NumPy/pandas/scikit-learn, evaluation | [ML Handbook](../../../ml/chapters/01-what-is-ml/README.md) (ch. 1–9) | A classifier with a proper train/validation/test split and a written evaluation |
+| **2. Deep learning to transformers** | Neural nets, attention, tokens, embeddings | ML Handbook ch. 10–12; Chapters 3–4 here | Train a tiny model in PyTorch; explain attention with worked numbers |
 | **3. Building with LLMs** | Prompting, API calls, structured output, tools, MCP | Chapters 5–6 | A small assistant that calls one tool and returns validated JSON |
 | **4. Grounding and evaluation** | Embeddings, vector search, RAG, fine-tuning vs RAG, eval sets | Chapters 7–8 | A RAG app over your own notes with a 30-question golden test set |
 | **5. Agents** | Tool loops, planning, memory, guardrails, multi-agent trade-offs | Chapter 9 | A bounded agent with step/cost limits and an approval gate |
-| **6. Beyond text; production** | Diffusion and multimodal models; serving, latency, cost; safety and governance | Chapters 10–12 | A cost/latency estimate and a threat model (a list of who might attack it, how, and your defences) for your RAG app |
+| **6. Beyond text; production** | Diffusion and multimodal models; serving, latency, cost; safety and governance | Chapters 10–12 | A cost/latency estimate and a threat model for your RAG app |
 | **7. Design and interviews** | Design frameworks, case studies, this review | Chapters 13–15; ML Handbook ch. 15–18 | Narrate two full designs aloud in 45 minutes each |
 
 ### Keeping it sharp
 
-1. **Drill the question bank** (§15.4) in any interview week, following the three drilling rules at the top of this chapter.
-2. **Narrate one full design per session** — for example the inference-cost exercise in [Chapter 11](../11-llm-serving-and-inference/README.md) (drills arithmetic) and a case study in [Chapter 14](../14-ai-case-studies/README.md) (drills control and safety).
-3. **Critique real systems** you meet at work: check the invariants first (permissions below the model, a feedback loop, a cost estimate, alarms for silent failure).
+1. **Drill the question bank** (§15.4) in any interview week, with the three drilling rules.
+2. **Narrate one full design per session** — e.g. the inference-cost exercise in [Chapter 11](../11-llm-serving-and-inference/README.md) (arithmetic) and a [Chapter 14](../14-ai-case-studies/README.md) case (control and safety).
+3. **Critique real systems** at work: invariants first (permissions below the model, a feedback loop, a cost estimate, alarms for silent failure).
 4. **Read primary sources** — model cards, official docs, papers — and date-check every claim ([§1.9](../01-ai-landscape/README.md)).
 
 ### Where to go next
 
 AI systems still stand on classic distributed-systems machinery. Companion notes in this repository:
 
-- [System Design Patterns](../../../system-design-patterns/README.md) — caching, sharding (splitting data across machines), queues, replication and end-to-end designs; start with its [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md) primer.
+- [System Design Patterns](../../../system-design-patterns/README.md) — caching, sharding, queues, replication and end-to-end designs; start with [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md).
 - [Designing Data-Intensive Applications notes](../../../ddia/README.md) — storage, replication, partitioning, streams, consistency in depth.
 - [Microservices patterns](../../../microservices-patterns/README.md) — service boundaries, communication, resilience, data consistency.
 - [Low-Level Design Handbook](../../../lld/README.md) — object-oriented design for the code inside those services.
 
 ### Final thoughts
 
-Three habits outlast every model release: **experiment** (build small prototypes; failures teach fastest), **collaborate** (technical and non-technical people together catch what either misses), and **stay grounded** (measure quality, count the cost, and keep the people affected by the system in view).
+Three habits outlast every model release: **experiment** (small prototypes; failures teach fastest), **collaborate** (technical and non-technical people together catch what either misses), **stay grounded** (measure quality, count the cost, keep the affected people in view).
 
 ---
 
 ## 15.7 Glossary
 
-Alphabetical. "Ch. N" links to the chapter of this book that explains the term; "ML N" links to the companion ML Handbook.
+Alphabetical; each term is defined once here (alternative names in brackets). "Ch. N" links to the chapter that explains it; "ML N" to the companion ML Handbook.
 
 | Term | Meaning | Where |
 |---|---|---|
@@ -676,7 +670,6 @@ Alphabetical. "Ch. N" links to the chapter of this book that explains the term; 
 | **A2A (Agent2Agent)** | Open protocol for AI agents built by different vendors to discover each other and hand off tasks | [Ch. 9](../09-ai-agents/README.md) |
 | **A/B test** | Randomly splitting live traffic between two versions to compare a metric | [Ch. 13](../13-ai-system-design-and-genai-products/README.md) |
 | **AC-3 (arc consistency)** | CSP algorithm that removes values with no compatible partner in a neighbouring variable | [Ch. 2](../02-classical-ai-search/README.md) |
-| **Acceptance rate (speculative decoding)** | Share of the draft model's proposed tokens that the large model accepts | [Ch. 11](../11-llm-serving-and-inference/README.md) |
 | **Access control list (ACL)** | List recording which users or groups may read or change each item | [Ch. 7](../07-embeddings-vector-databases-and-rag/README.md) |
 | **Accountability** | Clear responsibility for an AI system's outcomes, with a named owner who can be held to account | [Ch. 12](../12-safety-ethics-governance/README.md) |
 | **Action gate** | Deterministic code check that approves, blocks or escalates every action a model proposes | [Ch. 9](../09-ai-agents/README.md) |
@@ -719,7 +712,7 @@ Alphabetical. "Ch. N" links to the chapter of this book that explains the term; 
 | **Beam search** | Decoding that keeps the k most probable partial sequences at each step | [Ch. 4](../04-large-language-models/README.md) |
 | **BERT** | Encoder-only transformer (2018) trained by masked-word prediction; used for understanding and embeddings | [Ch. 3](../03-transformers-and-embeddings/README.md) |
 | **Best-first search** | Search that always expands the node with the best evaluation score | [Ch. 2](../02-classical-ai-search/README.md) |
-| **BF16 / FP16 / FP8** | Compact number formats with 16 or 8 bits used to store weights and run maths faster | [Ch. 11](../11-llm-serving-and-inference/README.md) |
+| **BF16 / FP16 / FP8** | Compact number formats with 16 or 8 bits used to store weights and run maths faster (vs 32-bit FP32/float32, 4 bytes per number) | [Ch. 11](../11-llm-serving-and-inference/README.md) |
 | **Bias (fairness)** | Systematically worse or unfair outcomes for some groups | [Ch. 12](../12-safety-ethics-governance/README.md) |
 | **BLEU** | Translation metric based on overlapping word sequences with a reference; a rough signal only | [Ch. 8](../08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md) |
 | **BM25** | Classic keyword-ranking formula based on term frequency and document length | [Ch. 7](../07-embeddings-vector-databases-and-rag/README.md) |
@@ -727,7 +720,7 @@ Alphabetical. "Ch. N" links to the chapter of this book that explains the term; 
 | **Bounded autonomy** | Letting an agent act alone only within set tools, budgets and approval rules | [Ch. 9](../09-ai-agents/README.md) |
 | **BPE (byte-pair encoding)** | Tokenizer that builds a vocabulary by repeatedly merging the most frequent symbol pairs | [Ch. 3](../03-transformers-and-embeddings/README.md) |
 | **Breadth-first search (BFS)** | Uninformed search that expands the shallowest nodes first (FIFO queue) | [Ch. 2](../02-classical-ai-search/README.md) |
-| **C2PA** | Open standard for signed "content credentials" that record how a piece of media was made | [Ch. 10](../10-generative-models-beyond-text/README.md) |
+| **C2PA (content credentials)** | Open standard for signed "content credentials" metadata recording how a piece of media was made and edited | [Ch. 10](../10-generative-models-beyond-text/README.md) |
 | **Calibration** | Whether predicted probabilities match observed frequencies (70% confident = right 70% of the time) | [Ch. 4](../04-large-language-models/README.md) |
 | **Canary release** | Sending a small slice of traffic to a new version before full rollout | [Ch. 13](../13-ai-system-design-and-genai-products/README.md) |
 | **Cascade (model)** | Trying a cheap model first and escalating to a stronger one only when needed | [Ch. 11](../11-llm-serving-and-inference/README.md) |
@@ -735,6 +728,7 @@ Alphabetical. "Ch. N" links to the chapter of this book that explains the term; 
 | **Causal mask** | Attention mask that stops a token from seeing tokens after it | [Ch. 3](../03-transformers-and-embeddings/README.md) |
 | **CCPA / CPRA** | California's consumer privacy laws giving rights to know, delete and opt out | [Ch. 12](../12-safety-ethics-governance/README.md) |
 | **Chain-of-thought (CoT)** | Prompting or training a model to write intermediate reasoning steps | [Ch. 5](../05-prompt-engineering/README.md) |
+| **CHAIR** | Captioning hallucination metric: share of objects mentioned in captions that are not in the image | [Ch. 14](../14-ai-case-studies/README.md) |
 | **Chat template** | Model-specific format that marks system, user and assistant turns in the token stream | [Ch. 4](../04-large-language-models/README.md) |
 | **ChatGPT** | OpenAI's chat assistant whose launch (Nov 2022) brought LLMs to the mass market | [Ch. 1](../01-ai-landscape/README.md) |
 | **Chinchilla scaling** | Finding that compute-optimal training uses about 20 tokens per parameter | [Ch. 4](../04-large-language-models/README.md) |
@@ -754,7 +748,6 @@ Alphabetical. "Ch. N" links to the chapter of this book that explains the term; 
 | **Concept drift** | Change in the relationship between inputs and the outcome | [ML 16](../../../ml/chapters/16-ml-in-production/README.md) |
 | **Constitutional AI** | Anthropic's method of training a model to follow a written set of principles, using AI feedback | [Ch. 12](../12-safety-ethics-governance/README.md) |
 | **Constraint satisfaction problem (CSP)** | Problem of assigning values to variables so that all constraints hold | [Ch. 2](../02-classical-ai-search/README.md) |
-| **Content credentials** | Signed metadata attached to media describing its origin and edits (C2PA) | [Ch. 12](../12-safety-ethics-governance/README.md) |
 | **Context assembly** | Building the prompt from instructions, memory, retrieved passages and the user turn within a token budget | [Ch. 13](../13-ai-system-design-and-genai-products/README.md) |
 | **Context rot** | Quality decline as a long context fills with stale or irrelevant material | [Ch. 9](../09-ai-agents/README.md) |
 | **Context window** | Maximum number of tokens a model can read (and write) in one request | [Ch. 4](../04-large-language-models/README.md) |
@@ -765,7 +758,7 @@ Alphabetical. "Ch. N" links to the chapter of this book that explains the term; 
 | **Counterfactual test** | Changing only a sensitive attribute (e.g. a name) to see whether the output changes | [Ch. 12](../12-safety-ethics-governance/README.md) |
 | **CPU / GPU / TPU** | Processor types: general-purpose CPU; massively parallel GPU; Google's ML-specific TPU | [Ch. 11](../11-llm-serving-and-inference/README.md) |
 | **Cross-attention** | Attention where queries come from one sequence and keys/values from another (e.g. prompt into image) | [Ch. 10](../10-generative-models-beyond-text/README.md) |
-| **Cross-encoder** | Model that scores a query and a document together; accurate but slow, used for reranking | [Ch. 7](../07-embeddings-vector-databases-and-rag/README.md) |
+| **Cross-encoder / reranker** | Second-stage model that scores query and document together to reorder retrieved candidates; accurate but slow, so used only on a shortlist | [Ch. 7](../07-embeddings-vector-databases-and-rag/README.md) |
 | **Cross-entropy loss** | Training loss that punishes low probability on the correct token | [Ch. 3](../03-transformers-and-embeddings/README.md) |
 | **CRUD** | Create, read, update, delete: the basic operations on stored data | [Ch. 13](../13-ai-system-design-and-genai-products/README.md) |
 | **CSAT** | Customer satisfaction score, usually from a post-interaction survey | [Ch. 13](../13-ai-system-design-and-genai-products/README.md) |
@@ -784,13 +777,11 @@ Alphabetical. "Ch. N" links to the chapter of this book that explains the term; 
 | **Depth-first search (DFS)** | Uninformed search that expands the deepest node first (LIFO stack) | [Ch. 2](../02-classical-ai-search/README.md) |
 | **Diffusion model** | Generative model that learns to reverse a gradual noising process | [Ch. 10](../10-generative-models-beyond-text/README.md) |
 | **Dijkstra's algorithm** | Shortest-path algorithm that always expands the cheapest known node (uniform-cost search) | [Ch. 2](../02-classical-ai-search/README.md) |
-| **Direct prompt injection** | A user typing instructions meant to override the system's rules | [Ch. 12](../12-safety-ethics-governance/README.md) |
 | **Disaggregated serving** | Running prefill and decode on separate GPU pools so each can be tuned | [Ch. 11](../11-llm-serving-and-inference/README.md) |
-| **Discriminator** | The GAN network that tries to tell real samples from generated ones | [Ch. 10](../10-generative-models-beyond-text/README.md) |
-| **Distillation** | Training a smaller "student" model to imitate a larger "teacher" | [Ch. 11](../11-llm-serving-and-inference/README.md) |
+| **Distillation (teacher / student)** | Training a smaller "student" model to imitate a larger "teacher" | [Ch. 11](../11-llm-serving-and-inference/README.md) |
 | **DiT (diffusion transformer)** | Diffusion model whose denoiser is a transformer over image or video patches | [Ch. 10](../10-generative-models-beyond-text/README.md) |
 | **DPO (direct preference optimization)** | Preference tuning directly from pairs of preferred and rejected answers, without a separate reward model | [Ch. 4](../04-large-language-models/README.md) |
-| **DreamBooth** | Fine-tuning a diffusion model on a few photos so a rare token generates that subject | [Ch. 10](../10-generative-models-beyond-text/README.md) |
+| **DreamBooth** | Fine-tuning a diffusion model on a few photos so a rare token (an unused word that comes to mean "this subject") generates that subject | [Ch. 10](../10-generative-models-beyond-text/README.md) |
 | **Durable task state** | Agent progress saved outside the model so a task can resume after a crash | [Ch. 9](../09-ai-agents/README.md) |
 | **Edge AI** | Running models on the device itself (phone, car, sensor) instead of in the cloud | [Ch. 4](../04-large-language-models/README.md) |
 | **ELBO** | Evidence lower bound: the VAE training objective (reconstruction minus KL penalty) | [Ch. 10](../10-generative-models-beyond-text/README.md) |
@@ -801,9 +792,10 @@ Alphabetical. "Ch. N" links to the chapter of this book that explains the term; 
 | **Encryption** | Scrambling data so only holders of the key can read it | [Ch. 12](../12-safety-ethics-governance/README.md) |
 | **Entailment / NLI** | Natural language inference: judging whether one text logically supports another | [Ch. 7](../07-embeddings-vector-databases-and-rag/README.md) |
 | **Episodic vs semantic memory** | Memory of specific past events vs memory of general facts | [Ch. 9](../09-ai-agents/README.md) |
-| **EU AI Act** | EU regulation sorting AI uses by risk tier, with duties scaling from transparency to bans | [Ch. 12](../12-safety-ethics-governance/README.md) |
+| **EU AI Act** | EU regulation sorting AI uses by risk tier, with duties scaling from transparency to bans; Annex III lists high-risk uses (hiring, credit…), Annex I covers AI inside already-regulated products | [Ch. 12](../12-safety-ethics-governance/README.md) |
 | **Evaluation function** | Game-search estimate of how good a position is, used when search stops early | [Ch. 2](../02-classical-ai-search/README.md) |
-| **Evaluation set (golden set)** | Fixed, representative test cases with expected outcomes, run on every change | [Ch. 8](../08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md) |
+| **Factorised attention** | Video attention split into spatial attention within each frame and temporal attention across frames, far cheaper than full spacetime attention | [Ch. 14](../14-ai-case-studies/README.md) |
+| **Golden set (evaluation set)** | Fixed, representative test cases with expected outcomes, run on every change | [Ch. 8](../08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md) |
 | **Exact match (EM)** | Metric: 1 if the output equals the reference exactly, else 0 | [Ch. 8](../08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md) |
 | **Expert parallelism** | Placing different mixture-of-experts experts on different GPUs | [Ch. 11](../11-llm-serving-and-inference/README.md) |
 | **Expert system** | Rule-based AI encoding specialist knowledge as if-then rules (1970s–80s) | [Ch. 1](../01-ai-landscape/README.md) |
@@ -826,16 +818,13 @@ Alphabetical. "Ch. N" links to the chapter of this book that explains the term; 
 | **Foundation model** | Large model pretrained on broad data and adapted to many tasks | [Ch. 1](../01-ai-landscape/README.md) |
 | **Frequency / presence penalty** | Sampling settings that discourage repeating tokens already used | [Ch. 4](../04-large-language-models/README.md) |
 | **Frontier (search)** | The set of discovered but not yet expanded nodes | [Ch. 2](../02-classical-ai-search/README.md) |
-| **Function calling** | See tool use | [Ch. 6](../06-building-llm-apps-in-python/README.md) |
 | **Funnel (ranking)** | Multi-stage pipeline: cheap retrieval of many candidates, then heavier ranking of few | [ML 15](../../../ml/chapters/15-ml-system-design-framework/README.md) |
-| **GAN (generative adversarial network)** | Generator and discriminator trained against each other | [Ch. 10](../10-generative-models-beyond-text/README.md) |
+| **GAN (generative adversarial network)** | A generator (turns random noise into samples) and a discriminator (tells real samples from generated ones) trained against each other | [Ch. 10](../10-generative-models-beyond-text/README.md) |
 | **GDPR** | EU data-protection law (2018) covering consent, access, deletion and lawful processing | [Ch. 12](../12-safety-ethics-governance/README.md) |
 | **Generative AI** | AI that creates new content (text, images, audio, code) | [Ch. 1](../01-ai-landscape/README.md) |
-| **Generator (GAN)** | The GAN network that turns random noise into samples meant to fool the discriminator | [Ch. 10](../10-generative-models-beyond-text/README.md) |
 | **Genetic algorithm** | Local search that evolves a population with selection, crossover and mutation | [Ch. 2](../02-classical-ai-search/README.md) |
 | **GGUF** | File format for quantized models used by llama.cpp and Ollama for local inference | [Ch. 11](../11-llm-serving-and-inference/README.md) |
 | **Goal test** | Check that decides whether a search state is a solution | [Ch. 2](../02-classical-ai-search/README.md) |
-| **Golden set** | See Evaluation set | [Ch. 8](../08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md) |
 | **Goodput** | Throughput counting only requests that met their latency target | [Ch. 11](../11-llm-serving-and-inference/README.md) |
 | **GPAI (general-purpose AI) model** | EU AI Act term for foundation models usable across many tasks, with their own duties | [Ch. 12](../12-safety-ethics-governance/README.md) |
 | **GPT** | OpenAI's decoder-only "generative pre-trained transformer" model family | [Ch. 4](../04-large-language-models/README.md) |
@@ -861,13 +850,11 @@ Alphabetical. "Ch. N" links to the chapter of this book that explains the term; 
 | **Imagen** | Google's family of text-to-image models | [Ch. 10](../10-generative-models-beyond-text/README.md) |
 | **Image-to-image / inpainting** | Editing an existing image, or regenerating only a masked region | [Ch. 10](../10-generative-models-beyond-text/README.md) |
 | **Implicit vs explicit feedback** | Signals from behaviour (copies, edits, retries) vs direct ratings (thumbs up/down) | [Ch. 8](../08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md) |
-| **Indirect prompt injection** | Instructions hidden in content the model reads (web page, email, document) rather than typed by the user | [Ch. 12](../12-safety-ethics-governance/README.md) |
 | **Inference** | Running a trained model to get outputs | [Ch. 11](../11-llm-serving-and-inference/README.md) |
 | **Inference server** | Software that loads a model and serves requests efficiently (vLLM, TGI, TensorRT-LLM) | [Ch. 11](../11-llm-serving-and-inference/README.md) |
 | **InstructGPT** | OpenAI's 2022 model that popularised SFT followed by RLHF | [Ch. 4](../04-large-language-models/README.md) |
 | **Instruction tuning (SFT)** | Supervised fine-tuning on instruction–response pairs to make a model follow requests | [Ch. 4](../04-large-language-models/README.md) |
 | **Interpretability** | Understanding why a model produced an output, or what its internals represent | [Ch. 4](../04-large-language-models/README.md) |
-| **Inter-token latency (ITL)** | Time between consecutive streamed tokens; similar to TPOT | [Ch. 11](../11-llm-serving-and-inference/README.md) |
 | **Inverted index** | Map from each word to the documents containing it; the core of keyword search | [Ch. 7](../07-embeddings-vector-databases-and-rag/README.md) |
 | **Iterative deepening** | Repeated depth-limited DFS with growing limits; BFS's completeness with DFS's memory | [Ch. 2](../02-classical-ai-search/README.md) |
 | **IVF index** | ANN index that clusters vectors and searches only the nearest clusters (nprobe) | [Ch. 7](../07-embeddings-vector-databases-and-rag/README.md) |
@@ -883,6 +870,7 @@ Alphabetical. "Ch. N" links to the chapter of this book that explains the term; 
 | **KV cache** | Stored attention keys and values for earlier tokens, reused during decoding | [Ch. 11](../11-llm-serving-and-inference/README.md) |
 | **LangChain / LlamaIndex** | Popular open-source frameworks for building LLM and RAG pipelines | [Ch. 7](../07-embeddings-vector-databases-and-rag/README.md) |
 | **Large language model (LLM)** | Transformer trained on huge text corpora to predict the next token | [Ch. 4](../04-large-language-models/README.md) |
+| **Latency** | Time one request takes, start to finish | [Ch. 11](../11-llm-serving-and-inference/README.md) |
 | **Latency budget** | Maximum time allotted to each stage of a request | [Ch. 13](../13-ai-system-design-and-genai-products/README.md) |
 | **Latent diffusion** | Diffusion performed in a compressed latent space (Stable Diffusion) | [Ch. 10](../10-generative-models-beyond-text/README.md) |
 | **Latent space** | Compressed internal representation a model maps data into | [Ch. 10](../10-generative-models-beyond-text/README.md) |
@@ -898,7 +886,6 @@ Alphabetical. "Ch. N" links to the chapter of this book that explains the term; 
 | **LLMOps** | Practices for versioning, evaluating, deploying and monitoring LLM features | [Ch. 13](../13-ai-system-design-and-genai-products/README.md) |
 | **Local search** | Optimisation that improves a single current state step by step | [Ch. 2](../02-classical-ai-search/README.md) |
 | **Logits** | Raw, unnormalised scores a model outputs before softmax | [Ch. 4](../04-large-language-models/README.md) |
-| **Long-term memory** | Facts stored outside the context window and retrieved when relevant | [Ch. 9](../09-ai-agents/README.md) |
 | **LoRA** | Low-rank adaptation: fine-tuning by training small added matrices instead of all weights | [Ch. 8](../08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md) |
 | **Lost in the middle** | LLMs using information at the start and end of a long context better than the middle | [Ch. 7](../07-embeddings-vector-databases-and-rag/README.md) |
 | **LSTM** | Long short-term memory: a recurrent network that carries state through a sequence; pre-transformer | [Ch. 3](../03-transformers-and-embeddings/README.md) |
@@ -908,7 +895,7 @@ Alphabetical. "Ch. N" links to the chapter of this book that explains the term; 
 | **Masked language modeling** | Pretraining by hiding some words and predicting them from both sides (BERT) | [Ch. 3](../03-transformers-and-embeddings/README.md) |
 | **MCP (Model Context Protocol)** | Open protocol connecting AI hosts to servers exposing tools, resources and prompts | [Ch. 6](../06-building-llm-apps-in-python/README.md) |
 | **Medusa / EAGLE** | Speculative-decoding methods that add small heads to the model to draft several tokens | [Ch. 11](../11-llm-serving-and-inference/README.md) |
-| **Memory (agent/conversation)** | Stored information carried across turns or sessions within a context budget | [Ch. 6](../06-building-llm-apps-in-python/README.md) |
+| **Memory (agent/conversation)** | Stored information carried across turns or sessions within a context budget; long-term memory is stored outside the context window and retrieved when relevant | [Ch. 6](../06-building-llm-apps-in-python/README.md) |
 | **Memory-bound** | Limited by how fast data moves from memory rather than by arithmetic (decode is memory-bound) | [Ch. 4](../04-large-language-models/README.md) |
 | **Metadata filtering** | Restricting search to items whose attributes (date, owner, type) match a condition | [Ch. 7](../07-embeddings-vector-databases-and-rag/README.md) |
 | **Midjourney** | Commercial text-to-image service | [Ch. 10](../10-generative-models-beyond-text/README.md) |
@@ -936,12 +923,14 @@ Alphabetical. "Ch. N" links to the chapter of this book that explains the term; 
 | **NIST AI RMF** | US AI Risk Management Framework organised as Govern, Map, Measure, Manage | [Ch. 12](../12-safety-ethics-governance/README.md) |
 | **Noise schedule** | How much noise a diffusion model adds at each step | [Ch. 10](../10-generative-models-beyond-text/README.md) |
 | **Non-functional requirements (NFRs)** | Qualities a system must have (latency, availability, cost, privacy) rather than features | [Ch. 13](../13-ai-system-design-and-genai-products/README.md) |
+| **NumPy / pandas / scikit-learn** | Python libraries for numeric arrays, data tables and classic ML | [ML 1](../../../ml/chapters/01-what-is-ml/README.md) |
 | **NVLink** | NVIDIA's high-speed link between GPUs in a server | [Ch. 11](../11-llm-serving-and-inference/README.md) |
 | **OAuth** | Standard for granting an app limited access to an account without sharing the password | [Ch. 6](../06-building-llm-apps-in-python/README.md) |
 | **Observability** | Logs, metrics and traces that show what a system is doing and why | [Ch. 11](../11-llm-serving-and-inference/README.md) |
 | **OCR** | Optical character recognition: reading text from images or scanned pages | [Ch. 14](../14-ai-case-studies/README.md) |
 | **One-hot vector** | Vector of zeros with a single 1 marking which item it is | [Ch. 3](../03-transformers-and-embeddings/README.md) |
 | **Online inference** | Computing predictions at request time | [ML 16](../../../ml/chapters/16-ml-in-production/README.md) |
+| **OOP (object-oriented programming)** | Organising code as objects that bundle data with the methods that act on it | [Python Handbook](../../../python/chapters/01-getting-started/README.md) |
 | **Open-weight model** | Model whose trained weights are published for download (Llama, Qwen, Mistral) | [Ch. 4](../04-large-language-models/README.md) |
 | **Orchestrator-workers** | Agent pattern where a lead agent splits a task and hands parts to worker agents | [Ch. 9](../09-ai-agents/README.md) |
 | **Overfitting** | Model memorises training data and fails on new data | [Ch. 8](../08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md) |
@@ -952,7 +941,7 @@ Alphabetical. "Ch. N" links to the chapter of this book that explains the term; 
 | **Parameters (weights)** | The learned numbers inside a model; model size is counted in parameters | [Ch. 4](../04-large-language-models/README.md) |
 | **pass@k / pass^k** | Chance at least one of k attempts succeeds / chance all k attempts succeed | [Ch. 9](../09-ai-agents/README.md) |
 | **Path cost** | Total cost of the actions taken along a search path | [Ch. 2](../02-classical-ai-search/README.md) |
-| **PEAS** | Performance, Environment, Actuators, Sensors: a way to specify an agent's task | [Ch. 1](../01-ai-landscape/README.md) |
+| **PEAS** | Performance measure, Environment, Actuators, Sensors: a way to specify an agent's task (percepts = everything the agent has sensed so far) | [Ch. 1](../01-ai-landscape/README.md) |
 | **PEFT** | Parameter-efficient fine-tuning: adapting a model by training a small fraction of parameters | [Ch. 8](../08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md) |
 | **Perplexity** | Exponential of average negative log-likelihood; lower = model less "surprised" | [Ch. 4](../04-large-language-models/README.md) |
 | **pgvector** | PostgreSQL extension that stores vectors and supports nearest-neighbour search | [Ch. 7](../07-embeddings-vector-databases-and-rag/README.md) |
@@ -966,18 +955,16 @@ Alphabetical. "Ch. N" links to the chapter of this book that explains the term; 
 | **PPO** | Proximal policy optimization: the RL algorithm classically used in RLHF | [Ch. 4](../04-large-language-models/README.md) |
 | **Precision and recall** | Of what was flagged, how much was right / of what should be flagged, how much was found | [Ch. 8](../08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md) |
 | **Prefill** | Processing the whole prompt in parallel before generation starts | [Ch. 11](../11-llm-serving-and-inference/README.md) |
-| **Prefix caching** | Reusing the KV cache of a prompt prefix shared by many requests | [Ch. 11](../11-llm-serving-and-inference/README.md) |
+| **Prefix caching (prompt caching)** | Reusing the computed KV state of a prompt prefix shared by many requests, to save cost and latency; sold by providers as discounted cached input | [Ch. 11](../11-llm-serving-and-inference/README.md) |
 | **Pre-LN / Post-LN** | Placing layer normalisation before each sublayer (Pre-LN, more stable to train) or after it (Post-LN, the original design) | [Ch. 3](../03-transformers-and-embeddings/README.md) |
 | **Presidio** | Microsoft's open-source toolkit for detecting and masking PII | [Ch. 12](../12-safety-ethics-governance/README.md) |
 | **Pretraining** | Initial large-scale training on general data | [Ch. 4](../04-large-language-models/README.md) |
 | **Prior preservation** | Training on generic class images alongside a subject's photos so the model keeps its general knowledge | [Ch. 14](../14-ai-case-studies/README.md) |
 | **Priority queue** | Data structure that always returns the item with the smallest (or largest) key first | [Ch. 2](../02-classical-ai-search/README.md) |
 | **Product quantization (PQ)** | Compressing vectors by encoding sub-vectors as short codes | [Ch. 7](../07-embeddings-vector-databases-and-rag/README.md) |
-| **Prompt** | The input instructions and context given to a model | [Ch. 5](../05-prompt-engineering/README.md) |
-| **Prompt caching** | Reusing the computed state of a repeated prompt prefix to save cost and latency | [Ch. 6](../06-building-llm-apps-in-python/README.md) |
 | **Prompt chaining** | Splitting a task into several prompts where each output feeds the next | [Ch. 5](../05-prompt-engineering/README.md) |
-| **Prompt engineering** | Designing and testing prompts to get reliable model behaviour | [Ch. 5](../05-prompt-engineering/README.md) |
-| **Prompt injection** | Untrusted content containing instructions that hijack the model | [Ch. 12](../12-safety-ethics-governance/README.md) |
+| **Prompt / prompt engineering** | The instructions and context given to a model; prompt engineering is designing and testing them for reliable behaviour | [Ch. 5](../05-prompt-engineering/README.md) |
+| **Prompt injection (direct / indirect)** | Instructions in text the model reads that hijack it: direct = typed by the user to override the rules; indirect = hidden in content the model ingests (web page, email, document) | [Ch. 12](../12-safety-ethics-governance/README.md) |
 | **Prompt registry** | Versioned store of prompts used by an application | [Ch. 13](../13-ai-system-design-and-genai-products/README.md) |
 | **Provenance** | Record of where data or media came from and how it was changed | [Ch. 10](../10-generative-models-beyond-text/README.md) |
 | **PyTorch** | The most widely used open-source deep-learning library | [Ch. 3](../03-transformers-and-embeddings/README.md) |
@@ -991,8 +978,7 @@ Alphabetical. "Ch. N" links to the chapter of this book that explains the term; 
 | **Rational agent** | An agent that acts to maximise its expected performance measure | [Ch. 1](../01-ai-landscape/README.md) |
 | **ReAct** | Pattern interleaving reasoning steps with tool actions and observations | [Ch. 9](../09-ai-agents/README.md) |
 | **Reasoning model** | LLM trained (often with RL) to think in extended intermediate steps before answering | [Ch. 4](../04-large-language-models/README.md) |
-| **Recall (retrieval)** | Share of all relevant items that the system actually found | [Ch. 7](../07-embeddings-vector-databases-and-rag/README.md) |
-| **Recall@k** | Share of relevant items that appear in the top k results | [Ch. 7](../07-embeddings-vector-databases-and-rag/README.md) |
+| **Recall / recall@k (retrieval)** | Share of all relevant items the system found; recall@k counts only those in the top k results | [Ch. 7](../07-embeddings-vector-databases-and-rag/README.md) |
 | **Reciprocal rank fusion (RRF)** | Merging ranked lists by summing 1/(k + rank) for each item | [Ch. 7](../07-embeddings-vector-databases-and-rag/README.md) |
 | **Recurrent neural network (RNN)** | Network that processes a sequence one step at a time while carrying a hidden state | [Ch. 3](../03-transformers-and-embeddings/README.md) |
 | **Red teaming** | Deliberately attacking a system to find failures before users do | [Ch. 12](../12-safety-ethics-governance/README.md) |
@@ -1001,7 +987,7 @@ Alphabetical. "Ch. N" links to the chapter of this book that explains the term; 
 | **Reinforcement learning from AI feedback (RLAIF)** | RLHF where an AI model, often guided by principles, supplies the preference labels | [Ch. 4](../04-large-language-models/README.md) |
 | **Reinforcement learning (RL)** | Learning by trial and error from rewards | [Ch. 4](../04-large-language-models/README.md) |
 | **ReLU / GELU / SwiGLU** | Activation functions inside transformer feed-forward layers; SwiGLU is a gated variant used in many LLMs | [Ch. 3](../03-transformers-and-embeddings/README.md) |
-| **Reranker** | Second-stage model that reorders retrieved candidates more precisely | [Ch. 7](../07-embeddings-vector-databases-and-rag/README.md) |
+| **Replication** | Keeping copies of data on several machines for availability and read capacity | [Ch. 7](../07-embeddings-vector-databases-and-rag/README.md) |
 | **Residual connection** | Adding a layer's input to its output, easing training of deep stacks | [Ch. 3](../03-transformers-and-embeddings/README.md) |
 | **Responsible AI** | Building and running AI with attention to fairness, safety, privacy, transparency and accountability | [Ch. 12](../12-safety-ethics-governance/README.md) |
 | **REST API** | Common style of web API using standard HTTP verbs on resource URLs | [Ch. 16](../16-appendix-ai-for-your-career/README.md) |
@@ -1028,13 +1014,15 @@ Alphabetical. "Ch. N" links to the chapter of this book that explains the term; 
 | **Server-sent events (SSE)** | One-way HTTP stream from server to client, commonly used to stream tokens | [Ch. 6](../06-building-llm-apps-in-python/README.md) |
 | **SGLang** | Open-source LLM serving engine with RadixAttention prefix sharing | [Ch. 11](../11-llm-serving-and-inference/README.md) |
 | **Shadow deployment** | Running a new version on live traffic without showing its outputs to users | [Ch. 13](../13-ai-system-design-and-genai-products/README.md) |
+| **Sharding** | Splitting data or an index across several machines | [Ch. 13](../13-ai-system-design-and-genai-products/README.md) |
 | **Simulated annealing** | Local search that sometimes accepts worse moves, less often as "temperature" falls | [Ch. 2](../02-classical-ai-search/README.md) |
 | **SLO / SLA** | Service-level objective (internal target such as p95 < 1 s) / agreement (contractual promise) | [Ch. 11](../11-llm-serving-and-inference/README.md) |
 | **Softmax** | Function turning scores into probabilities that sum to 1 | [Ch. 3](../03-transformers-and-embeddings/README.md) |
 | **Sora / Veo** | Text-to-video models from OpenAI and Google | [Ch. 10](../10-generative-models-beyond-text/README.md) |
+| **Spacetime latents / patches** | Compressed video representation whose tokens each span several pixels and frames | [Ch. 10](../10-generative-models-beyond-text/README.md) |
 | **Speaker diarization** | Working out who spoke when in a recording | [Ch. 14](../14-ai-case-studies/README.md) |
 | **Spectrogram** | Picture of audio showing energy at each frequency over time | [Ch. 10](../10-generative-models-beyond-text/README.md) |
-| **Speculative decoding** | A small draft model proposes tokens that the large model verifies in one pass | [Ch. 11](../11-llm-serving-and-inference/README.md) |
+| **Speculative decoding** | A small draft model proposes tokens that the large model verifies in one pass; the acceptance rate is the share of drafted tokens it keeps | [Ch. 11](../11-llm-serving-and-inference/README.md) |
 | **Spotlighting** | Marking untrusted text (tags, encoding) so the model can tell it apart from instructions | [Ch. 12](../12-safety-ethics-governance/README.md) |
 | **Stable Diffusion** | Open latent diffusion text-to-image model | [Ch. 10](../10-generative-models-beyond-text/README.md) |
 | **State space (search)** | All states reachable from the start by sequences of actions | [Ch. 2](../02-classical-ai-search/README.md) |
@@ -1044,8 +1032,7 @@ Alphabetical. "Ch. N" links to the chapter of this book that explains the term; 
 | **Stop reason** | Why the model stopped generating (end of turn, max tokens, tool use, stop sequence) | [Ch. 6](../06-building-llm-apps-in-python/README.md) |
 | **Stop sequence** | String that makes the model stop generating when it appears | [Ch. 4](../04-large-language-models/README.md) |
 | **Streaming** | Sending output tokens to the client as they are generated | [Ch. 6](../06-building-llm-apps-in-python/README.md) |
-| **Structured (constrained) decoding** | Restricting token choices during generation so output always matches a grammar or schema | [Ch. 4](../04-large-language-models/README.md) |
-| **Structured output** | Model output constrained to a schema, such as JSON | [Ch. 6](../06-building-llm-apps-in-python/README.md) |
+| **Structured output (constrained decoding)** | Model output forced to match a schema such as JSON, by restricting token choices during generation | [Ch. 6](../06-building-llm-apps-in-python/README.md) |
 | **StyleGAN** | GAN that controls image features through per-layer style inputs from a mapping network | [Ch. 14](../14-ai-case-studies/README.md) |
 | **Supervised learning** | Learning from examples paired with correct labels | [Ch. 1](../01-ai-landscape/README.md) |
 | **Sycophancy** | A model telling users what they want to hear rather than what is true | [Ch. 4](../04-large-language-models/README.md) |
@@ -1053,7 +1040,6 @@ Alphabetical. "Ch. N" links to the chapter of this book that explains the term; 
 | **Synthetic data** | Training or evaluation data generated by models or programs | [Ch. 8](../08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md) |
 | **SynthID** | Google's invisible watermarking for AI-generated content | [Ch. 10](../10-generative-models-beyond-text/README.md) |
 | **System prompt** | High-priority instructions setting a model's role and rules for a conversation | [Ch. 5](../05-prompt-engineering/README.md) |
-| **Teacher / student** | The large model being imitated and the small model learning from it in distillation | [Ch. 8](../08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md) |
 | **Temperature** | Sampling setting that sharpens (low) or flattens (high) the next-token distribution | [Ch. 4](../04-large-language-models/README.md) |
 | **Temporal consistency** | Video frames agreeing with each other over time (no flicker or changing identities) | [Ch. 10](../10-generative-models-beyond-text/README.md) |
 | **Tensor parallelism** | Splitting each layer's matrices across several GPUs | [Ch. 11](../11-llm-serving-and-inference/README.md) |
@@ -1061,16 +1047,16 @@ Alphabetical. "Ch. N" links to the chapter of this book that explains the term; 
 | **Test-time compute** | Spending more computation while answering (longer reasoning, more samples) to improve quality | [Ch. 4](../04-large-language-models/README.md) |
 | **TF-IDF** | Word weighting by frequency in a document times rarity across documents | [Ch. 7](../07-embeddings-vector-databases-and-rag/README.md) |
 | **TGI** | Text Generation Inference: Hugging Face's LLM serving server | [Ch. 11](../11-llm-serving-and-inference/README.md) |
+| **Threat model** | Written account of who might attack a system, how, and what they want | [Ch. 12](../12-safety-ethics-governance/README.md) |
 | **Throughput** | Amount of work (e.g. tokens per second) a system completes per unit time | [Ch. 11](../11-llm-serving-and-inference/README.md) |
 | **Time to first token (TTFT)** | Delay from sending a request until the first output token arrives | [Ch. 11](../11-llm-serving-and-inference/README.md) |
-| **Token** | Unit of text a model processes, often a subword | [Ch. 3](../03-transformers-and-embeddings/README.md) |
 | **Token budget** | Maximum tokens allowed for a request, conversation or agent run | [Ch. 6](../06-building-llm-apps-in-python/README.md) |
-| **Tokenizer** | Component that splits text into tokens and maps them to IDs | [Ch. 3](../03-transformers-and-embeddings/README.md) |
+| **Token / tokenizer** | Token: the unit of text a model processes, often a subword; tokenizer: splits text into tokens and maps them to IDs | [Ch. 3](../03-transformers-and-embeddings/README.md) |
 | **Tombstone** | Marker recording that an item was deleted, so caches and indexes drop it too | [Ch. 7](../07-embeddings-vector-databases-and-rag/README.md) |
-| **Tool use** | Model requests to call external functions, which your code executes and returns | [Ch. 6](../06-building-llm-apps-in-python/README.md) |
+| **Tool use (function calling)** | Model requests to call external functions, which your code executes and returns | [Ch. 6](../06-building-llm-apps-in-python/README.md) |
 | **Top-k sampling** | Sampling only from the k most likely next tokens | [Ch. 4](../04-large-language-models/README.md) |
 | **Top-p (nucleus) sampling** | Sampling from the smallest set of tokens whose probabilities sum to p | [Ch. 4](../04-large-language-models/README.md) |
-| **TPOT** | Time per output token during decoding | [Ch. 11](../11-llm-serving-and-inference/README.md) |
+| **TPOT (time per output token; ≈ inter-token latency, ITL)** | Average time between consecutive output tokens during decoding | [Ch. 11](../11-llm-serving-and-inference/README.md) |
 | **Training data** | The examples a model learned from; its gaps and biases carry into the model | [Ch. 1](../01-ai-landscape/README.md) |
 | **Training–serving skew** | Features computed differently in training and in production | [ML 16](../../../ml/chapters/16-ml-in-production/README.md) |
 | **Trajectory** | The full sequence of thoughts, tool calls and observations in one agent run | [Ch. 9](../09-ai-agents/README.md) |
@@ -1101,7 +1087,7 @@ Alphabetical. "Ch. N" links to the chapter of this book that explains the term; 
 
 ### Verifying the cross-references
 
-Every bullet in this chapter points to a section elsewhere, so the links were checked mechanically. [`code/check_refs.py`](code/check_refs.py) scans each chapter README for relative links, confirms the target file exists, and — when the link text names a section such as "§7.9" — confirms the target really has a `## 7.9` heading. Run it after editing any chapter.
+[`code/check_refs.py`](code/check_refs.py) checks every chapter README's relative links mechanically: the target file must exist and, when the link text names a section such as "§7.9", the target must have a `## 7.9` heading. Run it after editing any chapter.
 
 ```python
 # code/check_refs.py (core)
@@ -1120,7 +1106,7 @@ for bang, label, target in LINK.findall(line):
 Output:
 
 ```
-Checked 16 README file(s): 0 problem(s).
+Checked 17 README file(s): 0 problem(s).
 ```
 
 ---
@@ -1133,4 +1119,4 @@ Checked 16 README file(s): 0 problem(s).
 - **Most common red flags**: no numbers, no feedback loop, no cost estimate — all cheap to fix.
 - **Trends (2026)**: stronger reasoning, grounded and multimodal models, bounded agents, small on-device models, AI combined with IoT, AR/VR and robotics; quantum speed-ups for ML unproven; work is mostly augmented rather than replaced; regulation phasing in.
 - **Roadmap**: Python → ML foundations → deep learning and transformers → building with LLMs → grounding and evaluation → agents → production and safety → design and interviews, each stage proved by a project.
-- **Glossary**: 426 terms, each linked to the chapter that teaches it.
+- **Glossary**: 418 terms, each defined once and linked to the chapter that teaches it.
