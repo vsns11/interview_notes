@@ -244,7 +244,7 @@ window.__errors = [];
   }
 
   // colourful diagrams: give each node/actor its own colour
-  const PAL=[['#DCE8F7','#3E7CC4'],['#EBDDF7','#8E5BC7'],['#DDF0E2','#2E7D3A'],['#F7DDE3','#C24A63'],['#F6E7B8','#8A5A00'],['#D5EEF2','#0B6B5E'],['#F7E0CC','#9A4F00']];
+  const PAL=[['#16273D','#5B9BD5'],['#2A1E3D','#B48BE8'],['#173322','#6CC28A'],['#3A1A22','#F07A92'],['#3A3018','#E6C35C'],['#123236','#5CC9BC'],['#3A2416','#F0A35C']];
   document.querySelectorAll('figure.diagram svg').forEach(svg=>{
     let i=0;
     svg.querySelectorAll('g.node, g.classGroup').forEach(g=>{
@@ -252,15 +252,16 @@ window.__errors = [];
       g.querySelectorAll(':scope > rect, :scope > polygon, :scope > circle, :scope > ellipse, :scope > path.basic, :scope > path.label-container, :scope > g > rect, :scope > g > path').forEach(sh=>{
         if(sh.closest('.label')) return; sh.style.fill=f; sh.style.stroke=st; sh.style.strokeWidth='1.5px';
       });
-      g.querySelectorAll('.nodeLabel, text, span').forEach(t=>{t.style.color='#1C1712'; if(t.tagName==='text') t.style.fill='#1C1712';});
+      g.querySelectorAll('.nodeLabel, text, span').forEach(t=>{t.style.color='#F2EFEA'; if(t.tagName==='text') t.style.fill='#F2EFEA';});
     });
     const actors={};
     svg.querySelectorAll('rect.actor').forEach(r=>{
       const name=(r.parentNode.textContent||'').trim(); if(!(name in actors)) actors[name]=Object.keys(actors).length;
       const [f,st]=PAL[actors[name]%PAL.length]; r.style.fill=f; r.style.stroke=st; r.style.strokeWidth='1.5px';
+      r.parentNode.querySelectorAll('text, tspan').forEach(t=>{t.style.fill='#F2EFEA';});
     });
-    svg.querySelectorAll('rect.note').forEach(r=>{r.style.fill='#F6E7B8'; r.style.stroke='#8A5A00';});
-    svg.querySelectorAll('.flowchart-link, path.relation, .messageLine0, .messageLine1, .transition').forEach(e=>{e.style.stroke='#5A6FA8';});
+    svg.querySelectorAll('rect.note').forEach(r=>{r.style.fill='#3A3018'; r.style.stroke='#E6C35C';});
+    svg.querySelectorAll('.flowchart-link, path.relation, .messageLine0, .messageLine1, .transition').forEach(e=>{e.style.stroke='#8AB4F8';});
   });
   await Promise.all([...document.images].map(im => im.complete ? 0 : new Promise(r => { im.onload = im.onerror = r; })));
   window.__done = els.length;
