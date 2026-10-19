@@ -150,7 +150,44 @@ pre.hl code.hljs{color:#2E261C;background:none}
 code.lang-plain,code.lang-output,code.lang-text{color:#2F5E3A}
 `;
 
-const html = `<!doctype html><html><head><meta charset="utf-8"><title>${path.basename(outPdf, '.pdf')}</title><style>${CSS}</style></head><body>
+const html = `<!doctype html><html><head><meta charset="utf-8"><title>${path.basename(outPdf, '.pdf')}</title><style>${CSS}</style><style>
+/* Kindle-style dark theme (black page, soft white text) */
+html,body{background:#000!important;color:#E4E1DC!important}
+a,.toc a{color:#8AB4F8!important}
+h1{color:#F2EFEA!important;border-bottom-color:#5B7BE0!important}
+h2{color:#9CC0FF!important;border-top-color:#2A2A2A!important;border-left-color:#5B9BD5!important;background:linear-gradient(90deg,rgba(91,155,213,.16),rgba(0,0,0,0))!important}
+h3,h4{color:#ECE8E2!important}
+strong{color:#F5D68A!important}
+em{color:#CFC9C0!important}
+code{background:#1E1E1E!important;color:#F48FB1!important}
+pre,pre.hl{background:#111!important;border-color:#2C2C2C!important}
+pre code,pre.hl code.hljs{color:#E4E1DC!important}
+table td{border-color:#333!important}
+th{background:#1C1C1C!important;color:#F2EFEA!important;border-color:#333!important}
+td{border-color:#333!important}
+tr:nth-child(even) td{background:#0E0E0E!important}
+blockquote,blockquote.box{background:#121212!important;color:#DAD5CE!important;border-left-color:#C08A1E!important}
+.box{background:color-mix(in srgb,var(--c) 14%,#000)!important}
+figure.diagram{background:#0D0D0D!important;border-color:#2C2C2C!important}
+img.course{background:#fff!important;filter:invert(1) hue-rotate(180deg)!important;border-color:#2C2C2C!important}
+.cover h1{color:#9CC0FF!important}.cover p{color:#E4E1DC!important}.cover .small{color:#9A948B!important}
+.k{--c:#E4E1DC}
+.what,.analogy,.gain{--c:#81C995}.problem,.pay,.mistake{--c:#F28B82}.how,.walk,.intro{--c:#8AB4F8}
+.trade,.whennot,.stage{--c:#FDD663}.real{--c:#C58AF9}.interview{--c:#FF8BCB}.self{--c:#78D9C4}.tldr{--c:#F5D68A}.related{--c:#AEB8D0}
+.hljs-comment,.hljs-quote{color:#8E8E8E!important}
+.hljs-keyword,.hljs-selector-tag,.hljs-doctag{color:#FF79C6!important}
+.hljs-string,.hljs-regexp,.hljs-addition{color:#A5D6A7!important}
+.hljs-number,.hljs-literal{color:#FFB074!important}
+.hljs-title,.hljs-title.function_,.hljs-section{color:#82AAFF!important}
+.hljs-title.class_,.hljs-type,.hljs-class .hljs-title{color:#FFD580!important}
+.hljs-built_in,.hljs-symbol{color:#7FDBCA!important}
+.hljs-meta,.hljs-meta .hljs-keyword{color:#F48FB1!important}
+.hljs-attr,.hljs-attribute,.hljs-variable,.hljs-template-variable,.hljs-property{color:#F78C6C!important}
+.hljs-params{color:#C3A6FF!important}
+.hljs-operator,.hljs-punctuation{color:#A0AEC0!important}
+code.lang-plain,code.lang-output,code.lang-text{color:#B5E0B8!important}
+.merr{color:#FF8A80!important;border-color:#FF8A80!important}
+</style></head><body>
 ${cover}${body}
 <script>
 (() => {
@@ -192,7 +229,7 @@ ${cover}${body}
 </script>
 <script>${mermaidJs}</script>
 <script>
-mermaid.initialize({ startOnLoad:false, theme:'base', themeVariables:{ background:'#F3E5C6', primaryColor:'#EAD8B2', primaryTextColor:'#2E261C', primaryBorderColor:'#3A5BC7', lineColor:'#5A6FA8', secondaryColor:'#EAD8B2', tertiaryColor:'#F6EAD0', noteBkgColor:'#D6C29A', noteTextColor:'#2E261C', actorBkg:'#EAD8B2', actorTextColor:'#2E261C', signalColor:'#3B3024', signalTextColor:'#2E261C' }, securityLevel:'loose', fontFamily:'Monaco, monospace', flowchart:{useMaxWidth:true}, sequence:{useMaxWidth:true} });
+mermaid.initialize({ startOnLoad:false, theme:'base', themeVariables:{ background:'#0D0D0D', primaryColor:'#1E2A3A', primaryTextColor:'#E4E1DC', primaryBorderColor:'#5B9BD5', lineColor:'#8AB4F8', secondaryColor:'#2A2236', tertiaryColor:'#1A1A1A', noteBkgColor:'#3A3320', noteTextColor:'#F2EFEA', actorBkg:'#1E2A3A', actorTextColor:'#E4E1DC', signalColor:'#C9C4BC', signalTextColor:'#E4E1DC', edgeLabelBackground:'#1A1A1A', clusterBkg:'#141414', clusterBorder:'#444', titleColor:'#E4E1DC', textColor:'#E4E1DC' }, securityLevel:'loose', fontFamily:'Monaco, monospace', flowchart:{useMaxWidth:true}, sequence:{useMaxWidth:true} });
 window.__errors = [];
 (async () => {
   const els = [...document.querySelectorAll('pre.mermaid')];
@@ -239,7 +276,7 @@ try {
   await page.waitForFunction('window.__done !== undefined', { timeout: 600000 });
   const errors = await page.evaluate(() => window.__errors);
   const imgs = await page.evaluate(() => [...document.images].map(i => [i.naturalWidth > 0, i.alt]));
-  const band = (inner, h) => `<style>html,body{margin:0;padding:0}#header,#footer{padding:0!important}</style><div style="-webkit-print-color-adjust:exact;print-color-adjust:exact;background:#FBF0D9;width:100%;height:${h};margin:0;display:flex;align-items:center;justify-content:center;font-family:Monaco,monospace;font-size:7px;color:#7A6A52">${inner}</div>`;
+  const band = (inner, h) => `<style>html,body{margin:0;padding:0}#header,#footer{padding:0!important}</style><div style="-webkit-print-color-adjust:exact;print-color-adjust:exact;background:#000;width:100%;height:${h};margin:0;display:flex;align-items:center;justify-content:center;font-family:Monaco,monospace;font-size:7px;color:#8E887F">${inner}</div>`;
   await page.pdf({
     path: outPdf, timeout: 0, format: 'A4', printBackground: true, displayHeaderFooter: true,
     headerTemplate: band('', '14mm'),
