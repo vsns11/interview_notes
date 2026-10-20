@@ -150,8 +150,18 @@ pre.hl code.hljs{color:#2E261C;background:none}
 code.lang-plain,code.lang-output,code.lang-text{color:#2F5E3A}
 `;
 
-const html = `<!doctype html><html><head><meta charset="utf-8"><title>${path.basename(outPdf, '.pdf')}</title><style>${CSS}</style><style>
+const FONTDIR = path.join(path.dirname(new URL(import.meta.url).pathname), '..', '..', 'fonts');
+const ff = (f, w, st) => `@font-face{font-family:'PlexMono';font-weight:${w};font-style:${st};src:url(data:font/woff2;base64,${fs.readFileSync(path.join(FONTDIR, f)).toString('base64')}) format('woff2')}`;
+const FONTS = [ff('plex-300.woff2',300,'normal'), ff('plex-300i.woff2',300,'italic'), ff('plex-400.woff2',400,'normal'), ff('plex-500.woff2',500,'normal'), ff('plex-600.woff2',600,'normal')].join('');
+const html = `<!doctype html><html><head><meta charset="utf-8"><title>${path.basename(outPdf, '.pdf')}</title><style>${FONTS}${CSS}</style><style>
 /* Kindle-style dark theme (black page, soft white text) */
+/* lighter text for the dark page: thin font, medium-weight bold */
+body,pre,code,td,th,li,p{font-family:'PlexMono',Monaco,'Courier New',monospace!important;font-weight:300}
+html,body{color:#D9D5CE!important}
+strong,b,th{font-weight:500!important}
+h1,h2,h3,h4,.cover h1{font-weight:600!important}
+pre code,code{font-weight:400}
+
 html,body{background:#000!important;color:#E4E1DC!important}
 a,.toc a{color:#8AB4F8!important}
 h1{color:#F2EFEA!important;border-bottom-color:#5B7BE0!important}
