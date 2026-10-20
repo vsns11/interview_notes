@@ -152,26 +152,26 @@ code.lang-plain,code.lang-output,code.lang-text{color:#2F5E3A}
 
 const html = `<!doctype html><html><head><meta charset="utf-8"><title>${path.basename(outPdf, '.pdf')}</title><style>${CSS}</style><style>
 /* Kindle-style dark theme (black page, soft white text) */
-html,body{background:#000!important;color:#F0F0F0!important}
+html,body{background:#000!important;color:#E4E1DC!important}
 a,.toc a{color:#8AB4F8!important}
-h1{color:#F0F0F0!important;border-bottom-color:#5B7BE0!important}
+h1{color:#F2EFEA!important;border-bottom-color:#5B7BE0!important}
 h2{color:#9CC0FF!important;border-top-color:#2A2A2A!important;border-left-color:#5B9BD5!important;background:linear-gradient(90deg,rgba(91,155,213,.16),rgba(0,0,0,0))!important}
 h3,h4{color:#ECE8E2!important}
-strong{color:#FFFFFF!important}
+strong{color:#F5D68A!important}
 em{color:#CFC9C0!important}
 code{background:#1E1E1E!important;color:#F48FB1!important}
 pre,pre.hl{background:#111!important;border-color:#2C2C2C!important}
-pre code,pre.hl code.hljs{color:#F0F0F0!important}
+pre code,pre.hl code.hljs{color:#E4E1DC!important}
 table td{border-color:#333!important}
-th{background:#1C1C1C!important;color:#F0F0F0!important;border-color:#333!important}
+th{background:#1C1C1C!important;color:#F2EFEA!important;border-color:#333!important}
 td{border-color:#333!important}
 tr:nth-child(even) td{background:#0E0E0E!important}
 blockquote,blockquote.box{background:#121212!important;color:#DAD5CE!important;border-left-color:#C08A1E!important}
 .box{background:color-mix(in srgb,var(--c) 14%,#000)!important}
 figure.diagram{background:#0D0D0D!important;border-color:#2C2C2C!important}
 img.course{background:#fff!important;filter:invert(1) hue-rotate(180deg)!important;border-color:#2C2C2C!important}
-.cover h1{color:#9CC0FF!important}.cover p{color:#F0F0F0!important}.cover .small{color:#A0A0A0!important}
-.k{--c:#F0F0F0}
+.cover h1{color:#9CC0FF!important}.cover p{color:#E4E1DC!important}.cover .small{color:#9A948B!important}
+.k{--c:#E4E1DC}
 .what,.analogy,.gain{--c:#81C995}.problem,.pay,.mistake{--c:#F28B82}.how,.walk,.intro{--c:#8AB4F8}
 .trade,.whennot,.stage{--c:#FDD663}.real{--c:#C58AF9}.interview{--c:#FF8BCB}.self{--c:#78D9C4}.tldr{--c:#F5D68A}.related{--c:#AEB8D0}
 .hljs-comment,.hljs-quote{color:#8E8E8E!important}
@@ -229,7 +229,7 @@ ${cover}${body}
 </script>
 <script>${mermaidJs}</script>
 <script>
-mermaid.initialize({ startOnLoad:false, theme:'base', themeVariables:{ background:'#0D0D0D', primaryColor:'#1E2A3A', primaryTextColor:'#F0F0F0', primaryBorderColor:'#5B9BD5', lineColor:'#8AB4F8', secondaryColor:'#2A2236', tertiaryColor:'#1A1A1A', noteBkgColor:'#3A3320', noteTextColor:'#F0F0F0', actorBkg:'#1E2A3A', actorTextColor:'#F0F0F0', signalColor:'#C9C4BC', signalTextColor:'#F0F0F0', edgeLabelBackground:'#1A1A1A', clusterBkg:'#141414', clusterBorder:'#444', titleColor:'#F0F0F0', textColor:'#F0F0F0' }, securityLevel:'loose', fontFamily:'Monaco, monospace', flowchart:{useMaxWidth:true}, sequence:{useMaxWidth:true} });
+mermaid.initialize({ startOnLoad:false, theme:'base', themeVariables:{ background:'#0D0D0D', primaryColor:'#1E2A3A', primaryTextColor:'#E4E1DC', primaryBorderColor:'#5B9BD5', lineColor:'#8AB4F8', secondaryColor:'#2A2236', tertiaryColor:'#1A1A1A', noteBkgColor:'#3A3320', noteTextColor:'#F2EFEA', actorBkg:'#1E2A3A', actorTextColor:'#E4E1DC', signalColor:'#C9C4BC', signalTextColor:'#E4E1DC', edgeLabelBackground:'#1A1A1A', clusterBkg:'#141414', clusterBorder:'#444', titleColor:'#E4E1DC', textColor:'#E4E1DC' }, securityLevel:'loose', fontFamily:'Monaco, monospace', flowchart:{useMaxWidth:true}, sequence:{useMaxWidth:true} });
 window.__errors = [];
 (async () => {
   const els = [...document.querySelectorAll('pre.mermaid')];
@@ -252,13 +252,13 @@ window.__errors = [];
       g.querySelectorAll(':scope > rect, :scope > polygon, :scope > circle, :scope > ellipse, :scope > path.basic, :scope > path.label-container, :scope > g > rect, :scope > g > path').forEach(sh=>{
         if(sh.closest('.label')) return; sh.style.fill=f; sh.style.stroke=st; sh.style.strokeWidth='1.5px';
       });
-      g.querySelectorAll('.nodeLabel, text, span').forEach(t=>{t.style.color='#F0F0F0'; if(t.tagName==='text') t.style.fill='#F0F0F0';});
+      g.querySelectorAll('.nodeLabel, text, span').forEach(t=>{t.style.color='#F2EFEA'; if(t.tagName==='text') t.style.fill='#F2EFEA';});
     });
     const actors={};
     svg.querySelectorAll('rect.actor').forEach(r=>{
       const name=(r.parentNode.textContent||'').trim(); if(!(name in actors)) actors[name]=Object.keys(actors).length;
       const [f,st]=PAL[actors[name]%PAL.length]; r.style.fill=f; r.style.stroke=st; r.style.strokeWidth='1.5px';
-      r.parentNode.querySelectorAll('text, tspan').forEach(t=>{t.style.fill='#F0F0F0';});
+      r.parentNode.querySelectorAll('text, tspan').forEach(t=>{t.style.fill='#F2EFEA';});
     });
     svg.querySelectorAll('rect.note').forEach(r=>{r.style.fill='#3A3018'; r.style.stroke='#E6C35C';});
     svg.querySelectorAll('.flowchart-link, path.relation, .messageLine0, .messageLine1, .transition').forEach(e=>{e.style.stroke='#8AB4F8';});
