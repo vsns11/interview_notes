@@ -150,43 +150,25 @@ pre.hl code.hljs{color:#2E261C;background:none}
 code.lang-plain,code.lang-output,code.lang-text{color:#2F5E3A}
 `;
 
-const FONTDIR = path.join(path.dirname(new URL(import.meta.url).pathname), '..', '..', 'fonts');
-const ff = (f, w, st) => `@font-face{font-family:'PlexMono';font-weight:${w};font-style:${st};src:url(data:font/woff2;base64,${fs.readFileSync(path.join(FONTDIR, f)).toString('base64')}) format('woff2')}`;
-const fi = (f, w) => `@font-face{font-family:'InterUI';font-weight:${w};font-style:normal;src:url(data:font/woff2;base64,${fs.readFileSync(path.join(FONTDIR, f)).toString('base64')}) format('woff2')}`;
-const FONTS = [ff('plex-300.woff2',300,'normal'), ff('plex-300i.woff2',300,'italic'), ff('plex-400.woff2',400,'normal'), ff('plex-500.woff2',500,'normal'), ff('plex-600.woff2',600,'normal'), fi('inter-400.woff2',400), fi('inter-600.woff2',600), fi('inter-700.woff2',700)].join('');
-const html = `<!doctype html><html><head><meta charset="utf-8"><title>${path.basename(outPdf, '.pdf')}</title><style>${FONTS}${CSS}</style><style>
+const html = `<!doctype html><html><head><meta charset="utf-8"><title>${path.basename(outPdf, '.pdf')}</title><style>${CSS}</style><style>
 /* Kindle-style dark theme (black page, soft white text) */
-/* chat-app style: charcoal page, clean sans-serif text, monospace only for code */
-body,p,li,td,th,blockquote,.cover p{font-family:'InterUI',-apple-system,'Segoe UI',Helvetica,Arial,sans-serif!important;font-weight:400;letter-spacing:0}
-body{font-size:12.5px!important;line-height:1.62!important}
-html,body{color:#ECECEC!important;background:#1C1C1C!important}
-h1,h2,h3,h4,.cover h1{font-family:'InterUI',-apple-system,'Segoe UI',Helvetica,Arial,sans-serif!important;font-weight:700!important}
-strong,b,th{font-weight:600!important;color:#FFFFFF!important}
-pre,pre code,code,.mono{font-family:'PlexMono',Monaco,'Courier New',monospace!important;font-weight:400}
-pre,pre.hl{background:#262626!important;border-color:#333!important}
-code{background:#2C2C2C!important}
-tr:nth-child(even) td{background:#222!important}
-th{background:#2A2A2A!important}
-figure.diagram{background:#222!important;border-color:#333!important}
-blockquote,blockquote.box{background:#242424!important}
-
-html,body{background:#1C1C1C!important;color:#ECECEC!important}
+html,body{background:#000!important;color:#E4E1DC!important}
 a,.toc a{color:#8AB4F8!important}
 h1{color:#F2EFEA!important;border-bottom-color:#5B7BE0!important}
 h2{color:#9CC0FF!important;border-top-color:#2A2A2A!important;border-left-color:#5B9BD5!important;background:linear-gradient(90deg,rgba(91,155,213,.16),rgba(0,0,0,0))!important}
 h3,h4{color:#ECE8E2!important}
 strong{color:#F5D68A!important}
 em{color:#CFC9C0!important}
-code{background:#2C2C2C!important;color:#F48FB1!important}
-pre,pre.hl{background:#262626!important;border-color:#2C2C2C!important}
+code{background:#1E1E1E!important;color:#F48FB1!important}
+pre,pre.hl{background:#111!important;border-color:#2C2C2C!important}
 pre code,pre.hl code.hljs{color:#E4E1DC!important}
 table td{border-color:#333!important}
-th{background:#2A2A2A!important;color:#F2EFEA!important;border-color:#333!important}
+th{background:#1C1C1C!important;color:#F2EFEA!important;border-color:#333!important}
 td{border-color:#333!important}
-tr:nth-child(even) td{background:#222!important}
-blockquote,blockquote.box{background:#242424!important;color:#DAD5CE!important;border-left-color:#C08A1E!important}
-.box{background:color-mix(in srgb,var(--c) 14%,#1C1C1C)!important}
-figure.diagram{background:#222!important;border-color:#2C2C2C!important}
+tr:nth-child(even) td{background:#0E0E0E!important}
+blockquote,blockquote.box{background:#121212!important;color:#DAD5CE!important;border-left-color:#C08A1E!important}
+.box{background:color-mix(in srgb,var(--c) 14%,#000)!important}
+figure.diagram{background:#0D0D0D!important;border-color:#2C2C2C!important}
 img.course{background:#fff!important;filter:invert(1) hue-rotate(180deg)!important;border-color:#2C2C2C!important}
 .cover h1{color:#9CC0FF!important}.cover p{color:#E4E1DC!important}.cover .small{color:#9A948B!important}
 .k{--c:#E4E1DC}
@@ -247,7 +229,7 @@ ${cover}${body}
 </script>
 <script>${mermaidJs}</script>
 <script>
-mermaid.initialize({ startOnLoad:false, theme:'base', themeVariables:{ background:'#222222', primaryColor:'#1E2A3A', primaryTextColor:'#E4E1DC', primaryBorderColor:'#5B9BD5', lineColor:'#8AB4F8', secondaryColor:'#2A2236', tertiaryColor:'#1A1A1A', noteBkgColor:'#3A3320', noteTextColor:'#F2EFEA', actorBkg:'#1E2A3A', actorTextColor:'#E4E1DC', signalColor:'#C9C4BC', signalTextColor:'#E4E1DC', edgeLabelBackground:'#1A1A1A', clusterBkg:'#141414', clusterBorder:'#444', titleColor:'#E4E1DC', textColor:'#E4E1DC' }, securityLevel:'loose', fontFamily:'Monaco, monospace', flowchart:{useMaxWidth:true}, sequence:{useMaxWidth:true} });
+mermaid.initialize({ startOnLoad:false, theme:'base', themeVariables:{ background:'#0D0D0D', primaryColor:'#1E2A3A', primaryTextColor:'#E4E1DC', primaryBorderColor:'#5B9BD5', lineColor:'#8AB4F8', secondaryColor:'#2A2236', tertiaryColor:'#1A1A1A', noteBkgColor:'#3A3320', noteTextColor:'#F2EFEA', actorBkg:'#1E2A3A', actorTextColor:'#E4E1DC', signalColor:'#C9C4BC', signalTextColor:'#E4E1DC', edgeLabelBackground:'#1A1A1A', clusterBkg:'#141414', clusterBorder:'#444', titleColor:'#E4E1DC', textColor:'#E4E1DC' }, securityLevel:'loose', fontFamily:'Monaco, monospace', flowchart:{useMaxWidth:true}, sequence:{useMaxWidth:true} });
 window.__errors = [];
 (async () => {
   const els = [...document.querySelectorAll('pre.mermaid')];
@@ -295,7 +277,7 @@ try {
   await page.waitForFunction('window.__done !== undefined', { timeout: 600000 });
   const errors = await page.evaluate(() => window.__errors);
   const imgs = await page.evaluate(() => [...document.images].map(i => [i.naturalWidth > 0, i.alt]));
-  const band = (inner, h) => `<style>html,body{margin:0;padding:0}#header,#footer{padding:0!important}</style><div style="-webkit-print-color-adjust:exact;print-color-adjust:exact;background:#1C1C1C;width:100%;height:${h};margin:0;display:flex;align-items:center;justify-content:center;font-family:Monaco,monospace;font-size:7px;color:#8E887F">${inner}</div>`;
+  const band = (inner, h) => `<style>html,body{margin:0;padding:0}#header,#footer{padding:0!important}</style><div style="-webkit-print-color-adjust:exact;print-color-adjust:exact;background:#000;width:100%;height:${h};margin:0;display:flex;align-items:center;justify-content:center;font-family:Monaco,monospace;font-size:7px;color:#8E887F">${inner}</div>`;
   await page.pdf({
     path: outPdf, timeout: 0, format: 'A4', printBackground: true, displayHeaderFooter: true,
     headerTemplate: band('', '14mm'),
