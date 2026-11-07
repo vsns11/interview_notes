@@ -151,29 +151,29 @@ code.lang-plain,code.lang-output,code.lang-text{color:#2F5E3A}
 `;
 
 const html = `<!doctype html><html><head><meta charset="utf-8"><title>${path.basename(outPdf, '.pdf')}</title><style>${CSS}</style><style>
-/* Kindle-style dark theme (black page, soft white text) */
-html,body{background:#000!important;color:#E4E1DC!important}
-a,.toc a{color:#8AB4F8!important}
-h1{color:#F2EFEA!important;border-bottom-color:#5B7BE0!important}
-h2{color:#9CC0FF!important;border-top-color:#2A2A2A!important;border-left-color:#5B9BD5!important;background:linear-gradient(90deg,rgba(91,155,213,.16),rgba(0,0,0,0))!important}
-h3,h4{color:#ECE8E2!important}
-strong{color:#F5D68A!important}
-em{color:#CFC9C0!important}
-code{background:#1E1E1E!important;color:#F48FB1!important}
-pre,pre.hl{background:#111!important;border-color:#2C2C2C!important}
-pre code,pre.hl code.hljs{color:#E4E1DC!important}
-table td{border-color:#333!important}
-th{background:#1C1C1C!important;color:#F2EFEA!important;border-color:#333!important}
-td{border-color:#333!important}
-tr:nth-child(even) td{background:#0E0E0E!important}
-blockquote,blockquote.box{background:#121212!important;color:#DAD5CE!important;border-left-color:#C08A1E!important}
-.box{background:color-mix(in srgb,var(--c) 14%,#000)!important}
-figure.diagram{background:#0D0D0D!important;border-color:#2C2C2C!important}
-img.course{background:#fff!important;filter:invert(1) hue-rotate(180deg)!important;border-color:#2C2C2C!important}
-.cover h1{color:#9CC0FF!important}.cover p{color:#E4E1DC!important}.cover .small{color:#9A948B!important}
-.k{--c:#E4E1DC}
-.what,.analogy,.gain{--c:#81C995}.problem,.pay,.mistake{--c:#F28B82}.how,.walk,.intro{--c:#8AB4F8}
-.trade,.whennot,.stage{--c:#FDD663}.real{--c:#C58AF9}.interview{--c:#FF8BCB}.self{--c:#78D9C4}.tldr{--c:#F5D68A}.related{--c:#AEB8D0}
+/* Navy code-editor theme (deep navy page, cool white monospace text, teal headings, rounded bordered boxes) */
+html,body{background:#0B1020!important;color:#DCE2EC!important}
+a,.toc a{color:#5AB0F0!important;text-decoration:underline!important}
+h1{color:#5CC8DC!important;background:linear-gradient(90deg,#5CC8DC,#8A8AF0,#E8B84A) bottom/100% 2px no-repeat!important}
+h2{color:#4FC3C7!important;border-top-color:#1E2740!important;border-left-color:#4FC3C7!important;background:linear-gradient(90deg,rgba(79,195,199,.12),rgba(11,16,32,0))!important}
+h3,h4{color:#8FD3E0!important}
+strong{color:#F2F5FA!important}
+em{color:#C3CBD8!important}
+code{background:#151C30!important;color:#7FD8E6!important}
+pre,pre.hl{background:#0F1629!important;border:1px solid #27324D!important;border-left:3px solid #4FC3C7!important;border-radius:8px!important}
+pre code,pre.hl code.hljs{color:#DCE2EC!important}
+table td{border-color:#27324D!important}
+th{background:#131B31!important;color:#5CC8DC!important;border-color:#27324D!important}
+td{border-color:#27324D!important}
+tr:nth-child(even) td{background:#0E1428!important}
+blockquote,blockquote.box{background:#0F1629!important;color:#D2D9E4!important;border:1.5px solid #E8B84A!important;border-radius:8px!important}
+.box{background:color-mix(in srgb,var(--c) 7%,#0B1020)!important;border:1.5px solid var(--c)!important;border-radius:8px!important}
+figure.diagram{background:#0F1629!important;border-color:#27324D!important;border-radius:8px!important}
+img.course{background:#fff!important;filter:invert(1) hue-rotate(180deg)!important;border-color:#27324D!important}
+.cover h1{color:#5CC8DC!important}.cover p{color:#DCE2EC!important}.cover .small{color:#8E98AA!important}
+.k{--c:#DCE2EC}
+.what,.analogy,.gain{--c:#4FC3C7}.problem,.pay,.mistake{--c:#F07A8A}.how,.walk,.intro{--c:#8A8AF0}
+.trade,.whennot,.stage{--c:#E8B84A}.real{--c:#B48BE8}.interview{--c:#5AB0F0}.self{--c:#6CC28A}.tldr{--c:#E8B84A}.related{--c:#8E98AA}
 .hljs-comment,.hljs-quote{color:#8E8E8E!important}
 .hljs-keyword,.hljs-selector-tag,.hljs-doctag{color:#FF79C6!important}
 .hljs-string,.hljs-regexp,.hljs-addition{color:#A5D6A7!important}
@@ -229,7 +229,7 @@ ${cover}${body}
 </script>
 <script>${mermaidJs}</script>
 <script>
-mermaid.initialize({ startOnLoad:false, theme:'base', themeVariables:{ background:'#0D0D0D', primaryColor:'#1E2A3A', primaryTextColor:'#E4E1DC', primaryBorderColor:'#5B9BD5', lineColor:'#8AB4F8', secondaryColor:'#2A2236', tertiaryColor:'#1A1A1A', noteBkgColor:'#3A3320', noteTextColor:'#F2EFEA', actorBkg:'#1E2A3A', actorTextColor:'#E4E1DC', signalColor:'#C9C4BC', signalTextColor:'#E4E1DC', edgeLabelBackground:'#1A1A1A', clusterBkg:'#141414', clusterBorder:'#444', titleColor:'#E4E1DC', textColor:'#E4E1DC' }, securityLevel:'loose', fontFamily:'Monaco, monospace', flowchart:{useMaxWidth:true}, sequence:{useMaxWidth:true} });
+mermaid.initialize({ startOnLoad:false, theme:'base', themeVariables:{ background:'#0F1629', primaryColor:'#1E2A3A', primaryTextColor:'#E4E1DC', primaryBorderColor:'#5B9BD5', lineColor:'#8AB4F8', secondaryColor:'#2A2236', tertiaryColor:'#1A1A1A', noteBkgColor:'#3A3320', noteTextColor:'#F2EFEA', actorBkg:'#1E2A3A', actorTextColor:'#E4E1DC', signalColor:'#C9C4BC', signalTextColor:'#E4E1DC', edgeLabelBackground:'#1A1A1A', clusterBkg:'#141414', clusterBorder:'#444', titleColor:'#E4E1DC', textColor:'#E4E1DC' }, securityLevel:'loose', fontFamily:'Monaco, monospace', flowchart:{useMaxWidth:true}, sequence:{useMaxWidth:true} });
 window.__errors = [];
 (async () => {
   const els = [...document.querySelectorAll('pre.mermaid')];
@@ -277,7 +277,7 @@ try {
   await page.waitForFunction('window.__done !== undefined', { timeout: 600000 });
   const errors = await page.evaluate(() => window.__errors);
   const imgs = await page.evaluate(() => [...document.images].map(i => [i.naturalWidth > 0, i.alt]));
-  const band = (inner, h) => `<style>html,body{margin:0;padding:0}#header,#footer{padding:0!important}</style><div style="-webkit-print-color-adjust:exact;print-color-adjust:exact;background:#000;width:100%;height:${h};margin:0;display:flex;align-items:center;justify-content:center;font-family:Monaco,monospace;font-size:7px;color:#8E887F">${inner}</div>`;
+  const band = (inner, h) => `<style>html,body{margin:0;padding:0}#header,#footer{padding:0!important}</style><div style="-webkit-print-color-adjust:exact;print-color-adjust:exact;background:#0B1020;width:100%;height:${h};margin:0;display:flex;align-items:center;justify-content:center;font-family:Monaco,monospace;font-size:7px;color:#8E887F">${inner}</div>`;
   await page.pdf({
     path: outPdf, timeout: 0, format: 'A4', printBackground: true, displayHeaderFooter: true,
     headerTemplate: band('', '14mm'),
